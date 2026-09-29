@@ -1,4 +1,4 @@
-package com.SmartTicketing.SmartTicketing.dto.auth;
+package com.SmartTicketing.SmartTicketing.auth;
 
 import lombok.Getter;
 import org.springframework.core.env.Environment;

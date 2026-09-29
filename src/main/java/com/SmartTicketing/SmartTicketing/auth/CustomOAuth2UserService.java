@@ -1,4 +1,4 @@
-package com.SmartTicketing.SmartTicketing.dto.auth;
+package com.SmartTicketing.SmartTicketing.auth;
 
 import com.SmartTicketing.SmartTicketing.entity.Users;
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;

@@ -1,5 +1,8 @@
-package com.SmartTicketing.SmartTicketing.dto.auth;
+package com.SmartTicketing.SmartTicketing.auth;
 
+import com.SmartTicketing.SmartTicketing.dto.auth.LoginRequest;
+import com.SmartTicketing.SmartTicketing.dto.auth.SignupRequest;
+import com.SmartTicketing.SmartTicketing.dto.auth.TokenResponse;
 import com.SmartTicketing.SmartTicketing.dto.user.UserResponse;
 import com.SmartTicketing.SmartTicketing.entity.*;
 import com.SmartTicketing.SmartTicketing.entity.enums.*;

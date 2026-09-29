@@ -1,4 +1,4 @@
-package com.SmartTicketing.SmartTicketing.dto.auth;
+package com.SmartTicketing.SmartTicketing.auth;
 
 import java.util.Map;
 

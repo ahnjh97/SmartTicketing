@@ -1,5 +1,7 @@
 package com.SmartTicketing.SmartTicketing.controller;
 
+import com.SmartTicketing.SmartTicketing.auth.AuthService;
+import com.SmartTicketing.SmartTicketing.auth.CustomOAuth2UserService;
 import com.SmartTicketing.SmartTicketing.dto.auth.*;
 import com.SmartTicketing.SmartTicketing.dto.user.UserResponse;
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
