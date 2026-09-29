@@ -1,7 +1,6 @@
 package com.SmartTicketing.SmartTicketing.dto.user;
 
 import com.SmartTicketing.SmartTicketing.entity.enums.SeatPosition;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -21,12 +20,12 @@ public record UserUpdateRequest(
         )
         String loginId,
 
-        @Email(message = "올바른 이메일 형식을 입력해주세요.")
         @Size(
-                max = 255,
-                message = "이메일은 255자 이하로 입력해주세요."
+                min = 1,
+                max = 100,
+                message = "닉네임은 1~100자로 입력해주세요."
         )
-        String email,
+        String nickname,
 
         LocalDate birthDate,
 
