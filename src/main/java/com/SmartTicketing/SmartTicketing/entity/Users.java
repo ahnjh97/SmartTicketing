@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "users")
 @Data
@@ -26,6 +28,9 @@ public class Users {
 
     @Column(unique = true, length = 255)
     private String email;
+
+    @Column(name = "birth_date", nullable = false)
+    private LocalDate birthDate;
 
     @Column(nullable = false, length = 100)
     private String nickname;
