@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
         name = "user_preferred_seats",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_user_preferred_seat_position",
-                        columnNames = {"user_id", "seat_position"}
+                        name = "uk_user_preferred_seat_priority",
+                        columnNames = {"user_id", "priority"}
                 )
         }
 )
@@ -30,4 +30,7 @@ public class UserPreferredSeat {
     @Enumerated(EnumType.STRING)
     @Column(name = "seat_position", nullable = false, length = 30)
     private SeatPosition seatPosition;
+
+    @Column(nullable = false)
+    private Integer priority;
 }

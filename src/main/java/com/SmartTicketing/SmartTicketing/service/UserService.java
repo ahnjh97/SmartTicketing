@@ -223,23 +223,30 @@ public class UserService {
             Users u,
             List<SeatPosition> positions
     ) {
-        var unique = new LinkedHashSet<>(positions);
-
-        if (unique.size() < 1 || unique.size() > 6) {
+        if (positions == null ||
+                positions.size() < 1 ||
+                positions.size() > 6) {
             throw new IllegalArgumentException(
                     "선호 좌석은 1~6개까지 선택할 수 있습니다."
             );
         }
 
-        preferredSeats.deleteAllByUserId(u.getId());
+        preferredSeats.deleteAllByUserId(
+                u.getId()
+        );
 
-        for (SeatPosition pos : unique) {
+        for (int i = 0; i < positions.size(); i++) {
 
             UserPreferredSeat p =
                     new UserPreferredSeat();
 
             p.setUser(u);
-            p.setSeatPosition(pos);
+
+            p.setPriority(i + 1);
+
+            p.setSeatPosition(
+                    positions.get(i)
+            );
 
             preferredSeats.save(p);
         }

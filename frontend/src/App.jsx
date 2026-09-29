@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import "./index.css";
 import ResidencePreference from "./components/ResidencePreference";
-import ResidencePreferencePreview
-    from "./components/ResidencePreferencePreview";
-
 
 const API = "http://localhost:8080";
 
@@ -21,9 +18,6 @@ function App() {
     const [signupPassword, setSignupPassword] = useState("");
 
     const [nickname, setNickname] = useState("");
-    const [birthDate, setBirthDate] = useState("");
-    const [address, setAddress] = useState("");
-
     const [showSignup, setShowSignup] = useState(false);
 
     const [message, setMessage] = useState("");
@@ -32,13 +26,12 @@ function App() {
     const [kakaoSetupCompleted, setKakaoSetupCompleted] =
         useState(false);
 
-    return (
-        <ResidencePreferencePreview />);
+    const [editingProfile, setEditingProfile] =
+        useState(false);
 
     useEffect(() => {
         initialize();
     }, []);
-
 
     async function initialize() {
         try {
@@ -129,13 +122,22 @@ function App() {
             await response.text();
 
         if (!response.ok) {
+            localStorage.removeItem("accessToken");
+
             throw new Error(
                 `회원정보 조회 실패 (${response.status})`
             );
         }
 
-        const data =
-            JSON.parse(text);
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error(
+                "회원정보 응답을 처리할 수 없습니다."
+            );
+        }
 
         setUser(data);
 
@@ -143,20 +145,12 @@ function App() {
             data.nickname ?? ""
         );
 
-        setBirthDate(
-            data.birthDate ?? ""
-        );
-
-        setAddress(
-            data.address ?? ""
-        );
-
         /*
          * 카카오 최초 로그인 여부
          *
          * 카카오만 연결되어 있고
          * 이메일이 없는 경우
-         * 최초 프로필 설정 화면으로 이동한다.
+         * 최초 닉네임 설정 화면으로 이동
          */
         const isKakaoOnlyUser =
             data.linkedProviders?.length === 1 &&
@@ -197,8 +191,16 @@ function App() {
                     }
                 );
 
-            const data =
-                await response.json();
+            const text =
+                await response.text();
+
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = {};
+            }
 
             if (!response.ok) {
                 throw new Error(
@@ -219,7 +221,10 @@ function App() {
                 data.accessToken
             );
         } catch (e) {
-            setError(e.message);
+            setError(
+                e.message ??
+                "로그인에 실패했습니다."
+            );
         }
     }
 
@@ -251,8 +256,16 @@ function App() {
                     }
                 );
 
-            const data =
-                await response.json();
+            const text =
+                await response.text();
+
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = {};
+            }
 
             if (!response.ok) {
                 throw new Error(
@@ -272,13 +285,116 @@ function App() {
             setSignupLoginId("");
             setSignupPassword("");
         } catch (e) {
-            setError(e.message);
+            setError(
+                e.message ??
+                "회원가입에 실패했습니다."
+            );
+        }
+    }
+
+    async function withdraw() {
+        const confirmed =
+            window.confirm(
+                "정말 탈퇴하시겠습니까?\n탈퇴 후에는 다시 로그인할 수 없습니다."
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setError("");
+        setMessage("");
+
+        try {
+            const token =
+                localStorage.getItem("accessToken");
+
+            if (!token) {
+                throw new Error(
+                    "로그인 정보가 없습니다."
+                );
+            }
+
+            const response =
+                await fetch(
+                    `${API}/api/users/me`,
+                    {
+                        method: "DELETE",
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                const text =
+                    await response.text();
+
+                let data = {};
+
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    data = {};
+                }
+
+                throw new Error(
+                    data.message ??
+                    `회원 탈퇴 실패 (${response.status})`
+                );
+            }
+
+            localStorage.removeItem(
+                "accessToken"
+            );
+
+            if (user?.id) {
+                localStorage.removeItem(
+                    `kakaoProfileSetupDone:${user.id}`
+                );
+            }
+
+            setUser(null);
+            setEditingProfile(false);
+            setNickname("");
+            setShowSignup(false);
+            setKakaoSetupCompleted(false);
+
+            setMessage(
+                "회원 탈퇴가 완료되었습니다."
+            );
+        } catch (e) {
+            setError(
+                e.message ??
+                "회원 탈퇴에 실패했습니다."
+            );
         }
     }
 
     function socialLogin(provider) {
         window.location.href =
             `${API}/oauth2/authorization/${provider}`;
+    }
+
+    function handlePreferenceSaved(data) {
+        setUser(data);
+        setEditingProfile(false);
+
+        setNickname(
+            data.nickname ?? ""
+        );
+
+        setError("");
+        setMessage(
+            "회원정보가 수정되었습니다."
+        );
+    }
+
+    function cancelProfileEdit() {
+        setEditingProfile(false);
+        setError("");
+        setMessage("");
     }
 
     function logout() {
@@ -295,8 +411,6 @@ function App() {
         setUser(null);
 
         setNickname("");
-        setBirthDate("");
-        setAddress("");
 
         setMessage("");
         setError("");
@@ -333,6 +447,12 @@ function App() {
                     "accessToken"
                 );
 
+            if (!token) {
+                throw new Error(
+                    "로그인 정보가 없습니다."
+                );
+            }
+
             const response =
                 await fetch(
                     `${API}/api/users/me`,
@@ -350,8 +470,16 @@ function App() {
                     }
                 );
 
-            const data =
-                await response.json();
+            const text =
+                await response.text();
+
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = {};
+            }
 
             if (!response.ok) {
                 throw new Error(
@@ -379,36 +507,29 @@ function App() {
                 "닉네임이 저장되었습니다."
             );
         } catch (e) {
-            setError(e.message);
+            setError(
+                e.message ??
+                "닉네임 저장에 실패했습니다."
+            );
         }
     }
 
-    function handlePreferenceSaved(
-        data
-    ) {
+    function handlePreferenceSaved(data) {
         setUser(data);
 
         setNickname(
             data.nickname ?? ""
         );
 
-        setBirthDate(
-            data.birthDate ?? ""
-        );
-
-        setAddress(
-            data.address ?? ""
-        );
-
         setMessage(
-            "회원정보가 저장되었습니다."
+            "회원 정보 및 선호 정보가 저장되었습니다."
         );
     }
 
     if (loading) {
         return (
             <div className="page">
-                <div className="card">
+                <div className="card loading-card">
                     <h1>
                         SmartTicketing
                     </h1>
@@ -442,6 +563,7 @@ function App() {
                             <div className="social-buttons">
 
                                 <button
+                                    type="button"
                                     className="social-button google"
                                     onClick={() =>
                                         socialLogin(
@@ -453,6 +575,7 @@ function App() {
                                 </button>
 
                                 <button
+                                    type="button"
                                     className="social-button naver"
                                     onClick={() =>
                                         socialLogin(
@@ -464,6 +587,7 @@ function App() {
                                 </button>
 
                                 <button
+                                    type="button"
                                     className="social-button kakao"
                                     onClick={() =>
                                         socialLogin(
@@ -504,6 +628,7 @@ function App() {
                                         )
                                     }
                                     placeholder="아이디"
+                                    autoComplete="username"
                                     required
                                 />
 
@@ -524,6 +649,7 @@ function App() {
                                         )
                                     }
                                     placeholder="비밀번호"
+                                    autoComplete="current-password"
                                     required
                                 />
 
@@ -536,6 +662,7 @@ function App() {
                             </form>
 
                             <button
+                                type="button"
                                 className="text-button"
                                 onClick={() => {
                                     setShowSignup(
@@ -616,6 +743,7 @@ function App() {
                                         )
                                     }
                                     placeholder="영문, 숫자, 밑줄 4~50자"
+                                    autoComplete="username"
                                     required
                                 />
 
@@ -636,6 +764,7 @@ function App() {
                                         )
                                     }
                                     placeholder="8~100자"
+                                    autoComplete="new-password"
                                     required
                                 />
 
@@ -648,6 +777,7 @@ function App() {
                             </form>
 
                             <button
+                                type="button"
                                 className="text-button"
                                 onClick={() => {
                                     setShowSignup(
@@ -674,6 +804,7 @@ function App() {
                             {message}
                         </p>
                     )}
+
                 </div>
             </div>
         );
@@ -753,8 +884,9 @@ function App() {
     }
 
     /*
-     * 로그인 후 회원정보 / 거주지 /
-     * 주변 영화관 / 선호 좌석 설정
+     * 로그인 후 회원정보 /
+     * 거주지 / 주변 영화관 /
+     * 선호 좌석 설정
      */
     return (
         <div className="page">
@@ -772,6 +904,7 @@ function App() {
                     </div>
 
                     <button
+                        type="button"
                         className="logout-button"
                         onClick={logout}
                     >
@@ -825,6 +958,17 @@ function App() {
 
                     <div>
                         <span>
+                            생년월일
+                        </span>
+
+                        <strong>
+                            {user.birthDate ??
+                                "미등록"}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>
                             로그인 연동
                         </span>
 
@@ -842,15 +986,9 @@ function App() {
 
                 <ResidencePreference
                     user={user}
-                    onSaved={(data) => {
-                        setUser(data);
-                        setNickname(data.nickname ?? "");
-                        setBirthDate(data.birthDate ?? "");
-                        setAddress(data.address ?? "");
-                        setMessage(
-                            "회원 정보 및 선호 정보가 저장되었습니다."
-                        );
-                    }}
+                    onSaved={
+                        handlePreferenceSaved
+                    }
                 />
 
                 {error && (
