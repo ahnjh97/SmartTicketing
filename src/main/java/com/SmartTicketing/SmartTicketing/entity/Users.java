@@ -5,15 +5,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
-
 @Entity
-@Table(
-        name = "users",
-        indexes = {
-                @Index(name = "idx_users_email", columnList = "email")
-        }
-)
+@Table(name = "users")
 @Data
 @NoArgsConstructor
 public class Users {
@@ -24,9 +17,6 @@ public class Users {
 
     @Column(nullable = false, length = 50)
     private String name;
-
-    @Column(name = "birth_date", nullable = false)
-    private LocalDate birthDate;
 
     @Column(name = "login_id", unique = true, length = 50)
     private String loginId;
@@ -40,7 +30,7 @@ public class Users {
     @Column(nullable = false, length = 100)
     private String nickname;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String address;
 
     @Enumerated(EnumType.STRING)
