@@ -40,32 +40,40 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public PreferenceOptionResponse options() {
-        var ts = theaters.findByActiveTrueOrderByNameAsc()
-                .stream()
-                .limit(20)
-                .map(t ->
-                        new PreferenceOptionResponse.TheaterOption(
-                                t.getId(),
-                                t.getName(),
-                                t.getBrand(),
-                                t.getAddress()
+        var ts =
+                theaters.findByActiveTrueOrderByNameAsc()
+                        .stream()
+                        .limit(20)
+                        .map(t ->
+                                new PreferenceOptionResponse.TheaterOption(
+                                        t.getId(),
+                                        t.getName(),
+                                        t.getBrand(),
+                                        t.getAddress()
+                                )
                         )
-                )
-                .toList();
+                        .toList();
 
-        var ss = Arrays.stream(SeatPosition.values())
-                .map(p ->
-                        new PreferenceOptionResponse.SeatOption(
-                                p,
-                                label(p)
+        var ss =
+                Arrays.stream(SeatPosition.values())
+                        .map(p ->
+                                new PreferenceOptionResponse.SeatOption(
+                                        p,
+                                        label(p)
+                                )
                         )
-                )
-                .toList();
+                        .toList();
 
-        return new PreferenceOptionResponse(ts, ss);
+        return new PreferenceOptionResponse(
+                ts,
+                ss
+        );
     }
 
-    public UserResponse update(Long id, UserUpdateRequest r) {
+    public UserResponse update(
+            Long id,
+            UserUpdateRequest r
+    ) {
         Users u = findActive(id);
 
         if (r.birthDate() != null) {
@@ -88,12 +96,11 @@ public class UserService {
 
         /*
          * 닉네임 변경
-         *
-         * 소셜 회원 / 일반 회원 모두 변경 가능
          */
         if (r.nickname() != null) {
 
-            String nickname = r.nickname().trim();
+            String nickname =
+                    r.nickname().trim();
 
             if (nickname.isBlank()) {
                 throw new IllegalArgumentException(
@@ -115,7 +122,10 @@ public class UserService {
          *
          * 소셜 회원은 loginId가 없으므로 변경 불가
          */
-        if (r.loginId() != null && !r.loginId().isBlank()) {
+        if (
+                r.loginId() != null
+                        && !r.loginId().isBlank()
+        ) {
 
             if (u.getLoginId() == null) {
                 throw new IllegalStateException(
@@ -135,20 +145,20 @@ public class UserService {
                 );
             }
 
-            u.setLoginId(r.loginId());
+            u.setLoginId(
+                    r.loginId()
+            );
 
-            /*
-             * 일반 회원은 닉네임 기본값이 loginId이지만,
-             * 사용자가 별도로 nickname을 보냈다면
-             * 위 nickname 값이 유지되어야 한다.
-             *
-             * 따라서 nickname이 null일 때만 loginId를 적용한다.
-             */
             if (r.nickname() == null) {
-                u.setNickname(r.loginId());
+                u.setNickname(
+                        r.loginId()
+                );
             }
         }
 
+        /*
+         * 거주지
+         */
         if (r.address() != null) {
             u.setAddress(
                     r.address().isBlank()
@@ -157,6 +167,9 @@ public class UserService {
             );
         }
 
+        /*
+         * 선호 영화관
+         */
         if (r.preferredTheaterIds() != null) {
             replaceTheaters(
                     u,
@@ -164,6 +177,9 @@ public class UserService {
             );
         }
 
+        /*
+         * 선호 좌석
+         */
         if (r.preferredSeatPositions() != null) {
             replaceSeats(
                     u,
@@ -175,30 +191,41 @@ public class UserService {
     }
 
     public void withdraw(Long id) {
-        findActive(id).setStatus(UserStatus.WITHDRAWN);
+        findActive(id)
+                .setStatus(UserStatus.WITHDRAWN);
     }
 
     private void replaceTheaters(
             Users u,
             List<Long> ids
     ) {
-        var unique = new LinkedHashSet<>(ids);
+        var unique =
+                new LinkedHashSet<>(ids);
 
-        if (unique.size() < 3 || unique.size() > 5) {
+        if (
+                unique.size() < 3
+                        || unique.size() > 5
+        ) {
             throw new IllegalArgumentException(
                     "선호 영화관은 3~5곳을 선택해주세요."
             );
         }
 
-        var found = theaters.findAllById(unique);
+        var found =
+                theaters.findAllById(unique);
 
-        if (found.size() != unique.size()) {
+        if (
+                found.size()
+                        != unique.size()
+        ) {
             throw new IllegalArgumentException(
                     "존재하지 않는 영화관이 포함되어 있습니다."
             );
         }
 
-        preferredTheaters.deleteAllByUserId(u.getId());
+        preferredTheaters.deleteAllByUserId(
+                u.getId()
+        );
 
         int priority = 1;
 
@@ -210,10 +237,14 @@ public class UserService {
             p.setUser(u);
 
             p.setTheater(
-                    theaters.getReferenceById(theaterId)
+                    theaters.getReferenceById(
+                            theaterId
+                    )
             );
 
-            p.setPriority(priority++);
+            p.setPriority(
+                    priority++
+            );
 
             preferredTheaters.save(p);
         }
@@ -223,26 +254,41 @@ public class UserService {
             Users u,
             List<SeatPosition> positions
     ) {
-        if (positions == null ||
-                positions.size() < 1 ||
-                positions.size() > 6) {
+        if (
+                positions == null
+                        || positions.size() < 1
+                        || positions.size() > 6
+        ) {
             throw new IllegalArgumentException(
                     "선호 좌석은 1~6개까지 선택할 수 있습니다."
             );
         }
 
+        /*
+         * 같은 SeatPosition을 여러 번 저장할 수 있다.
+         *
+         * 예:
+         * 1위 MIDDLE_MIDDLE
+         * 2위 MIDDLE_MIDDLE
+         * 3위 MIDDLE_FRONT
+         */
         preferredSeats.deleteAllByUserId(
                 u.getId()
         );
 
-        for (int i = 0; i < positions.size(); i++) {
-
+        for (
+                int i = 0;
+                i < positions.size();
+                i++
+        ) {
             UserPreferredSeat p =
                     new UserPreferredSeat();
 
             p.setUser(u);
 
-            p.setPriority(i + 1);
+            p.setPriority(
+                    i + 1
+            );
 
             p.setSeatPosition(
                     positions.get(i)
@@ -252,7 +298,9 @@ public class UserService {
         }
     }
 
-    private Users findActive(Long id) {
+    private Users findActive(
+            Long id
+    ) {
         Users u =
                 users.findById(id)
                         .orElseThrow(() ->
@@ -261,7 +309,10 @@ public class UserService {
                                 )
                         );
 
-        if (u.getStatus() != UserStatus.ACTIVE) {
+        if (
+                u.getStatus()
+                        != UserStatus.ACTIVE
+        ) {
             throw new IllegalStateException(
                     "활성 상태의 회원이 아닙니다."
             );
@@ -270,11 +321,15 @@ public class UserService {
         return u;
     }
 
-    private UserResponse response(Users u) {
+    private UserResponse response(
+            Users u
+    ) {
 
         var pts =
                 preferredTheaters
-                        .findByUserIdOrderByPriorityAsc(u.getId())
+                        .findByUserIdOrderByPriorityAsc(
+                                u.getId()
+                        )
                         .stream()
                         .map(p ->
                                 new UserResponse.PreferredTheaterResponse(
@@ -288,15 +343,26 @@ public class UserService {
 
         var ps =
                 preferredSeats
-                        .findByUserId(u.getId())
+                        .findByUserIdOrderByPriorityAsc(
+                                u.getId()
+                        )
                         .stream()
-                        .map(UserPreferredSeat::getSeatPosition)
+                        .map(p ->
+                                new UserResponse.PreferredSeatResponse(
+                                        p.getSeatPosition(),
+                                        p.getPriority()
+                                )
+                        )
                         .toList();
 
         var providers =
-                social.findByUserId(u.getId())
+                social.findByUserId(
+                                u.getId()
+                        )
                         .stream()
-                        .map(UserSocialAccount::getProvider)
+                        .map(
+                                UserSocialAccount::getProvider
+                        )
                         .toList();
 
         return new UserResponse(
@@ -314,15 +380,27 @@ public class UserService {
         );
     }
 
-    private String label(SeatPosition p) {
+    private String label(
+            SeatPosition p
+    ) {
         return switch (p) {
-            case SIDE_FRONT -> "좌측 · 앞";
-            case SIDE_MIDDLE -> "좌측 · 가운데";
-            case SIDE_REAR -> "좌측 · 뒤";
-            case MIDDLE_FRONT -> "중간 · 앞";
-            case MIDDLE_MIDDLE -> "중간 · 가운데";
-            case MIDDLE_REAR -> "중간 · 뒤";
+            case SIDE_FRONT ->
+                    "좌측 · 앞";
+
+            case SIDE_MIDDLE ->
+                    "좌측 · 가운데";
+
+            case SIDE_REAR ->
+                    "좌측 · 뒤";
+
+            case MIDDLE_FRONT ->
+                    "중간 · 앞";
+
+            case MIDDLE_MIDDLE ->
+                    "중간 · 가운데";
+
+            case MIDDLE_REAR ->
+                    "중간 · 뒤";
         };
     }
 }
-

@@ -1,29 +1,112 @@
-import { useEffect, useState } from "react";
+import {
+    useEffect,
+    useState,
+} from "react";
+
 import "./index.css";
-import ResidencePreference from "./components/ResidencePreference";
+
+import ResidencePreference
+    from "./components/ResidencePreference";
 
 const API = "http://localhost:8080";
 
+const SEAT_POSITION_LABELS = {
+    SIDE_FRONT: "좌측 · 앞",
+    SIDE_MIDDLE: "좌측 · 가운데",
+    SIDE_REAR: "좌측 · 뒤",
+    MIDDLE_FRONT: "중간 · 앞",
+    MIDDLE_MIDDLE: "중간 · 가운데",
+    MIDDLE_REAR: "중간 · 뒤",
+};
+
+function getSeatLabel(position) {
+    return (
+        SEAT_POSITION_LABELS[position] ??
+        position
+    );
+}
+
+/*
+ * 최초 선호 정보 설정이 필요한지 확인
+ *
+ * 필요한 조건
+ * 1. 생년월일이 없는 경우
+ * 2. 거주지가 없는 경우
+ * 3. 선호 영화관이 3개 미만인 경우
+ * 4. 선호 좌석이 1개 미만인 경우
+ */
+function needsPreferenceSetup(user) {
+    if (!user) {
+        return false;
+    }
+
+    const preferredTheaters =
+        user.preferredTheaters ?? [];
+
+    const preferredSeats =
+        user.preferredSeats ?? [];
+
+    const hasBirthDate =
+        !!user.birthDate;
+
+    const hasAddress =
+        !!user.address?.trim();
+
+    const hasTheaters =
+        preferredTheaters.length >= 3;
+
+    const hasSeats =
+        preferredSeats.length >= 1;
+
+    return (
+        !hasBirthDate ||
+        !hasAddress ||
+        !hasTheaters ||
+        !hasSeats
+    );
+}
+
 function App() {
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] =
+        useState(true);
 
-    const [user, setUser] = useState(null);
+    const [user, setUser] =
+        useState(null);
 
-    const [loginId, setLoginId] = useState("");
-    const [password, setPassword] = useState("");
+    const [loginId, setLoginId] =
+        useState("");
 
-    const [signupName, setSignupName] = useState("");
-    const [signupBirthDate, setSignupBirthDate] = useState("");
-    const [signupLoginId, setSignupLoginId] = useState("");
-    const [signupPassword, setSignupPassword] = useState("");
+    const [password, setPassword] =
+        useState("");
 
-    const [nickname, setNickname] = useState("");
-    const [showSignup, setShowSignup] = useState(false);
+    const [signupName, setSignupName] =
+        useState("");
 
-    const [message, setMessage] = useState("");
-    const [error, setError] = useState("");
+    const [signupBirthDate, setSignupBirthDate] =
+        useState("");
+
+    const [signupLoginId, setSignupLoginId] =
+        useState("");
+
+    const [signupPassword, setSignupPassword] =
+        useState("");
+
+    const [nickname, setNickname] =
+        useState("");
+
+    const [showSignup, setShowSignup] =
+        useState(false);
+
+    const [message, setMessage] =
+        useState("");
+
+    const [error, setError] =
+        useState("");
 
     const [kakaoSetupCompleted, setKakaoSetupCompleted] =
+        useState(false);
+
+    const [preferenceSetupRequired, setPreferenceSetupRequired] =
         useState(false);
 
     const [editingProfile, setEditingProfile] =
@@ -35,15 +118,21 @@ function App() {
 
     async function initialize() {
         try {
-            const searchParams = new URLSearchParams(
-                window.location.search
-            );
+            const searchParams =
+                new URLSearchParams(
+                    window.location.search
+                );
 
-            const oauthError = searchParams.get("error");
+            const oauthError =
+                searchParams.get(
+                    "error"
+                );
 
             if (oauthError) {
                 setError(
-                    decodeURIComponent(oauthError)
+                    decodeURIComponent(
+                        oauthError
+                    )
                 );
 
                 window.history.replaceState(
@@ -56,12 +145,20 @@ function App() {
                 return;
             }
 
-            const hash = window.location.hash;
+            const hash =
+                window.location.hash;
 
-            if (hash.startsWith("#token=")) {
-                const token = decodeURIComponent(
-                    hash.substring("#token=".length)
-                );
+            if (
+                hash.startsWith(
+                    "#token="
+                )
+            ) {
+                const token =
+                    decodeURIComponent(
+                        hash.substring(
+                            "#token=".length
+                        )
+                    );
 
                 localStorage.setItem(
                     "accessToken",
@@ -74,20 +171,26 @@ function App() {
                     window.location.pathname
                 );
 
-                await loadMyInfo(token);
+                await loadMyInfo(
+                    token
+                );
 
                 return;
             }
 
             const token =
-                localStorage.getItem("accessToken");
+                localStorage.getItem(
+                    "accessToken"
+                );
 
             if (!token) {
                 setLoading(false);
                 return;
             }
 
-            await loadMyInfo(token);
+            await loadMyInfo(
+                token
+            );
         } catch (e) {
             console.error(e);
 
@@ -101,28 +204,34 @@ function App() {
     }
 
     async function loadMyInfo(
-        token = localStorage.getItem("accessToken")
+        token =
+        localStorage.getItem(
+            "accessToken"
+        )
     ) {
         if (!token) {
             setUser(null);
             return;
         }
 
-        const response = await fetch(
-            `${API}/api/users/me`,
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${token}`,
-                },
-            }
-        );
+        const response =
+            await fetch(
+                `${API}/api/users/me`,
+                {
+                    headers: {
+                        Authorization:
+                            `Bearer ${token}`,
+                    },
+                }
+            );
 
         const text =
             await response.text();
 
         if (!response.ok) {
-            localStorage.removeItem("accessToken");
+            localStorage.removeItem(
+                "accessToken"
+            );
 
             throw new Error(
                 `회원정보 조회 실패 (${response.status})`
@@ -132,7 +241,8 @@ function App() {
         let data;
 
         try {
-            data = JSON.parse(text);
+            data =
+                JSON.parse(text);
         } catch {
             throw new Error(
                 "회원정보 응답을 처리할 수 없습니다."
@@ -146,25 +256,36 @@ function App() {
         );
 
         /*
-         * 카카오 최초 로그인 여부
+         * 최초 선호 정보 설정 여부
+         */
+        setPreferenceSetupRequired(
+            needsPreferenceSetup(data)
+        );
+
+        /*
+         * 카카오 최초 닉네임 설정 여부
          *
          * 카카오만 연결되어 있고
          * 이메일이 없는 경우
-         * 최초 닉네임 설정 화면으로 이동
          */
         const isKakaoOnlyUser =
             data.linkedProviders?.length === 1 &&
-            data.linkedProviders.includes("KAKAO") &&
+            data.linkedProviders.includes(
+                "KAKAO"
+            ) &&
             !data.email;
 
         const setupKey =
             `kakaoProfileSetupDone:${data.id}`;
 
         const setupDone =
-            localStorage.getItem(setupKey) === "true";
+            localStorage.getItem(
+                setupKey
+            ) === "true";
 
         setKakaoSetupCompleted(
-            !isKakaoOnlyUser || setupDone
+            !isKakaoOnlyUser ||
+            setupDone
         );
     }
 
@@ -180,14 +301,17 @@ function App() {
                     `${API}/api/auth/login`,
                     {
                         method: "POST",
+
                         headers: {
                             "Content-Type":
                                 "application/json",
                         },
-                        body: JSON.stringify({
-                            loginId,
-                            password,
-                        }),
+
+                        body:
+                            JSON.stringify({
+                                loginId,
+                                password,
+                            }),
                     }
                 );
 
@@ -197,7 +321,8 @@ function App() {
             let data;
 
             try {
-                data = JSON.parse(text);
+                data =
+                    JSON.parse(text);
             } catch {
                 data = {};
             }
@@ -240,19 +365,26 @@ function App() {
                     `${API}/api/auth/signup`,
                     {
                         method: "POST",
+
                         headers: {
                             "Content-Type":
                                 "application/json",
                         },
-                        body: JSON.stringify({
-                            name: signupName,
-                            birthDate:
-                            signupBirthDate,
-                            loginId:
-                            signupLoginId,
-                            password:
-                            signupPassword,
-                        }),
+
+                        body:
+                            JSON.stringify({
+                                name:
+                                signupName,
+
+                                birthDate:
+                                signupBirthDate,
+
+                                loginId:
+                                signupLoginId,
+
+                                password:
+                                signupPassword,
+                            }),
                     }
                 );
 
@@ -262,7 +394,8 @@ function App() {
             let data;
 
             try {
-                data = JSON.parse(text);
+                data =
+                    JSON.parse(text);
             } catch {
                 data = {};
             }
@@ -307,7 +440,9 @@ function App() {
 
         try {
             const token =
-                localStorage.getItem("accessToken");
+                localStorage.getItem(
+                    "accessToken"
+                );
 
             if (!token) {
                 throw new Error(
@@ -320,6 +455,7 @@ function App() {
                     `${API}/api/users/me`,
                     {
                         method: "DELETE",
+
                         headers: {
                             Authorization:
                                 `Bearer ${token}`,
@@ -334,7 +470,8 @@ function App() {
                 let data = {};
 
                 try {
-                    data = JSON.parse(text);
+                    data =
+                        JSON.parse(text);
                 } catch {
                     data = {};
                 }
@@ -357,6 +494,7 @@ function App() {
 
             setUser(null);
             setEditingProfile(false);
+            setPreferenceSetupRequired(false);
             setNickname("");
             setShowSignup(false);
             setKakaoSetupCompleted(false);
@@ -372,27 +510,43 @@ function App() {
         }
     }
 
-    function socialLogin(provider) {
+    function socialLogin(
+        provider
+    ) {
         window.location.href =
             `${API}/oauth2/authorization/${provider}`;
     }
 
-    function handlePreferenceSaved(data) {
+    /*
+     * 최초 설정 또는 회원정보 수정 완료
+     */
+    function handlePreferenceSaved(
+        data
+    ) {
         setUser(data);
-        setEditingProfile(false);
 
         setNickname(
             data.nickname ?? ""
         );
 
+        setPreferenceSetupRequired(
+            false
+        );
+
+        setEditingProfile(
+            false
+        );
+
         setError("");
+
         setMessage(
-            "회원정보가 수정되었습니다."
+            "회원정보가 저장되었습니다."
         );
     }
 
     function cancelProfileEdit() {
         setEditingProfile(false);
+
         setError("");
         setMessage("");
     }
@@ -415,10 +569,17 @@ function App() {
         setMessage("");
         setError("");
 
-        setKakaoSetupCompleted(false);
+        setEditingProfile(false);
+        setPreferenceSetupRequired(false);
+
+        setKakaoSetupCompleted(
+            false
+        );
     }
 
-    async function saveKakaoNickname(e) {
+    async function saveKakaoNickname(
+        e
+    ) {
         e.preventDefault();
 
         setError("");
@@ -458,15 +619,20 @@ function App() {
                     `${API}/api/users/me`,
                     {
                         method: "PATCH",
+
                         headers: {
                             "Content-Type":
                                 "application/json",
+
                             Authorization:
                                 `Bearer ${token}`,
                         },
-                        body: JSON.stringify({
-                            nickname: value,
-                        }),
+
+                        body:
+                            JSON.stringify({
+                                nickname:
+                                value,
+                            }),
                     }
                 );
 
@@ -476,7 +642,8 @@ function App() {
             let data;
 
             try {
-                data = JSON.parse(text);
+                data =
+                    JSON.parse(text);
             } catch {
                 data = {};
             }
@@ -491,7 +658,8 @@ function App() {
             setUser(data);
 
             setNickname(
-                data.nickname ?? value
+                data.nickname ??
+                value
             );
 
             localStorage.setItem(
@@ -503,6 +671,14 @@ function App() {
                 true
             );
 
+            /*
+             * 닉네임 설정이 끝난 뒤에는
+             * 선호 정보 설정으로 이동한다.
+             */
+            setPreferenceSetupRequired(
+                needsPreferenceSetup(data)
+            );
+
             setMessage(
                 "닉네임이 저장되었습니다."
             );
@@ -512,18 +688,6 @@ function App() {
                 "닉네임 저장에 실패했습니다."
             );
         }
-    }
-
-    function handlePreferenceSaved(data) {
-        setUser(data);
-
-        setNickname(
-            data.nickname ?? ""
-        );
-
-        setMessage(
-            "회원 정보 및 선호 정보가 저장되었습니다."
-        );
     }
 
     if (loading) {
@@ -884,9 +1048,119 @@ function App() {
     }
 
     /*
-     * 로그인 후 회원정보 /
-     * 거주지 / 주변 영화관 /
-     * 선호 좌석 설정
+     * 로그인 직후 최초 선호 정보 설정
+     *
+     * 회원정보 수정 화면이 아니라
+     * 처음 필요한 정보만 설정한다.
+     */
+    if (
+        preferenceSetupRequired &&
+        !editingProfile
+    ) {
+        return (
+            <div className="page">
+                <div className="card profile-card">
+
+                    <div className="profile-header">
+                        <div>
+                            <h1>
+                                선호 정보 설정
+                            </h1>
+
+                            <p className="subtitle">
+                                {user.nickname}님,
+                                예매에 사용할
+                                선호 정보를
+                                설정해주세요.
+                            </p>
+                        </div>
+                    </div>
+
+                    <ResidencePreference
+                        user={user}
+                        onSaved={
+                            handlePreferenceSaved
+                        }
+                    />
+
+                    {error && (
+                        <p className="error-message">
+                            {error}
+                        </p>
+                    )}
+
+                    {message && (
+                        <p className="success-message">
+                            {message}
+                        </p>
+                    )}
+
+                </div>
+            </div>
+        );
+    }
+
+    /*
+     * 회원정보 수정
+     *
+     * [회원정보 수정] 버튼을 눌렀을 때만 진입
+     */
+    if (editingProfile) {
+        return (
+            <div className="page">
+                <div className="card profile-card">
+
+                    <div className="profile-header">
+                        <div>
+                            <h1>
+                                회원정보 수정
+                            </h1>
+
+                            <p className="subtitle">
+                                거주지,
+                                선호 영화관,
+                                선호 좌석을
+                                수정합니다.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="logout-button"
+                            onClick={
+                                cancelProfileEdit
+                            }
+                        >
+                            취소
+                        </button>
+                    </div>
+
+                    <ResidencePreference
+                        user={user}
+                        onSaved={
+                            handlePreferenceSaved
+                        }
+                    />
+
+                    {error && (
+                        <p className="error-message">
+                            {error}
+                        </p>
+                    )}
+
+                    {message && (
+                        <p className="success-message">
+                            {message}
+                        </p>
+                    )}
+
+                </div>
+            </div>
+        );
+    }
+
+    /*
+     * 로그인 후 회원정보 요약
      */
     return (
         <div className="page">
@@ -906,7 +1180,9 @@ function App() {
                     <button
                         type="button"
                         className="logout-button"
-                        onClick={logout}
+                        onClick={
+                            logout
+                        }
                     >
                         로그아웃
                     </button>
@@ -982,14 +1258,169 @@ function App() {
                         </strong>
                     </div>
 
+                    <div>
+                        <span>
+                            거주지
+                        </span>
+
+                        <strong>
+                            {user.address ??
+                                "미등록"}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>
+                            선호 영화관
+                        </span>
+
+                        <div>
+                            {user.preferredTheaters
+                                ?.length ? (
+                                user.preferredTheaters.map(
+                                    (
+                                        theater
+                                    ) => (
+                                        <div
+                                            key={
+                                                theater.theaterId
+                                            }
+                                            style={{
+                                                marginBottom:
+                                                    "6px",
+                                            }}
+                                        >
+                                            <strong>
+                                                {
+                                                    theater.priority
+                                                }
+                                                위
+                                            </strong>
+                                            {" "}
+                                            {
+                                                theater.theaterName
+                                            }
+                                            {" ("}
+                                            {
+                                                theater.brand
+                                            }
+                                            {")"}
+                                        </div>
+                                    )
+                                )
+                            ) : (
+                                <span>
+                                    미설정
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <span>
+                            선호 좌석
+                        </span>
+
+                        <div>
+                            {user.preferredSeats
+                                ?.length ? (
+                                user.preferredSeats.map(
+                                    (
+                                        seat,
+                                        index
+                                    ) => {
+                                        const position =
+                                            typeof seat ===
+                                            "string"
+                                                ? seat
+                                                : seat.position;
+
+                                        const priority =
+                                            typeof seat ===
+                                            "string"
+                                                ? index +
+                                                1
+                                                : seat.priority ??
+                                                index +
+                                                1;
+
+                                        return (
+                                            <div
+                                                key={`${position}-${priority}-${index}`}
+                                                style={{
+                                                    marginBottom:
+                                                        "6px",
+                                                }}
+                                            >
+                                                <strong>
+                                                    {
+                                                        priority
+                                                    }
+                                                    위
+                                                </strong>
+                                                {" "}
+                                                {
+                                                    getSeatLabel(
+                                                        position
+                                                    )
+                                                }
+                                            </div>
+                                        );
+                                    }
+                                )
+                            ) : (
+                                <span>
+                                    미설정
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                 </div>
 
-                <ResidencePreference
-                    user={user}
-                    onSaved={
-                        handlePreferenceSaved
-                    }
-                />
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginTop: "20px",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <button
+                        type="button"
+                        className="primary-button"
+                        style={{
+                            width: "auto",
+                            marginTop: 0,
+                            flex: 1,
+                        }}
+                        onClick={() => {
+                            setEditingProfile(
+                                true
+                            );
+
+                            setError("");
+                            setMessage("");
+                        }}
+                    >
+                        회원정보 수정
+                    </button>
+
+                    <button
+                        type="button"
+                        className="logout-button"
+                        style={{
+                            flex: 1,
+                            minHeight:
+                                "46px",
+                        }}
+                        onClick={
+                            withdraw
+                        }
+                    >
+                        회원 탈퇴
+                    </button>
+                </div>
 
                 {error && (
                     <p className="error-message">

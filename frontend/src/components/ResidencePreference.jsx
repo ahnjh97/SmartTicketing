@@ -1,6 +1,5 @@
 import {
     useEffect,
-    useMemo,
     useRef,
     useState,
 } from "react";
@@ -44,11 +43,56 @@ function getSeatPosition(
     return `${horizontal}_${vertical}`;
 }
 
-function getSeatLabel(position) {
+function getSeatLabel(
+    position
+) {
     return (
         SEAT_POSITION_LABELS[position] ??
         position
     );
+}
+
+/*
+ * 서버에는 좌석 번호가 아니라
+ * 좌석 위치 + priority만 저장한다.
+ *
+ * 따라서 저장되어 있던 선호 위치를
+ * 수정 화면에서 다시 보여주기 위해
+ * 화면용 대표 좌석을 생성한다.
+ */
+function getRepresentativeSeat(
+    position,
+    priority
+) {
+    const rows =
+        position.endsWith(
+            "_FRONT"
+        )
+            ? [0, 1, 2]
+            : position.endsWith(
+                "_MIDDLE"
+            )
+                ? [3, 4, 5, 6]
+                : [7, 8, 9];
+
+    const rowIndex =
+        rows[
+        (priority - 1) %
+        rows.length
+            ];
+
+    const seatNumbers =
+        position.startsWith("SIDE")
+            ? [1, 12]
+            : [5, 6, 7, 8, 9, 10];
+
+    const seatNumber =
+        seatNumbers[
+        (priority - 1) %
+        seatNumbers.length
+            ];
+
+    return `${ROWS[rowIndex]}${seatNumber}`;
 }
 
 export default function ResidencePreference({
@@ -76,6 +120,18 @@ export default function ResidencePreference({
     const kakaoReadyRef =
         useRef(false);
 
+    /*
+     * 소셜 회원 최초 설정 시
+     * 여기서 생년월일을 입력한다.
+     *
+     * 일반 회원은 이미 birthDate가 있으므로
+     * 기존 값을 사용한다.
+     */
+    const [birthDate, setBirthDate] =
+        useState(
+            user.birthDate ?? ""
+        );
+
     const [address, setAddress] =
         useState(
             user.address ?? ""
@@ -89,14 +145,26 @@ export default function ResidencePreference({
 
     const [selectedTheaters, setSelectedTheaters] =
         useState(
-            (user.preferredTheaters ?? []).map(
-                (item) =>
-                    item.theaterId
-            )
+            (user.preferredTheaters ?? [])
+                .map(
+                    (item) =>
+                        item.theaterId
+                )
         );
 
-    const [selectedSeatMap, setSelectedSeatMap] =
-        useState({});
+    /*
+     * 선택한 실제 좌석
+     *
+     * 배열 순서 = 우선순위
+     *
+     * [
+     *   { seatId: "E6", position: "MIDDLE_MIDDLE" },
+     *   { seatId: "E7", position: "MIDDLE_MIDDLE" },
+     *   { seatId: "B6", position: "MIDDLE_FRONT" }
+     * ]
+     */
+    const [selectedSeats, setSelectedSeats] =
+        useState([]);
 
     const [locationLoading, setLocationLoading] =
         useState(false);
@@ -112,15 +180,6 @@ export default function ResidencePreference({
 
     const [message, setMessage] =
         useState("");
-
-    const selectedSeats =
-        useMemo(
-            () =>
-                Object.keys(
-                    selectedSeatMap
-                ),
-            [selectedSeatMap]
-        );
 
     useEffect(() => {
         loadKakaoMap();
@@ -154,58 +213,79 @@ export default function ResidencePreference({
         };
     }, []);
 
+    /*
+     * 기존 선호 좌석 복원
+     */
     useEffect(() => {
         if (
             !user.preferredSeats ||
             user.preferredSeats.length === 0
         ) {
+            setSelectedSeats([]);
             return;
         }
 
-        const initial = {};
+        const restored =
+            user.preferredSeats
+                .map(
+                    (
+                        item,
+                        index
+                    ) => {
+                        const position =
+                            typeof item ===
+                            "string"
+                                ? item
+                                : item?.position;
 
-        user.preferredSeats.forEach(
-            (position, index) => {
-                const rowIndex =
-                    position.includes("FRONT")
-                        ? index % 3
-                        : position.includes("MIDDLE")
-                            ? 3 + (index % 4)
-                            : 7 + (index % 3);
+                        const priority =
+                            typeof item ===
+                            "string"
+                                ? index +
+                                1
+                                : item?.priority ??
+                                index +
+                                1;
 
-                let seatNumber;
+                        if (!position) {
+                            return null;
+                        }
 
-                if (
-                    position.startsWith(
-                        "SIDE"
-                    )
-                ) {
-                    seatNumber =
-                        index % 2 === 0
-                            ? 1
-                            : 12;
-                } else {
-                    seatNumber =
-                        5 + (index % 4);
-                }
+                        return {
+                            seatId:
+                                getRepresentativeSeat(
+                                    position,
+                                    priority
+                                ),
+                            position,
+                        };
+                    }
+                )
+                .filter(Boolean);
 
-                const row =
-                    ROWS[
-                        Math.min(
-                            rowIndex,
-                            ROWS.length - 1
-                        )
-                        ];
+        setSelectedSeats(
+            restored.slice(0, 6)
+        );
+    }, [
+        user.preferredSeats,
+    ]);
 
-                initial[position] =
-                    `${row}${seatNumber}`;
-            }
+    /*
+     * 회원이 바뀌었을 때 생년월일 / 주소도 동기화
+     */
+    useEffect(() => {
+        setBirthDate(
+            user.birthDate ?? ""
         );
 
-        setSelectedSeatMap(
-            initial
+        setAddress(
+            user.address ?? ""
         );
-    }, [user.preferredSeats]);
+    }, [
+        user.id,
+        user.birthDate,
+        user.address,
+    ]);
 
     function loadKakaoMap() {
         const key =
@@ -216,12 +296,12 @@ export default function ResidencePreference({
             setError(
                 "VITE_KAKAO_MAP_JS_KEY가 설정되지 않았습니다."
             );
+
             return;
         }
 
         /*
-         * 이미 SDK 객체가 있으면
-         * 다시 script를 삽입하지 않는다.
+         * SDK가 이미 있으면 재사용
          */
         if (window.kakao?.maps) {
             window.kakao.maps.load(
@@ -360,7 +440,9 @@ export default function ResidencePreference({
         setLocationLoading(true);
 
         navigator.geolocation.getCurrentPosition(
-            async (position) => {
+            async (
+                position
+            ) => {
                 const latitude =
                     position.coords
                         .latitude;
@@ -408,7 +490,9 @@ export default function ResidencePreference({
             {
                 enableHighAccuracy:
                     true,
+
                 timeout: 10000,
+
                 maximumAge: 0,
             }
         );
@@ -427,6 +511,10 @@ export default function ResidencePreference({
                 longitude
             );
 
+        /*
+         * 좌표는 내부 처리용.
+         * 화면에는 위도/경도를 출력하지 않는다.
+         */
         setLocation({
             latitude,
             longitude,
@@ -454,9 +542,6 @@ export default function ResidencePreference({
             6
         );
 
-        /*
-         * 현재 위치 마커
-         */
         if (
             currentMarkerRef.current
         ) {
@@ -469,13 +554,13 @@ export default function ResidencePreference({
             new kakao.maps.Marker({
                 map:
                 mapInstanceRef.current,
+
                 position,
-                title: "현재 위치",
+
+                title:
+                    "현재 위치",
             });
 
-        /*
-         * 3km 원
-         */
         if (
             currentCircleRef.current
         ) {
@@ -488,28 +573,42 @@ export default function ResidencePreference({
             new kakao.maps.Circle({
                 map:
                 mapInstanceRef.current,
-                center: position,
+
+                center:
+                position,
+
                 radius: 3000,
+
                 strokeWeight: 2,
-                strokeColor: "#222222",
+
+                strokeColor:
+                    "#222222",
+
                 strokeOpacity: 0.7,
-                strokeStyle: "solid",
-                fillColor: "#555555",
+
+                strokeStyle:
+                    "solid",
+
+                fillColor:
+                    "#555555",
+
                 fillOpacity: 0.08,
             });
 
         /*
-         * 좌표 → 주소
+         * Kakao JavaScript SDK Geocoder
          *
-         * Kakao Local REST API가 아니라
-         * Kakao JavaScript SDK Geocoder 사용
+         * 좌표 → 주소
          */
         const geocoder =
             new kakao.maps.services.Geocoder();
 
         const addressResult =
             await new Promise(
-                (resolve, reject) => {
+                (
+                    resolve,
+                    reject
+                ) => {
                     geocoder.coord2Address(
                         longitude,
                         latitude,
@@ -519,7 +618,10 @@ export default function ResidencePreference({
                         ) => {
                             if (
                                 status !==
-                                kakao.maps.services.Status.OK
+                                kakao.maps
+                                    .services
+                                    .Status
+                                    .OK
                             ) {
                                 reject(
                                     new Error(
@@ -574,6 +676,7 @@ export default function ResidencePreference({
         longitude
     ) {
         setTheaterLoading(true);
+
         setError("");
 
         try {
@@ -612,7 +715,11 @@ export default function ResidencePreference({
                 );
             }
 
-            if (!Array.isArray(data)) {
+            if (
+                !Array.isArray(
+                    data
+                )
+            ) {
                 throw new Error(
                     "주변 영화관 데이터 형식이 올바르지 않습니다."
                 );
@@ -620,7 +727,9 @@ export default function ResidencePreference({
 
             const normalized =
                 data.map(
-                    (theater) => ({
+                    (
+                        theater
+                    ) => ({
                         ...theater,
 
                         transitMinutes:
@@ -649,7 +758,10 @@ export default function ResidencePreference({
              * 없으면 거리순
              */
             normalized.sort(
-                (a, b) => {
+                (
+                    a,
+                    b
+                ) => {
                     if (
                         a.transitMinutes !=
                         null &&
@@ -703,7 +815,10 @@ export default function ResidencePreference({
             );
 
             setTheaters([]);
-            renderTheaterMarkers([]);
+
+            renderTheaterMarkers(
+                []
+            );
         } finally {
             setTheaterLoading(
                 false
@@ -722,13 +837,21 @@ export default function ResidencePreference({
         }
 
         theaterMarkersRef.current.forEach(
-            (marker) =>
-                marker.setMap(null)
+            (
+                marker
+            ) =>
+                marker.setMap(
+                    null
+                )
         );
 
         theaterOverlaysRef.current.forEach(
-            (overlay) =>
-                overlay.setMap(null)
+            (
+                overlay
+            ) =>
+                overlay.setMap(
+                    null
+                )
         );
 
         theaterMarkersRef.current =
@@ -766,7 +889,9 @@ export default function ResidencePreference({
                         {
                             map:
                             mapInstanceRef.current,
+
                             position,
+
                             title:
                             theater.name,
                         }
@@ -814,7 +939,9 @@ export default function ResidencePreference({
         theaterId
     ) {
         setSelectedTheaters(
-            (current) => {
+            (
+                current
+            ) => {
                 if (
                     current.includes(
                         theaterId
@@ -823,14 +950,17 @@ export default function ResidencePreference({
                     setError("");
 
                     return current.filter(
-                        (id) =>
+                        (
+                            id
+                        ) =>
                             id !==
                             theaterId
                     );
                 }
 
                 if (
-                    current.length >= 5
+                    current.length >=
+                    5
                 ) {
                     setError(
                         "선호 영화관은 최대 5곳까지 선택할 수 있습니다."
@@ -857,7 +987,9 @@ export default function ResidencePreference({
             `${row}${seatNumber}`;
 
         const rowIndex =
-            ROWS.indexOf(row);
+            ROWS.indexOf(
+                row
+            );
 
         const position =
             getSeatPosition(
@@ -865,36 +997,68 @@ export default function ResidencePreference({
                 seatNumber
             );
 
-        setSelectedSeatMap(
-            (current) => {
-                /*
-                 * 같은 좌석 클릭 → 해제
-                 */
-                if (
-                    current[position] ===
+        const alreadySelected =
+            selectedSeats.some(
+                (
+                    seat
+                ) =>
+                    seat.seatId ===
                     seatId
-                ) {
-                    const next = {
-                        ...current,
-                    };
+            );
 
-                    delete next[
-                        position
-                        ];
+        /*
+         * 같은 실제 좌석 클릭 → 해제
+         */
+        if (
+            alreadySelected
+        ) {
+            setSelectedSeats(
+                (
+                    current
+                ) =>
+                    current.filter(
+                        (
+                            seat
+                        ) =>
+                            seat.seatId !==
+                            seatId
+                    )
+            );
 
-                    return next;
-                }
+            setError("");
 
-                /*
-                 * 같은 좌석 위치 범주를
-                 * 이미 선택했다면 새 좌석으로 교체
-                 */
-                return {
-                    ...current,
-                    [position]:
+            return;
+        }
+
+        /*
+         * 최대 6개
+         */
+        if (
+            selectedSeats.length >=
+            6
+        ) {
+            setError(
+                "선호 좌석은 최대 6개까지 선택할 수 있습니다."
+            );
+
+            return;
+        }
+
+        /*
+         * 같은 위치 범주라도
+         * 여러 개 선택 가능
+         */
+        setSelectedSeats(
+            (
+                current
+            ) => [
+                ...current,
+
+                {
                     seatId,
-                };
-            }
+                    position,
+                },
+            ]
         );
 
         setError("");
@@ -907,10 +1071,12 @@ export default function ResidencePreference({
         const seatId =
             `${row}${seatNumber}`;
 
-        return Object.values(
-            selectedSeatMap
-        ).includes(
-            seatId
+        return selectedSeats.some(
+            (
+                seat
+            ) =>
+                seat.seatId ===
+                seatId
         );
     }
 
@@ -918,13 +1084,18 @@ export default function ResidencePreference({
         const selected =
             theaters
                 .filter(
-                    (theater) =>
+                    (
+                        theater
+                    ) =>
                         selectedTheaters.includes(
                             theater.theaterId
                         )
                 )
                 .sort(
-                    (a, b) => {
+                    (
+                        a,
+                        b
+                    ) => {
                         if (
                             a.transitMinutes !=
                             null &&
@@ -965,7 +1136,9 @@ export default function ResidencePreference({
                 );
 
         return selected.map(
-            (theater) =>
+            (
+                theater
+            ) =>
                 theater.theaterId
         );
     }
@@ -973,6 +1146,17 @@ export default function ResidencePreference({
     async function save() {
         setError("");
         setMessage("");
+
+        /*
+         * 소셜 회원이 최초 설정하는 경우
+         */
+        if (!birthDate) {
+            setError(
+                "생년월일을 입력해주세요."
+            );
+
+            return;
+        }
 
         if (!location) {
             setError(
@@ -1020,8 +1204,8 @@ export default function ResidencePreference({
             getSelectedTheatersInPriorityOrder();
 
         /*
-         * 현재 주변 영화관 데이터에
-         * 실제 선택된 영화관이 포함되어 있는지 확인
+         * 현재 조회한 영화관 데이터에
+         * 선택된 영화관이 모두 있는지 확인
          */
         if (
             theaterIds.length !==
@@ -1029,14 +1213,6 @@ export default function ResidencePreference({
         ) {
             setError(
                 "현재 조회된 영화관 정보를 확인한 뒤 다시 선택해주세요."
-            );
-
-            return;
-        }
-
-        if (!user.birthDate) {
-            setError(
-                "선호 정보를 저장하려면 먼저 생년월일을 등록해주세요."
             );
 
             return;
@@ -1071,23 +1247,25 @@ export default function ResidencePreference({
                         },
 
                         body:
-                            JSON.stringify(
-                                {
-                                    nickname:
-                                    user.nickname,
+                            JSON.stringify({
+                                nickname:
+                                user.nickname,
 
-                                    birthDate:
-                                    user.birthDate,
+                                birthDate,
 
-                                    address,
+                                address,
 
-                                    preferredTheaterIds:
-                                    theaterIds,
+                                preferredTheaterIds:
+                                theaterIds,
 
-                                    preferredSeatPositions:
-                                    selectedSeats,
-                                }
-                            ),
+                                preferredSeatPositions:
+                                    selectedSeats.map(
+                                        (
+                                            seat
+                                        ) =>
+                                            seat.position
+                                    ),
+                            }),
                     }
                 );
 
@@ -1098,7 +1276,9 @@ export default function ResidencePreference({
 
             try {
                 data =
-                    JSON.parse(text);
+                    JSON.parse(
+                        text
+                    );
             } catch {
                 data = null;
             }
@@ -1110,11 +1290,9 @@ export default function ResidencePreference({
                 );
             }
 
-            setMessage(
-                "거주지, 선호 영화관, 선호 좌석이 저장되었습니다."
+            onSaved(
+                data
             );
-
-            onSaved(data);
         } catch (e) {
             setError(
                 e.message ??
@@ -1128,6 +1306,40 @@ export default function ResidencePreference({
     return (
         <div className="preference-container">
 
+            {/* 생년월일 */}
+
+            {!user.birthDate && (
+                <section>
+                    <h2>
+                        생년월일
+                    </h2>
+
+                    <p className="help">
+                        소셜 로그인 사용자는
+                        생년월일을 입력해주세요.
+                    </p>
+
+                    <label>
+                        생년월일
+                    </label>
+
+                    <input
+                        type="date"
+                        value={
+                            birthDate
+                        }
+                        onChange={(
+                            e
+                        ) =>
+                            setBirthDate(
+                                e.target.value
+                            )
+                        }
+                        required
+                    />
+                </section>
+            )}
+
             {/* 거주지 */}
 
             <section>
@@ -1136,8 +1348,9 @@ export default function ResidencePreference({
                 </h2>
 
                 <p className="help">
-                    현재 위치를 기준으로 거주지를
-                    자동 확인하고 주변 3km 영화관을
+                    현재 위치를 기준으로
+                    거주지를 자동 확인하고
+                    주변 3km 영화관을
                     조회합니다.
                 </p>
 
@@ -1151,9 +1364,11 @@ export default function ResidencePreference({
                         locationLoading
                     }
                 >
-                    {locationLoading
-                        ? "현재 위치 확인 중..."
-                        : "현재 위치로 조회"}
+                    {
+                        locationLoading
+                            ? "현재 위치 확인 중..."
+                            : "현재 위치로 조회"
+                    }
                 </button>
 
                 <div
@@ -1163,19 +1378,8 @@ export default function ResidencePreference({
 
                 {location && (
                     <div className="location-info">
-                        현재 위치
-
-                        <strong>
-                            {location.latitude.toFixed(
-                                6
-                            )}
-
-                            {" , "}
-
-                            {location.longitude.toFixed(
-                                6
-                            )}
-                        </strong>
+                        현재 위치를
+                        확인했습니다.
                     </div>
                 )}
 
@@ -1209,8 +1413,9 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    현재 위치 기준 3km 이내의
-                    영화관을 대중교통 소요시간순으로
+                    현재 위치 기준 3km
+                    이내의 영화관을
+                    대중교통 소요시간순으로
                     표시합니다.
                 </p>
 
@@ -1329,10 +1534,12 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    실제 영화관 좌석 형태에서
+                    실제 영화관 좌석에서
                     선호하는 좌석을 선택하세요.
-                    같은 위치 범주의 좌석은 하나만
-                    선택됩니다.
+                    같은 위치 범주의 좌석도
+                    여러 개 선택할 수 있으며,
+                    선택한 순서가 우선순위가
+                    됩니다.
                 </p>
 
                 <div className="screen">
@@ -1354,9 +1561,13 @@ export default function ResidencePreference({
                                         length:
                                         SEATS_PER_ROW,
                                     },
-                                    (_, index) => {
+                                    (
+                                        _,
+                                        index
+                                    ) => {
                                         const seatNumber =
-                                            index + 1;
+                                            index +
+                                            1;
 
                                         const position =
                                             getSeatPosition(
@@ -1391,7 +1602,9 @@ export default function ResidencePreference({
                                                     )
                                                 }
                                             >
-                                                {row}
+                                                {
+                                                    row
+                                                }
                                                 {
                                                     seatNumber
                                                 }
@@ -1412,25 +1625,29 @@ export default function ResidencePreference({
                         </span>
                     ) : (
                         selectedSeats.map(
-                            (position) => (
+                            (
+                                seat,
+                                index
+                            ) => (
                                 <div
                                     key={
-                                        position
+                                        seat.seatId
                                     }
                                     className="seat-summary-item"
                                 >
                                     <strong>
-                                        {
-                                            selectedSeatMap[
-                                                position
-                                                ]
-                                        }
+                                        {index + 1}
+                                        위
                                     </strong>
 
                                     <span>
                                         {
+                                            seat.seatId
+                                        }
+                                        {" · "}
+                                        {
                                             getSeatLabel(
-                                                position
+                                                seat.position
                                             )
                                         }
                                     </span>
@@ -1456,12 +1673,18 @@ export default function ResidencePreference({
             <button
                 type="button"
                 className="primary-button save-preference-button"
-                onClick={save}
-                disabled={saving}
+                onClick={
+                    save
+                }
+                disabled={
+                    saving
+                }
             >
-                {saving
-                    ? "저장 중..."
-                    : "선호 정보 저장"}
+                {
+                    saving
+                        ? "저장 중..."
+                        : "선호 정보 저장"
+                }
             </button>
 
         </div>

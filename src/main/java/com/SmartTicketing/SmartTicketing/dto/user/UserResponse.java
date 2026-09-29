@@ -17,13 +17,20 @@ public record UserResponse(
         String address,
         UserStatus status,
         List<PreferredTheaterResponse> preferredTheaters,
-        List<SeatPosition> preferredSeats,
+        List<PreferredSeatResponse> preferredSeats,
         List<SocialProvider> linkedProviders
 ) {
+
     public record PreferredTheaterResponse(
             Long theaterId,
             String theaterName,
             String brand,
+            Integer priority
+    ) {
+    }
+
+    public record PreferredSeatResponse(
+            SeatPosition position,
             Integer priority
     ) {
     }
