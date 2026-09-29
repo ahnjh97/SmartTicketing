@@ -1,0 +1,39 @@
+package com.SmartTicketing.SmartTicketing.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "movies")
+@Data
+@NoArgsConstructor
+public class Movie {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 255)
+    private String title;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "running_time")
+    private Integer runningTime;
+
+    @Column(length = 20)
+    private String rating;
+
+    @Column(name = "release_date")
+    private LocalDate releaseDate;
+
+    @Column(name = "poster_url", length = 500)
+    private String posterUrl;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
+}
