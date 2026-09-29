@@ -19,47 +19,51 @@ export default function ResidencePreference({
     const mapInstance = useRef(null);
     const markerRef = useRef(null);
     const theaterMarkersRef = useRef([]);
+    const kakaoLoadedRef = useRef(false);
 
-    const [addressQuery, setAddressQuery] =
-        useState("");
+    const [address, setAddress] = useState(
+        user.address ?? ""
+    );
 
-    const [address, setAddress] =
-        useState(user.address ?? "");
+    const [location, setLocation] = useState(null);
 
-    const [selectedLocation, setSelectedLocation] =
-        useState(null);
+    const [theaters, setTheaters] = useState([]);
 
-    const [searchResults, setSearchResults] =
-        useState([]);
+    const [selectedTheaters, setSelectedTheaters] = useState(
+        (user.preferredTheaters ?? []).map(
+            (item) => item.theaterId
+        )
+    );
 
-    const [theaters, setTheaters] =
-        useState([]);
+    const [selectedSeats, setSelectedSeats] = useState(
+        user.preferredSeats ?? []
+    );
 
-    const [selectedTheaters, setSelectedTheaters] =
-        useState(
-            (user.preferredTheaters ?? [])
-                .map((item) => item.theaterId)
-        );
-
-    const [selectedSeats, setSelectedSeats] =
-        useState(
-            user.preferredSeats ?? []
-        );
-
-    const [loading, setLoading] =
-        useState(false);
-
-    const [error, setError] =
-        useState("");
+    const [loading, setLoading] = useState(false);
+    const [locationLoading, setLocationLoading] = useState(false);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         loadKakaoMap();
+
+        return () => {
+            theaterMarkersRef.current.forEach((marker) => {
+                marker.setMap(null);
+            });
+
+            theaterMarkersRef.current = [];
+
+            if (markerRef.current) {
+                markerRef.current.setMap(null);
+            }
+
+            mapInstance.current = null;
+        };
     }, []);
 
     function loadKakaoMap() {
         const key =
-            import.meta.env
-                .VITE_KAKAO_MAP_JS_KEY;
+            import.meta.env.VITE_KAKAO_MAP_JS_KEY;
 
         if (!key) {
             setError(
@@ -69,36 +73,75 @@ export default function ResidencePreference({
         }
 
         if (window.kakao?.maps) {
+            kakaoLoadedRef.current = true;
             initMap();
             return;
         }
 
-        const script =
-            document.createElement("script");
+        const existingScript = document.querySelector(
+            'script[data-kakao-map="true"]'
+        );
+
+        if (existingScript) {
+            existingScript.addEventListener(
+                "load",
+                handleKakaoLoad
+            );
+
+            return;
+        }
+
+        const script = document.createElement("script");
+
+        script.setAttribute(
+            "data-kakao-map",
+            "true"
+        );
 
         script.src =
-            `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services`;
+            `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
 
-        script.onload = () => {
-            window.kakao.maps.load(
-                initMap
-            );
-        };
+        script.async = true;
+
+        script.onload = handleKakaoLoad;
 
         script.onerror = () => {
             setError(
-                "카카오맵을 불러오지 못했습니다."
+                "카카오맵 SDK를 불러오지 못했습니다. JavaScript Key와 도메인 설정을 확인해주세요."
             );
         };
 
-        document.head.appendChild(
-            script
-        );
+        document.head.appendChild(script);
+    }
+
+    function handleKakaoLoad() {
+        if (!window.kakao?.maps) {
+            setError(
+                "카카오맵 SDK가 정상적으로 로드되지 않았습니다."
+            );
+            return;
+        }
+
+        window.kakao.maps.load(() => {
+            kakaoLoadedRef.current = true;
+
+            initMap();
+        });
     }
 
     function initMap() {
-        const kakao =
-            window.kakao;
+        if (
+            !mapRef.current ||
+            !window.kakao?.maps
+        ) {
+            return;
+        }
+
+        if (mapInstance.current) {
+            return;
+        }
+
+        const kakao = window.kakao;
 
         const defaultPosition =
             new kakao.maps.LatLng(
@@ -110,74 +153,85 @@ export default function ResidencePreference({
             new kakao.maps.Map(
                 mapRef.current,
                 {
-                    center:
-                    defaultPosition,
+                    center: defaultPosition,
                     level: 6,
                 }
             );
     }
 
-    function searchAddress() {
-        if (!addressQuery.trim()) {
+    function getCurrentLocation() {
+        if (!navigator.geolocation) {
+            setError(
+                "이 브라우저에서는 위치 정보를 사용할 수 없습니다."
+            );
             return;
         }
 
-        const geocoder =
-            new window.kakao.maps.services.Geocoder();
+        if (!kakaoLoadedRef.current) {
+            setError(
+                "카카오맵이 아직 로딩되지 않았습니다."
+            );
+            return;
+        }
 
-        geocoder.addressSearch(
-            addressQuery.trim(),
-            (
-                results,
-                status
-            ) => {
-                if (
-                    status !==
-                    window.kakao.maps.services.Status.OK
-                ) {
-                    setSearchResults([]);
+        setLocationLoading(true);
+        setError("");
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const latitude =
+                    position.coords.latitude;
+
+                const longitude =
+                    position.coords.longitude;
+
+                try {
+                    await setResidenceFromLocation(
+                        latitude,
+                        longitude
+                    );
+                } catch (e) {
                     setError(
-                        "주소를 찾지 못했습니다."
+                        e.message ??
+                        "현재 위치를 처리하지 못했습니다."
+                    );
+                } finally {
+                    setLocationLoading(false);
+                }
+            },
+            (error) => {
+                setLocationLoading(false);
+
+                if (
+                    error.code ===
+                    error.PERMISSION_DENIED
+                ) {
+                    setError(
+                        "위치 권한이 거부되었습니다. 브라우저에서 위치 권한을 허용해주세요."
                     );
                     return;
                 }
 
-                setError("");
-                setSearchResults(
-                    results.slice(0, 5)
+                setError(
+                    "현재 위치를 가져오지 못했습니다."
                 );
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0,
             }
         );
     }
 
-    async function selectAddress(
-        result
+    async function setResidenceFromLocation(
+        latitude,
+        longitude
     ) {
-        const latitude =
-            Number(result.y);
-
-        const longitude =
-            Number(result.x);
-
-        setAddress(
-            result.road_address?.address_name ??
-            result.address_name
-        );
-
-        setAddressQuery(
-            result.road_address?.address_name ??
-            result.address_name
-        );
-
-        setSearchResults([]);
-
-        setSelectedLocation({
-            latitude,
-            longitude,
-        });
+        const kakao = window.kakao;
 
         const position =
-            new window.kakao.maps.LatLng(
+            new kakao.maps.LatLng(
                 latitude,
                 longitude
             );
@@ -186,23 +240,79 @@ export default function ResidencePreference({
             position
         );
 
-        mapInstance.current.setLevel(
-            5
-        );
+        mapInstance.current.setLevel(5);
 
         if (markerRef.current) {
-            markerRef.current.setMap(
-                null
-            );
+            markerRef.current.setMap(null);
         }
 
         markerRef.current =
-            new window.kakao.maps.Marker(
-                {
-                    map: mapInstance.current,
-                    position,
+            new kakao.maps.Marker({
+                map: mapInstance.current,
+                position,
+            });
+
+        setLocation({
+            latitude,
+            longitude,
+        });
+
+        const geocoder =
+            new kakao.maps.services.Geocoder();
+
+        const addressInfo =
+            await new Promise(
+                (
+                    resolve,
+                    reject
+                ) => {
+                    geocoder.coord2Address(
+                        longitude,
+                        latitude,
+                        (
+                            result,
+                            status
+                        ) => {
+                            if (
+                                status !==
+                                kakao.maps.services.Status.OK
+                            ) {
+                                reject(
+                                    new Error(
+                                        "현재 위치의 주소를 가져오지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            resolve(result);
+                        }
+                    );
                 }
             );
+
+        const first =
+            addressInfo?.[0];
+
+        const roadAddress =
+            first?.road_address?.address_name;
+
+        const jibunAddress =
+            first?.address?.address_name;
+
+        const resolvedAddress =
+            roadAddress ??
+            jibunAddress;
+
+        if (!resolvedAddress) {
+            throw new Error(
+                "현재 위치의 주소를 확인하지 못했습니다."
+            );
+        }
+
+        setAddress(
+            resolvedAddress
+        );
 
         await loadNearbyTheaters(
             latitude,
@@ -234,14 +344,17 @@ export default function ResidencePreference({
                     }
                 );
 
+            const text =
+                await response.text();
+
             if (!response.ok) {
                 throw new Error(
-                    "주변 영화관을 가져오지 못했습니다."
+                    `주변 영화관 조회 실패 (${response.status})`
                 );
             }
 
             const data =
-                await response.json();
+                JSON.parse(text);
 
             setTheaters(data);
 
@@ -250,7 +363,8 @@ export default function ResidencePreference({
             );
         } catch (e) {
             setError(
-                e.message
+                e.message ??
+                "주변 영화관을 가져오지 못했습니다."
             );
         } finally {
             setLoading(false);
@@ -260,29 +374,29 @@ export default function ResidencePreference({
     function renderTheaterMarkers(
         data
     ) {
+        if (!mapInstance.current) {
+            return;
+        }
+
         theaterMarkersRef.current.forEach(
-            (marker) =>
-                marker.setMap(null)
+            (marker) => {
+                marker.setMap(null);
+            }
         );
 
         theaterMarkersRef.current =
             data.map((theater) => {
-
                 const position =
                     new window.kakao.maps.LatLng(
                         theater.latitude,
                         theater.longitude
                     );
 
-                return new window.kakao.maps.Marker(
-                    {
-                        map:
-                        mapInstance.current,
-                        position,
-                        title:
-                        theater.name,
-                    }
-                );
+                return new window.kakao.maps.Marker({
+                    map: mapInstance.current,
+                    position,
+                    title: theater.name,
+                });
             });
     }
 
@@ -291,7 +405,6 @@ export default function ResidencePreference({
     ) {
         setSelectedTheaters(
             (current) => {
-
                 if (
                     current.includes(
                         theaterId
@@ -313,11 +426,7 @@ export default function ResidencePreference({
                     return current;
                 }
 
-                if (
-                    current.length < 5
-                ) {
-                    setError("");
-                }
+                setError("");
 
                 return [
                     ...current,
@@ -332,7 +441,6 @@ export default function ResidencePreference({
     ) {
         setSelectedSeats(
             (current) => {
-
                 if (
                     current.includes(
                         position
@@ -354,6 +462,8 @@ export default function ResidencePreference({
                     return current;
                 }
 
+                setError("");
+
                 return [
                     ...current,
                     position,
@@ -363,9 +473,9 @@ export default function ResidencePreference({
     }
 
     async function save() {
-        if (!address.trim()) {
+        if (!address) {
             setError(
-                "거주지를 선택해주세요."
+                "먼저 현재 위치에서 거주지를 조회해주세요."
             );
             return;
         }
@@ -407,6 +517,8 @@ export default function ResidencePreference({
                                 `Bearer ${token}`,
                         },
                         body: JSON.stringify({
+                            birthDate:
+                            user.birthDate,
                             address,
                             preferredTheaterIds:
                             selectedTheaters,
@@ -416,21 +528,30 @@ export default function ResidencePreference({
                     }
                 );
 
-            const data =
-                await response.json();
+            const text =
+                await response.text();
+
+            let data = null;
+
+            try {
+                data =
+                    JSON.parse(text);
+            } catch {
+                data = null;
+            }
 
             if (!response.ok) {
                 throw new Error(
-                    data.message ??
-                    "회원정보 저장에 실패했습니다."
+                    data?.message ??
+                    `회원정보 저장 실패 (${response.status})`
                 );
             }
 
             onSaved(data);
-
         } catch (e) {
             setError(
-                e.message
+                e.message ??
+                "회원정보 저장에 실패했습니다."
             );
         }
     }
@@ -440,77 +561,24 @@ export default function ResidencePreference({
 
             <section>
                 <h2>
-                    거주지 설정
+                    거주지
                 </h2>
 
-                <div className="address-search">
-                    <input
-                        value={
-                            addressQuery
-                        }
-                        onChange={(e) =>
-                            setAddressQuery(
-                                e.target.value
-                            )
-                        }
-                        onKeyDown={(e) => {
-                            if (
-                                e.key ===
-                                "Enter"
-                            ) {
-                                searchAddress();
-                            }
-                        }}
-                        placeholder="도로명 주소를 입력해주세요."
-                    />
+                <p className="help">
+                    현재 위치를 Kakao Map으로 조회하여
+                    주소를 자동으로 가져옵니다.
+                </p>
 
-                    <button
-                        type="button"
-                        onClick={
-                            searchAddress
-                        }
-                    >
-                        검색
-                    </button>
-                </div>
-
-                {searchResults.length >
-                    0 && (
-                        <div className="address-results">
-                            {searchResults.map(
-                                (result, index) => (
-                                    <button
-                                        type="button"
-                                        key={
-                                            `${result.address_name}-${index}`
-                                        }
-                                        onClick={() =>
-                                            selectAddress(
-                                                result
-                                            )
-                                        }
-                                    >
-                                        <strong>
-                                            {
-                                                result.road_address?.address_name ??
-                                                result.address_name
-                                            }
-                                        </strong>
-
-                                        {result.road_address
-                                            ?.address_name && (
-                                            <small>
-                                                지번:{" "}
-                                                {
-                                                    result.address_name
-                                                }
-                                            </small>
-                                        )}
-                                    </button>
-                                )
-                            )}
-                        </div>
-                    )}
+                <button
+                    type="button"
+                    className="primary-button"
+                    onClick={getCurrentLocation}
+                    disabled={locationLoading}
+                >
+                    {locationLoading
+                        ? "현재 위치 확인 중..."
+                        : "현재 위치로 거주지 조회"}
+                </button>
 
                 <div
                     ref={mapRef}
@@ -519,7 +587,7 @@ export default function ResidencePreference({
 
                 {address && (
                     <div className="selected-address">
-                        선택된 거주지:
+                        현재 위치에서 조회된 주소:
                         <strong>
                             {address}
                         </strong>
@@ -534,24 +602,22 @@ export default function ResidencePreference({
                     </h2>
 
                     <span>
-                        {selectedTheaters.length}
-                        /5
+                        {selectedTheaters.length}/5
                     </span>
                 </div>
 
                 <p className="help">
-                    거주지 기준 가까운 영화관입니다.
+                    현재 위치 기준 가까운 영화관입니다.
                     3~5곳을 선택해주세요.
                 </p>
 
                 {loading && (
                     <p>
-                        영화관을 검색하는 중...
+                        주변 영화관을 검색하는 중...
                     </p>
                 )}
 
                 <div className="theater-list">
-
                     {theaters.map(
                         (theater) => (
                             <button
@@ -574,36 +640,26 @@ export default function ResidencePreference({
                             >
                                 <div>
                                     <strong>
-                                        {
-                                            theater.name
-                                        }
+                                        {theater.name}
                                     </strong>
 
                                     <span>
-                                        {
-                                            theater.brand
-                                        }
+                                        {theater.brand}
                                     </span>
                                 </div>
 
                                 <div>
                                     <small>
-                                        {
-                                            theater.address
-                                        }
+                                        {theater.address}
                                     </small>
 
                                     <b>
-                                        {
-                                            theater.distance
-                                        }
-                                        m
+                                        {theater.distance}m
                                     </b>
                                 </div>
                             </button>
                         )
                     )}
-
                 </div>
             </section>
 
@@ -614,13 +670,11 @@ export default function ResidencePreference({
                     </h2>
 
                     <span>
-                        {selectedSeats.length}
-                        /6
+                        {selectedSeats.length}/6
                     </span>
                 </div>
 
                 <div className="seat-grid">
-
                     {SEATS.map(
                         ([value, label]) => (
                             <button
@@ -643,7 +697,6 @@ export default function ResidencePreference({
                             </button>
                         )
                     )}
-
                 </div>
             </section>
 

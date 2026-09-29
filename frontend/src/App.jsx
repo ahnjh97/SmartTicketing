@@ -1,22 +1,13 @@
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import "./index.css";
+import ResidencePreference from "./components/ResidencePreference";
 
 const API = "http://localhost:8080";
-
-const SEAT_POSITIONS = [
-    {value: "SIDE_FRONT", label: "좌측 · 앞"},
-    {value: "SIDE_MIDDLE", label: "좌측 · 가운데"},
-    {value: "SIDE_REAR", label: "좌측 · 뒤"},
-    {value: "MIDDLE_FRONT", label: "중간 · 앞"},
-    {value: "MIDDLE_MIDDLE", label: "중간 · 가운데"},
-    {value: "MIDDLE_REAR", label: "중간 · 뒤"},
-];
 
 function App() {
     const [loading, setLoading] = useState(true);
 
     const [user, setUser] = useState(null);
-    const [options, setOptions] = useState(null);
 
     const [loginId, setLoginId] = useState("");
     const [password, setPassword] = useState("");
@@ -30,14 +21,13 @@ function App() {
     const [birthDate, setBirthDate] = useState("");
     const [address, setAddress] = useState("");
 
-    const [preferredTheaters, setPreferredTheaters] = useState([]);
-    const [preferredSeats, setPreferredSeats] = useState([]);
-
     const [showSignup, setShowSignup] = useState(false);
+
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
 
-    const [kakaoSetupCompleted, setKakaoSetupCompleted] = useState(false);
+    const [kakaoSetupCompleted, setKakaoSetupCompleted] =
+        useState(false);
 
     useEffect(() => {
         initialize();
@@ -100,6 +90,7 @@ function App() {
             await loadMyInfo(token);
         } catch (e) {
             console.error(e);
+
             setError(
                 e.message ??
                 "로그인 처리 중 오류가 발생했습니다."
@@ -112,16 +103,23 @@ function App() {
     async function loadMyInfo(
         token = localStorage.getItem("accessToken")
     ) {
+        if (!token) {
+            setUser(null);
+            return;
+        }
+
         const response = await fetch(
             `${API}/api/users/me`,
             {
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    Authorization:
+                        `Bearer ${token}`,
                 },
             }
         );
 
-        const text = await response.text();
+        const text =
+            await response.text();
 
         if (!response.ok) {
             throw new Error(
@@ -129,24 +127,30 @@ function App() {
             );
         }
 
-        const data = JSON.parse(text);
+        const data =
+            JSON.parse(text);
 
         setUser(data);
 
-        setNickname(data.nickname ?? "");
-        setBirthDate(data.birthDate ?? "");
-        setAddress(data.address ?? "");
-
-        setPreferredTheaters(
-            (data.preferredTheaters ?? []).map(
-                (theater) => theater.theaterId
-            )
+        setNickname(
+            data.nickname ?? ""
         );
 
-        setPreferredSeats(
-            data.preferredSeats ?? []
+        setBirthDate(
+            data.birthDate ?? ""
         );
 
+        setAddress(
+            data.address ?? ""
+        );
+
+        /*
+         * 카카오 최초 로그인 여부
+         *
+         * 카카오만 연결되어 있고
+         * 이메일이 없는 경우
+         * 최초 프로필 설정 화면으로 이동한다.
+         */
         const isKakaoOnlyUser =
             data.linkedProviders?.length === 1 &&
             data.linkedProviders.includes("KAKAO") &&
@@ -161,33 +165,6 @@ function App() {
         setKakaoSetupCompleted(
             !isKakaoOnlyUser || setupDone
         );
-
-        if (!data.birthDate) {
-            await loadPreferenceOptions(token);
-        }
-    }
-
-    async function loadPreferenceOptions(
-        token = localStorage.getItem("accessToken")
-    ) {
-        const response = await fetch(
-            `${API}/api/users/preference-options`,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(
-                "선호 설정 정보를 가져오지 못했습니다."
-            );
-        }
-
-        const data = await response.json();
-
-        setOptions(data);
     }
 
     async function normalLogin(e) {
@@ -197,22 +174,24 @@ function App() {
         setMessage("");
 
         try {
-            const response = await fetch(
-                `${API}/api/auth/login`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                    },
-                    body: JSON.stringify({
-                        loginId,
-                        password,
-                    }),
-                }
-            );
+            const response =
+                await fetch(
+                    `${API}/api/auth/login`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                        },
+                        body: JSON.stringify({
+                            loginId,
+                            password,
+                        }),
+                    }
+                );
 
-            const data = await response.json();
+            const data =
+                await response.json();
 
             if (!response.ok) {
                 throw new Error(
@@ -244,25 +223,26 @@ function App() {
         setMessage("");
 
         try {
-            const response = await fetch(
-                `${API}/api/auth/signup`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                    },
-                    body: JSON.stringify({
-                        name: signupName,
-                        birthDate:
-                        signupBirthDate,
-                        loginId:
-                        signupLoginId,
-                        password:
-                        signupPassword,
-                    }),
-                }
-            );
+            const response =
+                await fetch(
+                    `${API}/api/auth/signup`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                        },
+                        body: JSON.stringify({
+                            name: signupName,
+                            birthDate:
+                            signupBirthDate,
+                            loginId:
+                            signupLoginId,
+                            password:
+                            signupPassword,
+                        }),
+                    }
+                );
 
             const data =
                 await response.json();
@@ -295,12 +275,25 @@ function App() {
     }
 
     function logout() {
-        localStorage.removeItem("accessToken");
+        localStorage.removeItem(
+            "accessToken"
+        );
+
+        if (user?.id) {
+            localStorage.removeItem(
+                `kakaoProfileSetupDone:${user.id}`
+            );
+        }
 
         setUser(null);
-        setOptions(null);
+
+        setNickname("");
+        setBirthDate("");
+        setAddress("");
+
         setMessage("");
         setError("");
+
         setKakaoSetupCompleted(false);
     }
 
@@ -310,7 +303,8 @@ function App() {
         setError("");
         setMessage("");
 
-        const value = nickname.trim();
+        const value =
+            nickname.trim();
 
         if (!value) {
             setError(
@@ -332,21 +326,22 @@ function App() {
                     "accessToken"
                 );
 
-            const response = await fetch(
-                `${API}/api/users/me`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                        Authorization:
-                            `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        nickname: value,
-                    }),
-                }
-            );
+            const response =
+                await fetch(
+                    `${API}/api/users/me`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                            nickname: value,
+                        }),
+                    }
+                );
 
             const data =
                 await response.json();
@@ -359,169 +354,48 @@ function App() {
             }
 
             setUser(data);
-            setNickname(data.nickname ?? value);
+
+            setNickname(
+                data.nickname ?? value
+            );
 
             localStorage.setItem(
                 `kakaoProfileSetupDone:${data.id}`,
                 "true"
             );
 
-            setKakaoSetupCompleted(true);
+            setKakaoSetupCompleted(
+                true
+            );
+
             setMessage(
                 "닉네임이 저장되었습니다."
             );
-
-            if (!data.birthDate) {
-                await loadPreferenceOptions(
-                    token
-                );
-            }
         } catch (e) {
             setError(e.message);
         }
     }
 
-    function toggleTheater(theaterId) {
-        setPreferredTheaters(
-            (current) => {
-                if (
-                    current.includes(theaterId)
-                ) {
-                    return current.filter(
-                        (id) =>
-                            id !== theaterId
-                    );
-                }
+    function handlePreferenceSaved(
+        data
+    ) {
+        setUser(data);
 
-                if (current.length >= 5) {
-                    setError(
-                        "선호 영화관은 최대 5곳까지 선택할 수 있습니다."
-                    );
-
-                    return current;
-                }
-
-                setError("");
-
-                return [
-                    ...current,
-                    theaterId,
-                ];
-            }
+        setNickname(
+            data.nickname ?? ""
         );
-    }
 
-    function toggleSeat(position) {
-        setPreferredSeats(
-            (current) => {
-                if (
-                    current.includes(position)
-                ) {
-                    return current.filter(
-                        (item) =>
-                            item !== position
-                    );
-                }
-
-                if (current.length >= 6) {
-                    setError(
-                        "선호 좌석은 최대 6개까지 선택할 수 있습니다."
-                    );
-
-                    return current;
-                }
-
-                setError("");
-
-                return [
-                    ...current,
-                    position,
-                ];
-            }
+        setBirthDate(
+            data.birthDate ?? ""
         );
-    }
 
-    async function saveProfile(e) {
-        e.preventDefault();
+        setAddress(
+            data.address ?? ""
+        );
 
-        setError("");
-        setMessage("");
-
-        if (!birthDate) {
-            setError(
-                "생년월일을 입력해주세요."
-            );
-
-            return;
-        }
-
-        if (
-            preferredTheaters.length < 3 ||
-            preferredTheaters.length > 5
-        ) {
-            setError(
-                "선호 영화관을 3~5곳 선택해주세요."
-            );
-
-            return;
-        }
-
-        if (
-            preferredSeats.length < 1 ||
-            preferredSeats.length > 6
-        ) {
-            setError(
-                "선호 좌석을 1~6개 선택해주세요."
-            );
-
-            return;
-        }
-
-        try {
-            const token =
-                localStorage.getItem(
-                    "accessToken"
-                );
-
-            const response = await fetch(
-                `${API}/api/users/me`,
-                {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                        Authorization:
-                            `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        nickname,
-                        birthDate,
-                        address,
-                        preferredTheaterIds:
-                        preferredTheaters,
-                        preferredSeatPositions:
-                        preferredSeats,
-                    }),
-                }
-            );
-
-            const data =
-                await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.message ??
-                    "회원정보 수정에 실패했습니다."
-                );
-            }
-
-            setUser(data);
-            setMessage(
-                "회원정보가 저장되었습니다."
-            );
-        } catch (e) {
-            setError(e.message);
-        }
+        setMessage(
+            "회원정보가 저장되었습니다."
+        );
     }
 
     if (loading) {
@@ -532,12 +406,17 @@ function App() {
                         SmartTicketing
                     </h1>
 
-                    <p>불러오는 중...</p>
+                    <p>
+                        불러오는 중...
+                    </p>
                 </div>
             </div>
         );
     }
 
+    /*
+     * 로그인하지 않은 상태
+     */
     if (!user) {
         return (
             <div className="page">
@@ -614,8 +493,7 @@ function App() {
                                         e
                                     ) =>
                                         setLoginId(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     placeholder="아이디"
@@ -635,8 +513,7 @@ function App() {
                                         e
                                     ) =>
                                         setPassword(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     placeholder="비밀번호"
@@ -689,8 +566,7 @@ function App() {
                                         e
                                     ) =>
                                         setSignupName(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     placeholder="이름"
@@ -710,8 +586,7 @@ function App() {
                                         e
                                     ) =>
                                         setSignupBirthDate(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     required
@@ -730,8 +605,7 @@ function App() {
                                         e
                                     ) =>
                                         setSignupLoginId(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     placeholder="영문, 숫자, 밑줄 4~50자"
@@ -751,8 +625,7 @@ function App() {
                                         e
                                     ) =>
                                         setSignupPassword(
-                                            e.target
-                                                .value
+                                            e.target.value
                                         )
                                     }
                                     placeholder="8~100자"
@@ -801,6 +674,7 @@ function App() {
 
     /*
      * 카카오 최초 로그인 사용자
+     * → 닉네임 설정
      */
     if (!kakaoSetupCompleted) {
         return (
@@ -835,12 +709,9 @@ function App() {
                             value={
                                 nickname
                             }
-                            onChange={(
-                                e
-                            ) =>
+                            onChange={(e) =>
                                 setNickname(
-                                    e.target
-                                        .value
+                                    e.target.value
                                 )
                             }
                             placeholder="닉네임을 입력해주세요."
@@ -868,13 +739,15 @@ function App() {
                             {message}
                         </p>
                     )}
+
                 </div>
             </div>
         );
     }
 
     /*
-     * 로그인 후 회원정보 / 선호 설정
+     * 로그인 후 회원정보 / 거주지 /
+     * 주변 영화관 / 선호 좌석 설정
      */
     return (
         <div className="page">
@@ -960,105 +833,32 @@ function App() {
 
                 </div>
 
-                <form
-                    onSubmit={
-                        saveProfile
-                    }
-                >
+                <ResidencePreference
+                    user={user}
+                    onSaved={(data) => {
+                        setUser(data);
+                        setNickname(data.nickname ?? "");
+                        setBirthDate(data.birthDate ?? "");
+                        setAddress(data.address ?? "");
+                        setMessage("회원정보가 저장되었습니다.");
+                    }}
+                />
 
-                    <section>
-                        <h2>
-                            프로필 설정
-                        </h2>
+                {error && (
+                    <p className="error-message">
+                        {error}
+                    </p>
+                )}
 
-                        <label>
-                            닉네임
-                        </label>
+                {message && (
+                    <p className="success-message">
+                        {message}
+                    </p>
+                )}
 
-                        <input
-                            type="text"
-                            value={
-                                nickname
-                            }
-                            onChange={(
-                                e
-                            ) =>
-                                setNickname(
-                                    e.target
-                                        .value
-                                )
-                            }
-                            maxLength={100}
-                            required
-                        />
-
-                        <label>
-                            생년월일
-                        </label>
-
-                        <input
-                            type="date"
-                            value={
-                                birthDate
-                            }
-                            onChange={(
-                                e
-                            ) =>
-                                setBirthDate(
-                                    e.target
-                                        .value
-                                )
-                            }
-                            required
-                        />
-
-                        <label>
-                            거주지
-                        </label>
-
-                        <input
-                            type="text"
-                            value={
-                                address
-                            }
-                            onChange={(
-                                e
-                            ) =>
-                                setAddress(
-                                    e.target
-                                        .value
-                                )
-                            }
-                            placeholder="거주지를 입력해주세요."
-                        />
-                    </section>
-
-                    <section>
-                        <div className="section-title"><h2> 선호 영화관 </h2> <span> {preferredTheaters.length} /5 </span>
-                        </div>
-                        <p className="help"> 최소 3곳을 선택해주세요. </p>
-                        <div className="option-grid"> {options?.theaters?.map((theater) => (
-                            <button type="button" key={theater.id}
-                                    className={preferredTheaters.includes(theater.id) ? "option selected" : "option"}
-                                    onClick={() => toggleTheater(theater.id)}><strong> {theater.name} </strong>
-                                <span> {theater.brand} </span> <small> {theater.address} </small></button>))} </div>
-                    </section>
-                    <section>
-                        <div className="section-title"><h2> 선호 좌석 </h2> <span> {preferredSeats.length} /6 </span></div>
-                        <p className="help"> 좌석 위치를 1~6개 선택해주세요. </p>
-                        <div className="seat-grid"> {(options?.seats ?? SEAT_POSITIONS).map((seat) => {
-                            const value = seat.position ?? seat.value;
-                            const label = seat.label;
-                            return (<button type="button" key={value}
-                                            className={preferredSeats.includes(value) ? "seat selected" : "seat"}
-                                            onClick={() => toggleSeat(value)}> {label} </button>);
-                        })} </div>
-                    </section>
-                    <button type="submit" className="primary-button save-button"> 회원정보 저장</button>
-                </form>
-                {error && (<p className="error-message"> {error} </p>)} {message && (
-                <p className="success-message"> {message} </p>)} </div>
-        </div>);
+            </div>
+        </div>
+    );
 }
 
 export default App;
