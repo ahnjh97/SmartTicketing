@@ -2,4 +2,5 @@ package com.SmartTicketing.SmartTicketing.dto.auth;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record LoginRequest(@NotBlank String loginId, @NotBlank String password) { }
+public record LoginRequest(@NotBlank String loginId, @NotBlank String password) {
+}
