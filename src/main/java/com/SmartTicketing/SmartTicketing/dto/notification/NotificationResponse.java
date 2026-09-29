@@ -1,0 +1,6 @@
+package com.SmartTicketing.SmartTicketing.dto.notification;
+
+import com.SmartTicketing.SmartTicketing.entity.enums.NotificationType;
+import java.time.LocalDateTime;
+
+public record NotificationResponse(Long id, NotificationType type, String message, boolean read, LocalDateTime createdAt) { }
