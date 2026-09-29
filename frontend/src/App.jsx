@@ -1,100 +1,111 @@
 import { useEffect, useState } from "react";
+import "./index.css";
 
 const API = "http://localhost:8080";
 
+const SEAT_POSITIONS = [
+  { value: "SIDE_FRONT", label: "좌측 · 앞" },
+  { value: "SIDE_MIDDLE", label: "좌측 · 가운데" },
+  { value: "SIDE_REAR", label: "좌측 · 뒤" },
+  { value: "MIDDLE_FRONT", label: "중간 · 앞" },
+  { value: "MIDDLE_MIDDLE", label: "중간 · 가운데" },
+  { value: "MIDDLE_REAR", label: "중간 · 뒤" },
+];
+
 function App() {
-  const [token, setToken] = useState(
-      localStorage.getItem("accessToken")
-  );
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [options, setOptions] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
 
+  const [signupName, setSignupName] = useState("");
+  const [signupBirthDate, setSignupBirthDate] = useState("");
+  const [signupLoginId, setSignupLoginId] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+
   const [birthDate, setBirthDate] = useState("");
-  const [preferredTheaterIds, setPreferredTheaterIds] = useState([]);
-  const [preferredSeatPositions, setPreferredSeatPositions] = useState([]);
+  const [address, setAddress] = useState("");
+  const [preferredTheaters, setPreferredTheaters] = useState([]);
+  const [preferredSeats, setPreferredSeats] = useState([]);
+
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
-    const hash = window.location.hash;
-
-    if (hash.startsWith("#token=")) {
-      const oauthToken = decodeURIComponent(
-          hash.substring("#token=".length)
-      );
-
-      localStorage.setItem("accessToken", oauthToken);
-      setToken(oauthToken);
-
-      window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname
-      );
-    }
+    initialize();
   }, []);
 
-  useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    loadUser();
-  }, [token]);
-
-  async function loadUser() {
+  async function initialize() {
     try {
-      setLoading(true);
-      setError("");
+      const hash = window.location.hash;
 
-      const response = await fetch(`${API}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      if (hash.startsWith("#token=")) {
+        const token = decodeURIComponent(
+            hash.substring("#token=".length)
+        );
 
-      if (response.status === 401) {
-        logout();
+        localStorage.setItem("accessToken", token);
+
+        window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+        );
+      }
+
+      const token = localStorage.getItem("accessToken");
+
+      if (!token) {
+        setLoading(false);
         return;
       }
 
-      if (!response.ok) {
-        throw new Error("회원 정보를 가져오지 못했습니다.");
-      }
-
-      const data = await response.json();
-
-      setUser(data);
-
-      if (data.birthDate) {
-        setBirthDate(data.birthDate);
-      }
-
-      setPreferredTheaterIds(
-          data.preferredTheaters?.map(
-              (theater) => theater.theaterId
-          ) ?? []
-      );
-
-      setPreferredSeatPositions(
-          data.preferredSeats ?? []
-      );
-
-      if (!data.birthDate) {
-        await loadOptions();
-      }
+      await loadMyInfo(token);
     } catch (e) {
-      setError(e.message);
+      console.error(e);
+      localStorage.removeItem("accessToken");
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadOptions() {
+  async function loadMyInfo(token = localStorage.getItem("accessToken")) {
+    const response = await fetch(`${API}/api/users/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("회원 정보를 가져오지 못했습니다.");
+    }
+
+    const data = await response.json();
+
+    setUser(data);
+
+    setBirthDate(data.birthDate ?? "");
+    setAddress(data.address ?? "");
+
+    setPreferredTheaters(
+        (data.preferredTheaters ?? []).map(
+            (theater) => theater.theaterId
+        )
+    );
+
+    setPreferredSeats(data.preferredSeats ?? []);
+
+    if (!data.birthDate) {
+      await loadPreferenceOptions(token);
+    }
+  }
+
+  async function loadPreferenceOptions(
+      token = localStorage.getItem("accessToken")
+  ) {
     const response = await fetch(
         `${API}/api/users/preference-options`,
         {
@@ -112,141 +123,187 @@ function App() {
     setOptions(data);
   }
 
-  function googleLogin() {
+  async function normalLogin(e) {
+    e.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loginId,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+            data.message ??
+            "아이디 또는 비밀번호가 올바르지 않습니다."
+        );
+      }
+
+      localStorage.setItem("accessToken", data.accessToken);
+
+      setLoginId("");
+      setPassword("");
+
+      await loadMyInfo(data.accessToken);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function signup(e) {
+    e.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API}/api/auth/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: signupName,
+          birthDate: signupBirthDate,
+          loginId: signupLoginId,
+          password: signupPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+            data.message ?? "회원가입에 실패했습니다."
+        );
+      }
+
+      setMessage("회원가입이 완료되었습니다. 로그인해주세요.");
+      setShowSignup(false);
+
+      setSignupName("");
+      setSignupBirthDate("");
+      setSignupLoginId("");
+      setSignupPassword("");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function socialLogin(provider) {
     window.location.href =
-        `${API}/oauth2/authorization/google`;
-  }
-
-  async function normalLogin() {
-    try {
-      setError("");
-
-      const response = await fetch(
-          `${API}/api/auth/login`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              loginId,
-              password,
-            }),
-          }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-            data.message ?? "로그인에 실패했습니다."
-        );
-      }
-
-      localStorage.setItem(
-          "accessToken",
-          data.accessToken
-      );
-
-      setToken(data.accessToken);
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-
-  async function saveProfile() {
-    try {
-      setError("");
-
-      if (!birthDate) {
-        throw new Error("생년월일을 입력해주세요.");
-      }
-
-      if (
-          preferredTheaterIds.length < 3 ||
-          preferredTheaterIds.length > 5
-      ) {
-        throw new Error(
-            "선호 영화관은 3~5개를 선택해주세요."
-        );
-      }
-
-      if (
-          preferredSeatPositions.length < 1 ||
-          preferredSeatPositions.length > 6
-      ) {
-        throw new Error(
-            "선호 좌석은 1~6개를 선택해주세요."
-        );
-      }
-
-      const response = await fetch(
-          `${API}/api/users/me`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              birthDate,
-              preferredTheaterIds,
-              preferredSeatPositions,
-            }),
-          }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-            data.message ?? "프로필 저장에 실패했습니다."
-        );
-      }
-
-      setUser(data);
-      alert("프로필 설정이 저장되었습니다.");
-    } catch (e) {
-      setError(e.message);
-    }
-  }
-
-  function toggleTheater(id) {
-    setPreferredTheaterIds((current) => {
-      if (current.includes(id)) {
-        return current.filter((value) => value !== id);
-      }
-
-      if (current.length >= 5) {
-        return current;
-      }
-
-      return [...current, id];
-    });
-  }
-
-  function toggleSeat(position) {
-    setPreferredSeatPositions((current) => {
-      if (current.includes(position)) {
-        return current.filter(
-            (value) => value !== position
-        );
-      }
-
-      if (current.length >= 6) {
-        return current;
-      }
-
-      return [...current, position];
-    });
+        `${API}/oauth2/authorization/` + provider;
   }
 
   function logout() {
     localStorage.removeItem("accessToken");
-    setToken(null);
+
     setUser(null);
     setOptions(null);
+    setMessage("");
     setError("");
+  }
+
+  function toggleTheater(theaterId) {
+    setPreferredTheaters((current) => {
+      if (current.includes(theaterId)) {
+        return current.filter((id) => id !== theaterId);
+      }
+
+      if (current.length >= 5) {
+        setError("선호 영화관은 최대 5곳까지 선택할 수 있습니다.");
+        return current;
+      }
+
+      setError("");
+      return [...current, theaterId];
+    });
+  }
+
+  function toggleSeat(position) {
+    setPreferredSeats((current) => {
+      if (current.includes(position)) {
+        return current.filter((item) => item !== position);
+      }
+
+      if (current.length >= 6) {
+        setError("선호 좌석은 최대 6개까지 선택할 수 있습니다.");
+        return current;
+      }
+
+      setError("");
+      return [...current, position];
+    });
+  }
+
+  async function saveProfile(e) {
+    e.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    if (!birthDate) {
+      setError("생년월일을 입력해주세요.");
+      return;
+    }
+
+    if (
+        preferredTheaters.length < 3 ||
+        preferredTheaters.length > 5
+    ) {
+      setError("선호 영화관을 3~5곳 선택해주세요.");
+      return;
+    }
+
+    if (
+        preferredSeats.length < 1 ||
+        preferredSeats.length > 6
+    ) {
+      setError("선호 좌석을 1~6개 선택해주세요.");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("accessToken");
+
+      const response = await fetch(`${API}/api/users/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          birthDate,
+          address,
+          preferredTheaterIds: preferredTheaters,
+          preferredSeatPositions: preferredSeats,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+            data.message ?? "회원정보 수정에 실패했습니다."
+        );
+      }
+
+      setUser(data);
+      setMessage("회원정보가 저장되었습니다.");
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   if (loading) {
@@ -260,79 +317,192 @@ function App() {
     );
   }
 
-  if (!token || !user) {
+  if (!user) {
     return (
         <div className="page">
-          <div className="card">
+          <div className="card auth-card">
             <h1>SmartTicketing</h1>
-
-            <p className="description">
-              로그인 테스트
+            <p className="subtitle">
+              영화 예매 시스템
             </p>
 
-            <button
-                className="google-button"
-                onClick={googleLogin}
-            >
-              Google 로그인
-            </button>
+            {!showSignup ? (
+                <>
+                  <div className="social-buttons">
+                    <button
+                        className="social-button google"
+                        onClick={() =>
+                            socialLogin("google")
+                        }
+                    >
+                      Google 로그인
+                    </button>
 
-            <button
-                className="naver-button"
-                onClick={() =>
-                    (window.location.href =
-                        "http://localhost:8080/oauth2/authorization/naver")
-                }
-            >
-              Naver 로그인
-            </button>
+                    <button
+                        className="social-button naver"
+                        onClick={() =>
+                            socialLogin("naver")
+                        }
+                    >
+                      Naver 로그인
+                    </button>
 
-            <div className="divider">
-              또는
-            </div>
+                    <button
+                        className="social-button kakao"
+                        onClick={() =>
+                            socialLogin("kakao")
+                        }
+                    >
+                      Kakao 로그인
+                    </button>
+                  </div>
 
-            <input
-                type="text"
-                placeholder="아이디"
-                value={loginId}
-                onChange={(e) =>
-                    setLoginId(e.target.value)
-                }
-            />
+                  <div className="divider">
+                    <span>또는</span>
+                  </div>
 
-            <input
-                type="password"
-                placeholder="비밀번호"
-                value={password}
-                onChange={(e) =>
-                    setPassword(e.target.value)
-                }
-            />
+                  <form onSubmit={normalLogin}>
+                    <label>아이디</label>
+                    <input
+                        type="text"
+                        value={loginId}
+                        onChange={(e) =>
+                            setLoginId(e.target.value)
+                        }
+                        placeholder="아이디"
+                        required
+                    />
 
-            <button onClick={normalLogin}>
-              일반 로그인
-            </button>
+                    <label>비밀번호</label>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) =>
+                            setPassword(e.target.value)
+                        }
+                        placeholder="비밀번호"
+                        required
+                    />
+
+                    <button
+                        type="submit"
+                        className="primary-button"
+                    >
+                      로그인
+                    </button>
+                  </form>
+
+                  <button
+                      className="text-button"
+                      onClick={() => {
+                        setShowSignup(true);
+                        setError("");
+                        setMessage("");
+                      }}
+                  >
+                    일반 회원가입
+                  </button>
+                </>
+            ) : (
+                <>
+                  <h2>일반 회원가입</h2>
+
+                  <form onSubmit={signup}>
+                    <label>이름</label>
+                    <input
+                        type="text"
+                        value={signupName}
+                        onChange={(e) =>
+                            setSignupName(e.target.value)
+                        }
+                        placeholder="이름"
+                        required
+                    />
+
+                    <label>생년월일</label>
+                    <input
+                        type="date"
+                        value={signupBirthDate}
+                        onChange={(e) =>
+                            setSignupBirthDate(
+                                e.target.value
+                            )
+                        }
+                        required
+                    />
+
+                    <label>아이디</label>
+                    <input
+                        type="text"
+                        value={signupLoginId}
+                        onChange={(e) =>
+                            setSignupLoginId(
+                                e.target.value
+                            )
+                        }
+                        placeholder="영문, 숫자, 밑줄 4~50자"
+                        required
+                    />
+
+                    <label>비밀번호</label>
+                    <input
+                        type="password"
+                        value={signupPassword}
+                        onChange={(e) =>
+                            setSignupPassword(
+                                e.target.value
+                            )
+                        }
+                        placeholder="8~100자"
+                        required
+                    />
+
+                    <button
+                        type="submit"
+                        className="primary-button"
+                    >
+                      회원가입
+                    </button>
+                  </form>
+
+                  <button
+                      className="text-button"
+                      onClick={() => {
+                        setShowSignup(false);
+                        setError("");
+                        setMessage("");
+                      }}
+                  >
+                    로그인으로 돌아가기
+                  </button>
+                </>
+            )}
 
             {error && (
-                <p className="error">{error}</p>
+                <p className="error-message">
+                  {error}
+                </p>
+            )}
+
+            {message && (
+                <p className="success-message">
+                  {message}
+                </p>
             )}
           </div>
         </div>
     );
   }
 
-  const needsProfile =
-      !user.birthDate ||
-      !user.preferredTheaters?.length ||
-      !user.preferredSeats?.length;
-
   return (
       <div className="page">
-        <div className="card wide">
-          <div className="header">
+        <div className="card profile-card">
+          <div className="profile-header">
             <div>
-              <h1>SmartTicketing</h1>
-              <p>로그인 성공</p>
+              <h1>회원정보</h1>
+              <p className="subtitle">
+                {user.nickname}
+              </p>
             </div>
 
             <button
@@ -343,192 +513,175 @@ function App() {
             </button>
           </div>
 
-          <section>
-            <h2>회원 정보</h2>
-
-            <div className="info">
-              <p>
-                <strong>ID:</strong>{" "}
-                {user.id}
-              </p>
-
-              <p>
-                <strong>이름:</strong>{" "}
-                {user.name}
-              </p>
-
-              <p>
-                <strong>닉네임:</strong>{" "}
-                {user.nickname}
-              </p>
-
-              <p>
-                <strong>이메일:</strong>{" "}
-                {user.email ?? "-"}
-              </p>
-
-              <p>
-                <strong>생년월일:</strong>{" "}
-                {user.birthDate ?? "미입력"}
-              </p>
-
-              <p>
-                <strong>상태:</strong>{" "}
-                {user.status}
-              </p>
+          <div className="user-info">
+            <div>
+              <span>이름</span>
+              <strong>{user.name}</strong>
             </div>
-          </section>
 
-          {needsProfile && (
-              <>
-                <hr />
+            <div>
+              <span>아이디</span>
+              <strong>
+                {user.loginId ?? "소셜 로그인"}
+              </strong>
+            </div>
 
-                <section>
-                  <h2>
-                    기본 설정
-                  </h2>
+            <div>
+              <span>이메일</span>
+              <strong>
+                {user.email ?? "미등록"}
+              </strong>
+            </div>
 
-                  <p className="description">
-                    소셜 회원은 여기에서
-                    생년월일과 선호 정보를
-                    입력해주세요.
-                  </p>
+            <div>
+              <span>로그인 연동</span>
+              <strong>
+                {user.linkedProviders?.length
+                    ? user.linkedProviders.join(", ")
+                    : "일반 회원"}
+              </strong>
+            </div>
+          </div>
 
-                  <label>
-                    생년월일
-                  </label>
+          <form onSubmit={saveProfile}>
+            <section>
+              <h2>기본 정보</h2>
 
-                  <input
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) =>
-                          setBirthDate(
-                              e.target.value
+              <label>생년월일</label>
+
+              <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) =>
+                      setBirthDate(e.target.value)
+                  }
+                  required
+              />
+
+              <label>거주지</label>
+
+              <input
+                  type="text"
+                  value={address}
+                  onChange={(e) =>
+                      setAddress(e.target.value)
+                  }
+                  placeholder="거주지를 입력해주세요."
+              />
+            </section>
+
+            <section>
+              <div className="section-title">
+                <h2>선호 영화관</h2>
+                <span>
+                                {preferredTheaters.length}/5
+                            </span>
+              </div>
+
+              <p className="help">
+                최소 3곳을 선택해주세요.
+              </p>
+
+              <div className="option-grid">
+                {options?.theaters?.map((theater) => (
+                    <button
+                        type="button"
+                        key={theater.id}
+                        className={
+                          preferredTheaters.includes(
+                              theater.id
                           )
-                      }
-                  />
+                              ? "option selected"
+                              : "option"
+                        }
+                        onClick={() =>
+                            toggleTheater(
+                                theater.id
+                            )
+                        }
+                    >
+                      <strong>
+                        {theater.name}
+                      </strong>
 
-                  <h3>
-                    선호 영화관
-                    {" "}
-                    ({preferredTheaterIds.length}/5)
-                  </h3>
+                      <span>
+                                        {theater.brand}
+                                    </span>
 
-                  {!options ? (
-                      <p>
-                        영화관 정보를 불러오는 중...
-                      </p>
-                  ) : (
-                      <div className="option-grid">
-                        {options.theaters.map(
-                            (theater) => {
-                              const selected =
-                                  preferredTheaterIds.includes(
-                                      theater.id
-                                  );
+                      <small>
+                        {theater.address}
+                      </small>
+                    </button>
+                ))}
+              </div>
+            </section>
 
-                              return (
-                                  <button
-                                      key={theater.id}
-                                      className={
-                                        selected
-                                            ? "option selected"
-                                            : "option"
-                                      }
-                                      onClick={() =>
-                                          toggleTheater(
-                                              theater.id
-                                          )
-                                      }
-                                  >
-                                    <strong>
-                                      {
-                                        theater.name
-                                      }
-                                    </strong>
-                                    <span>
-                                                        {
-                                                          theater.brand
-                                                        }
-                                                    </span>
-                                  </button>
-                              );
-                            }
-                        )}
-                      </div>
-                  )}
+            <section>
+              <div className="section-title">
+                <h2>선호 좌석</h2>
+                <span>
+                                {preferredSeats.length}/6
+                            </span>
+              </div>
 
-                  <h3>
-                    선호 좌석
-                  </h3>
+              <p className="help">
+                좌석 위치를 1~6개 선택해주세요.
+              </p>
 
-                  {!options ? (
-                      <p>
-                        좌석 정보를 불러오는 중...
-                      </p>
-                  ) : (
-                      <div className="option-grid">
-                        {options.seats.map(
-                            (seat) => {
-                              const selected =
-                                  preferredSeatPositions.includes(
-                                      seat.position
-                                  );
+              <div className="seat-grid">
+                {(options?.seats ??
+                    SEAT_POSITIONS).map(
+                    (seat) => {
+                      const value =
+                          seat.position ??
+                          seat.value;
 
-                              return (
-                                  <button
-                                      key={
-                                        seat.position
-                                      }
-                                      className={
-                                        selected
-                                            ? "option selected"
-                                            : "option"
-                                      }
-                                      onClick={() =>
-                                          toggleSeat(
-                                              seat.position
-                                          )
-                                      }
-                                  >
-                                    {
-                                      seat.label
-                                    }
-                                  </button>
-                              );
-                            }
-                        )}
-                      </div>
-                  )}
+                      const label =
+                          seat.label;
 
-                  <button
-                      className="save-button"
-                      onClick={saveProfile}
-                  >
-                    기본 설정 저장
-                  </button>
+                      return (
+                          <button
+                              type="button"
+                              key={value}
+                              className={
+                                preferredSeats.includes(
+                                    value
+                                )
+                                    ? "seat selected"
+                                    : "seat"
+                              }
+                              onClick={() =>
+                                  toggleSeat(
+                                      value
+                                  )
+                              }
+                          >
+                            {label}
+                          </button>
+                      );
+                    }
+                )}
+              </div>
+            </section>
 
-                  {error && (
-                      <p className="error">
-                        {error}
-                      </p>
-                  )}
-                </section>
-              </>
+            <button
+                type="submit"
+                className="primary-button save-button"
+            >
+              회원정보 저장
+            </button>
+          </form>
+
+          {error && (
+              <p className="error-message">
+                {error}
+              </p>
           )}
 
-          {!needsProfile && (
-              <section className="success-box">
-                <h2>
-                  기본 설정 완료
-                </h2>
-
-                <p>
-                  생년월일, 선호 영화관,
-                  선호 좌석이 모두 설정되어
-                  있습니다.
-                </p>
-              </section>
+          {message && (
+              <p className="success-message">
+                {message}
+              </p>
           )}
         </div>
       </div>
