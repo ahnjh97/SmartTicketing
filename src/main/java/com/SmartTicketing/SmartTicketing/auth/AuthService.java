@@ -27,7 +27,19 @@ public class AuthService {
     }
 
     public static UserResponse toResponse(Users u) {
-        return new UserResponse(u.getId(), u.getName(), u.getLoginId(), u.getEmail(), u.getNickname(), u.getAddress(), u.getStatus(), java.util.List.of(), java.util.List.of(), java.util.List.of());
+        return new UserResponse(
+                u.getId(),
+                u.getName(),
+                u.getBirthDate(),
+                u.getLoginId(),
+                u.getEmail(),
+                u.getNickname(),
+                u.getAddress(),
+                u.getStatus(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of()
+        );
     }
 
     public UserResponse signup(SignupRequest r) {

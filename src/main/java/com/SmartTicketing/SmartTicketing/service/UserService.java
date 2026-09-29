@@ -95,7 +95,19 @@ public class UserService {
         var pts = preferredTheaters.findByUserIdOrderByPriorityAsc(u.getId()).stream().map(p -> new UserResponse.PreferredTheaterResponse(p.getTheater().getId(), p.getTheater().getName(), p.getTheater().getBrand().name(), p.getPriority())).toList();
         var ps = preferredSeats.findByUserId(u.getId()).stream().map(UserPreferredSeat::getSeatPosition).toList();
         var providers = social.findByUserId(u.getId()).stream().map(UserSocialAccount::getProvider).toList();
-        return new UserResponse(u.getId(), u.getName(), u.getLoginId(), u.getEmail(), u.getNickname(), u.getAddress(), u.getStatus(), pts, ps, providers);
+        return new UserResponse(
+                u.getId(),
+                u.getName(),
+                u.getBirthDate(),
+                u.getLoginId(),
+                u.getEmail(),
+                u.getNickname(),
+                u.getAddress(),
+                u.getStatus(),
+                pts,
+                ps,
+                providers
+        );
     }
 
     private String label(SeatPosition p) {

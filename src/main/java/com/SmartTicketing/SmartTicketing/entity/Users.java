@@ -29,7 +29,7 @@ public class Users {
     @Column(unique = true, length = 255)
     private String email;
 
-    @Column(name = "birth_date", nullable = false)
+    @Column(name = "birth_date")
     private LocalDate birthDate;
 
     @Column(nullable = false, length = 100)
