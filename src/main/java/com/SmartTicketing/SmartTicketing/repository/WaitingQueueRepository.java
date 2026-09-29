@@ -1,5 +1,7 @@
 package com.SmartTicketing.SmartTicketing.repository;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import com.SmartTicketing.SmartTicketing.entity.WaitingQueue;
 import com.SmartTicketing.SmartTicketing.entity.enums.QueueStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,8 +20,10 @@ public interface WaitingQueueRepository
             Long userId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<WaitingQueue> findFirstByShowtimeIdAndStatusOrderByQueueNumberAsc(
             Long showtimeId,
             QueueStatus status
     );
+
 }
