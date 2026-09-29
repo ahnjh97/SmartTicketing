@@ -3,7 +3,6 @@ package com.SmartTicketing.SmartTicketing.entity;
 import com.SmartTicketing.SmartTicketing.entity.enums.TheaterBrand;
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity

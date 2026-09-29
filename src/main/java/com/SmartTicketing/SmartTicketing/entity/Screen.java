@@ -2,7 +2,6 @@ package com.SmartTicketing.SmartTicketing.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
