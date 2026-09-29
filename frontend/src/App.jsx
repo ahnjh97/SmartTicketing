@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import "./index.css";
 import ResidencePreference from "./components/ResidencePreference";
+import ResidencePreferencePreview
+    from "./components/ResidencePreferencePreview";
+
 
 const API = "http://localhost:8080";
 
@@ -29,9 +32,13 @@ function App() {
     const [kakaoSetupCompleted, setKakaoSetupCompleted] =
         useState(false);
 
+    return (
+        <ResidencePreferencePreview />);
+
     useEffect(() => {
         initialize();
     }, []);
+
 
     async function initialize() {
         try {
@@ -840,7 +847,9 @@ function App() {
                         setNickname(data.nickname ?? "");
                         setBirthDate(data.birthDate ?? "");
                         setAddress(data.address ?? "");
-                        setMessage("회원정보가 저장되었습니다.");
+                        setMessage(
+                            "회원 정보 및 선호 정보가 저장되었습니다."
+                        );
                     }}
                 />
 

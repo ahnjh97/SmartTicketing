@@ -1,0 +1,68 @@
+/* =========================================
+   CINEMA PREVIEW ISOLATION
+   ========================================= */
+
+.cinema-preview-page {
+    min-height: 100vh;
+
+    margin: 0;
+    padding: 40px 24px;
+
+    background:
+            radial-gradient(
+                    circle at top,
+                    #292929 0%,
+                    #111111 45%,
+                    #070707 100%
+            );
+
+    color: #f5f5f5;
+}
+
+.cinema-preview-page,
+.cinema-preview-page * {
+    box-sizing: border-box;
+}
+
+.cinema-preview-page button {
+    font: inherit;
+    cursor: pointer;
+}
+
+.cinema-preview-page section {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.cinema-preview-page h1,
+.cinema-preview-page h2,
+.cinema-preview-page h3,
+.cinema-preview-page p {
+    margin-top: 0;
+}
+
+.cinema-preview-page input {
+    font: inherit;
+}
+
+.cinema-preview-page .preference-container {
+    width: min(1200px, 100%);
+    margin: 0 auto;
+
+    padding: 32px;
+
+    border: 1px solid #303030;
+    border-radius: 24px;
+
+    background:
+            linear-gradient(
+                    180deg,
+                    #181818 0%,
+                    #111111 100%
+            );
+
+    box-shadow:
+            0 30px 80px
+            rgba(0, 0, 0, 0.55);
+}
