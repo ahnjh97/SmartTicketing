@@ -1,4 +1,4 @@
-package com.SmartTicketing.SmartTicketing.entity;
+package com.SmartTicketing.SmartTicketing.entity.enums;
 
 public enum ReservationStatus {
     PENDING,
