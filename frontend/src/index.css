@@ -1,0 +1,185 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+          Arial,
+          "Noto Sans KR",
+          sans-serif;
+  background: #f4f6f8;
+  color: #222;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+}
+
+.card {
+  width: 420px;
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.card.wide {
+  width: 900px;
+}
+
+h1 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+h3 {
+  margin-top: 28px;
+}
+
+.description {
+  color: #666;
+}
+
+input {
+  width: 100%;
+  padding: 12px 14px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: #111;
+  color: white;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.google-button {
+  width: 100%;
+  background: #4285f4;
+  margin-bottom: 16px;
+}
+
+.naver-button {
+  width: 100%;
+  margin-bottom: 16px;
+  background: #03c75a;
+}
+
+.divider {
+  text-align: center;
+  margin: 16px 0;
+  color: #999;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.logout-button {
+  background: #666;
+}
+
+.info {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 10px;
+}
+
+.info p {
+  margin: 8px 0;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.option {
+  background: #f1f3f5;
+  color: #222;
+  text-align: left;
+  min-height: 70px;
+}
+
+.option span,
+.option strong {
+  display: block;
+}
+
+.option span {
+  margin-top: 6px;
+  color: #666;
+}
+
+.option.selected {
+  background: #111;
+  color: white;
+}
+
+.option.selected span {
+  color: #ddd;
+}
+
+.save-button {
+  width: 100%;
+  margin-top: 24px;
+  background: #111;
+}
+
+.success-box {
+  margin-top: 24px;
+  padding: 20px;
+  background: #eef8f0;
+  border-radius: 10px;
+}
+
+.error {
+  margin-top: 16px;
+  color: #d93025;
+}
+
+hr {
+  margin: 30px 0;
+  border: 0;
+  border-top: 1px solid #eee;
+}
+
+@media (max-width: 700px) {
+  .card.wide {
+    width: 100%;
+  }
+
+  .option-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+}
