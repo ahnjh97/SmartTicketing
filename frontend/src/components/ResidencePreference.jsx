@@ -187,6 +187,9 @@ export default function ResidencePreference({
                 )
         );
 
+    const [hoveredSeatPosition, setHoveredSeatPosition] =
+        useState(null);
+
     const [locationLoading, setLocationLoading] =
         useState(false);
 
