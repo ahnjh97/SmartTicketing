@@ -7,45 +7,24 @@ import AuthFormLayout from "../components/AuthFormLayout.jsx";
 
 export default function FindAccountPage() {
     const navigate = useNavigate();
-    const [email, setEmail] = useState("");
-    const [code, setCode] = useState("");
+    const [identifier, setIdentifier] = useState("");
+    const [confirmedIdentifier, setConfirmedIdentifier] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
-    const [foundLoginId, setFoundLoginId] = useState("");
-    const [codeSent, setCodeSent] = useState(false);
     const [message, setMessage] = useState("");
 
     const { error, setError, pending, run } = useAsyncAction();
 
-    async function findLoginId(event) {
+    function continueToReset(event) {
         event.preventDefault();
+        setError("");
         setMessage("");
-        setFoundLoginId("");
-
-        run(async () => {
-            const data = await authApi.findLoginId({
-                email: email.trim()
-            });
-            setFoundLoginId(data.loginId);
-            setMessage("가입된 아이디를 찾았습니다.");
-        });
-    }
-
-    async function sendCode(event) {
-        event.preventDefault();
-        setMessage("");
-
-        run(async () => {
-            await authApi.requestPasswordReset({
-                email: email.trim()
-            });
-            setCodeSent(true);
-            setMessage("인증코드를 이메일로 보냈습니다. 5분 안에 입력해주세요.");
-        });
+        setConfirmedIdentifier(identifier.trim());
     }
 
     async function resetPassword(event) {
         event.preventDefault();
+        setError("");
         setMessage("");
 
         if (newPassword !== newPasswordConfirm) {
@@ -55,84 +34,61 @@ export default function FindAccountPage() {
 
         run(async () => {
             await authApi.resetPassword({
-                email: email.trim(),
-                code: code.trim(),
+                identifier: confirmedIdentifier,
                 newPassword
             });
-            setMessage("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.");
-            setCode("");
+
+            setMessage(
+                "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요."
+            );
             setNewPassword("");
             setNewPasswordConfirm("");
-            setCodeSent(false);
         });
     }
 
     return (
         <AuthFormLayout error={error} message={message}>
-            <h2>아이디 / 비밀번호 찾기</h2>
-            <p className="subtitle">
-                가입할 때 사용한 이메일로 계정을 확인할 수 있습니다.
-            </p>
+            <h2>비밀번호 재설정</h2>
 
-            <section>
-                <h3>아이디 찾기</h3>
-                <form onSubmit={findLoginId}>
-                    <label htmlFor="find-account-email">이메일</label>
-                    <input
-                        id="find-account-email"
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="가입 이메일"
-                        autoComplete="email"
-                        required
-                    />
-                    <button type="submit" className="primary-button" disabled={pending}>
-                        아이디 찾기
-                    </button>
-                </form>
-
-                {foundLoginId && (
-                    <p className="success-message field-message" role="status">
-                        가입된 아이디: {foundLoginId}
+            {!confirmedIdentifier ? (
+                <>
+                    <p className="subtitle">
+                        소셜 계정은 가입한 이메일, 일반 계정은 아이디를 입력해주세요.
                     </p>
-                )}
-            </section>
 
-            <section>
-                <h3>비밀번호 재설정</h3>
-                <form onSubmit={sendCode}>
-                    <label htmlFor="reset-account-email">이메일</label>
-                    <input
-                        id="reset-account-email"
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="가입 이메일"
-                        autoComplete="email"
-                        required
-                    />
-                    <button type="submit" className="signup-button" disabled={pending}>
-                        인증코드 받기
-                    </button>
-                </form>
-
-                {codeSent && (
-                    <form onSubmit={resetPassword}>
-                        <label htmlFor="reset-code">인증코드</label>
+                    <form onSubmit={continueToReset}>
+                        <label htmlFor="account-identifier">
+                            아이디 또는 이메일
+                        </label>
                         <input
-                            id="reset-code"
+                            id="account-identifier"
                             type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            value={code}
+                            value={identifier}
                             onChange={(event) =>
-                                setCode(event.target.value.replace(/\D/g, ""))
+                                setIdentifier(event.target.value)
                             }
-                            placeholder="6자리 인증코드"
+                            placeholder="일반 계정 아이디 또는 소셜 계정 이메일"
+                            autoComplete="username"
                             required
                         />
 
+                        <button
+                            type="submit"
+                            className="primary-button"
+                            disabled={pending}
+                        >
+                            비밀번호 재설정
+                        </button>
+                    </form>
+                </>
+            ) : (
+                <>
+                    <p className="subtitle">
+                        <strong>{confirmedIdentifier}</strong> 계정의 새 비밀번호를
+                        입력해주세요.
+                    </p>
+
+                    <form onSubmit={resetPassword}>
                         <label htmlFor="new-password">새 비밀번호</label>
                         <input
                             id="new-password"
@@ -140,13 +96,17 @@ export default function FindAccountPage() {
                             minLength={8}
                             maxLength={100}
                             value={newPassword}
-                            onChange={(event) => setNewPassword(event.target.value)}
+                            onChange={(event) =>
+                                setNewPassword(event.target.value)
+                            }
                             placeholder="8~100자"
                             autoComplete="new-password"
                             required
                         />
 
-                        <label htmlFor="new-password-confirm">새 비밀번호 확인</label>
+                        <label htmlFor="new-password-confirm">
+                            새 비밀번호 확인
+                        </label>
                         <input
                             id="new-password-confirm"
                             type="password"
@@ -161,12 +121,30 @@ export default function FindAccountPage() {
                             required
                         />
 
-                        <button type="submit" className="primary-button" disabled={pending}>
+                        <button
+                            type="submit"
+                            className="primary-button"
+                            disabled={pending}
+                        >
                             비밀번호 변경
                         </button>
                     </form>
-                )}
-            </section>
+
+                    <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                            setConfirmedIdentifier("");
+                            setNewPassword("");
+                            setNewPasswordConfirm("");
+                            setMessage("");
+                            setError("");
+                        }}
+                    >
+                        다른 계정으로 재설정
+                    </button>
+                </>
+            )}
 
             <button
                 type="button"
