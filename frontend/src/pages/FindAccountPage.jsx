@@ -122,10 +122,12 @@ export default function FindAccountPage() {
         <AuthFormLayout error={error} message={message}>
             <h2>아이디 / 비밀번호 찾기</h2>
 
-            <div className="account-find-tabs">
+            <div className="account-find-tabs" role="tablist" aria-label="계정 찾기">
                 <button
                     type="button"
                     className={mode === "find-id" ? "active" : ""}
+                    role="tab"
+                    aria-selected={mode === "find-id"}
                     onClick={() => changeMode("find-id")}
                 >
                     아이디 찾기
@@ -133,6 +135,8 @@ export default function FindAccountPage() {
                 <button
                     type="button"
                     className={mode === "find-password" ? "active" : ""}
+                    role="tab"
+                    aria-selected={mode === "find-password"}
                     onClick={() => changeMode("find-password")}
                 >
                     비밀번호 찾기
@@ -183,29 +187,24 @@ export default function FindAccountPage() {
 
                     <form onSubmit={selectAccount}>
                         <div
+                            className="account-choice-list"
                             role="radiogroup"
                             aria-label="비밀번호를 찾을 아이디 선택"
                         >
                             {loginIds.map((loginId) => (
-                                <label
+                                <button
                                     key={loginId}
-                                    className="account-choice"
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selectedLoginId === loginId}
+                                    className={"account-choice " + (selectedLoginId === loginId ? "selected" : "")}
+                                    onClick={() => setSelectedLoginId(loginId)}
                                 >
-                                    <input
-                                        type="radio"
-                                        name="selected-login-id"
-                                        value={loginId}
-                                        checked={
-                                            selectedLoginId === loginId
-                                        }
-                                        onChange={(event) =>
-                                            setSelectedLoginId(
-                                                event.target.value
-                                            )
-                                        }
-                                    />
                                     <span>{loginId}</span>
-                                </label>
+                                    <span className="account-choice-check" aria-hidden="true">
+                                        {selectedLoginId === loginId ? "✓" : ""}
+                                    </span>
+                                </button>
                             ))}
                         </div>
 
