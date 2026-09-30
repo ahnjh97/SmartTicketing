@@ -41,17 +41,24 @@ test("saved seat priorities restore immediately and remain editable", () => {
         </StrictMode>
     );
 
-    expect(
-        [...container.querySelectorAll(".seat-preference-region.selected")]
-            .map((seat) => seat.querySelector("span").textContent + " " + seat.querySelector("strong").textContent)
-    ).toEqual([
-        "중간 가운데",
-        "사이드 앞",
+    const getSelectedPositions = () =>
+        [
+            ...container.querySelectorAll(
+                ".seat-zone-button.selected"
+            ),
+        ]
+            .map((button) => button.getAttribute("aria-label"))
+            .filter(
+                (position, index, positions) =>
+                    positions.indexOf(position) === index
+            );
+
+    expect(getSelectedPositions()).toEqual([
+        "중간 · 가운데",
+        "사이드 · 앞",
     ]);
 
-    expect(
-        container.querySelectorAll(".seat-preference-region.selected")
-    ).toHaveLength(2);
+    expect(getSelectedPositions()).toHaveLength(2);
 
     expect(window.kakao.maps.Map).toHaveBeenCalledTimes(1);
     expect(screen.getByText("서울")).toBeTruthy();
@@ -62,9 +69,7 @@ test("saved seat priorities restore immediately and remain editable", () => {
         })
     );
 
-    expect(
-        container.querySelectorAll(".seat-preference-region.selected")
-    ).toHaveLength(1);
+    expect(getSelectedPositions()).toHaveLength(1);
 
     fireEvent.click(
         screen.getByRole("button", {
@@ -78,9 +83,7 @@ test("saved seat priorities restore immediately and remain editable", () => {
         })
     );
 
-    expect(
-        container.querySelectorAll(".seat-preference-region.selected")
-    ).toHaveLength(3);
+    expect(getSelectedPositions()).toHaveLength(3);
 });
 
 test("a different member starts with that member's address and preferences", () => {
@@ -88,7 +91,11 @@ test("a different member starts with that member's address and preferences", () 
     const nextUser = { ...user, id: 2, address: "부산", preferredTheaters: [], preferredSeats: [] };
     rerender(<ResidencePreference key={nextUser.id} user={nextUser} onSaved={vi.fn()} />);
     expect(
-        container.querySelectorAll(".seat-preference-region.selected")
+        [
+            ...container.querySelectorAll(
+                ".seat-zone-button.selected"
+            ),
+        ]
     ).toHaveLength(0);
     expect(screen.queryByText("서울")).toBe(null);
     expect(screen.getByText("부산")).toBeTruthy();
