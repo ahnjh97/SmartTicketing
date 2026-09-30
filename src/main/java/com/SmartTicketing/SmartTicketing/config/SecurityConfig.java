@@ -62,6 +62,7 @@ public class SecurityConfig {
                                 "/api/auth/signup",
                                 "/api/auth/login",
                                 "/api/auth/check-login-id",
+                                "/api/auth/find-login-ids",
                                 "/api/auth/password-reset",
                                 "/api/auth/social-signup-info",
                                 "/api/auth/social-signup",
