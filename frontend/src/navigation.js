@@ -5,6 +5,7 @@ export const PAGE_PATHS = {
     tickets: "/tickets",
     login: "/login",
     signup: "/signup",
+    findAccount: "/find-account",
     socialSignup: "/signup/social",
     profile: "/profile",
     preferences: "/preferences",
