@@ -6,10 +6,10 @@ import com.SmartTicketing.SmartTicketing.entity.enums.TheaterBrand;
 import com.SmartTicketing.SmartTicketing.repository.TheaterRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
@@ -20,6 +20,7 @@ public class KakaoMapService {
 
     private final TheaterRepository theaters;
     private final RestClient restClient;
+    private final RestClient publicTransitClient;
     private final String restApiKey;
 
     public KakaoMapService(
@@ -28,8 +29,13 @@ public class KakaoMapService {
     ) {
         this.theaters = theaters;
         this.restApiKey = restApiKey;
+
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
+                .build();
+
+        this.publicTransitClient = RestClient.builder()
+                .baseUrl("https://apis-navi.kakaomobility.com")
                 .build();
     }
 
@@ -39,9 +45,12 @@ public class KakaoMapService {
             int radius
     ) {
         if (restApiKey.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "카카오 지도 연동이 설정되지 않았습니다.");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "카카오 지도 연동이 설정되지 않았습니다."
+            );
         }
+
         if (radius < 0 || radius > 20000) {
             throw new IllegalArgumentException(
                     "검색 반경은 0~20000m까지 가능합니다."
@@ -50,17 +59,23 @@ public class KakaoMapService {
 
         Map<String, TheaterBrand> brandQueries =
                 Map.of(
-                        "CGV", TheaterBrand.CGV,
-                        "롯데시네마", TheaterBrand.LOTTE_CINEMA,
-                        "메가박스", TheaterBrand.MEGABOX
+                        "CGV",
+                        TheaterBrand.CGV,
+
+                        "롯데시네마",
+                        TheaterBrand.LOTTE_CINEMA,
+
+                        "메가박스",
+                        TheaterBrand.MEGABOX
                 );
 
         Map<String, NearbyPlace> places =
                 new LinkedHashMap<>();
 
-        for (Map.Entry<String, TheaterBrand> entry :
-                brandQueries.entrySet()) {
-
+        for (
+                Map.Entry<String, TheaterBrand> entry :
+                brandQueries.entrySet()
+        ) {
             List<NearbyPlace> results =
                     search(
                             entry.getKey(),
@@ -85,7 +100,22 @@ public class KakaoMapService {
                                 NearbyPlace::distance
                         )
                 )
-                .map(this::upsert)
+                .map(
+                        place ->
+                                upsert(
+                                        place,
+                                        latitude,
+                                        longitude
+                                )
+                )
+                .sorted(
+                        Comparator.comparing(
+                                NearbyTheaterResponse::transitMinutes,
+                                Comparator.nullsLast(
+                                        Comparator.naturalOrder()
+                                )
+                        )
+                )
                 .limit(15)
                 .toList();
     }
@@ -99,40 +129,41 @@ public class KakaoMapService {
     ) {
         Map<String, Object> response =
                 restClient.get()
-                        .uri(uriBuilder ->
-                                uriBuilder
-                                        .path(
-                                                "/v2/local/search/keyword.json"
-                                        )
-                                        .queryParam(
-                                                "query",
-                                                query
-                                        )
-                                        .queryParam(
-                                                "category_group_code",
-                                                "CT1"
-                                        )
-                                        .queryParam(
-                                                "x",
-                                                longitude
-                                        )
-                                        .queryParam(
-                                                "y",
-                                                latitude
-                                        )
-                                        .queryParam(
-                                                "radius",
-                                                radius
-                                        )
-                                        .queryParam(
-                                                "sort",
-                                                "distance"
-                                        )
-                                        .queryParam(
-                                                "size",
-                                                15
-                                        )
-                                        .build()
+                        .uri(
+                                uriBuilder ->
+                                        uriBuilder
+                                                .path(
+                                                        "/v2/local/search/keyword.json"
+                                                )
+                                                .queryParam(
+                                                        "query",
+                                                        query
+                                                )
+                                                .queryParam(
+                                                        "category_group_code",
+                                                        "CT1"
+                                                )
+                                                .queryParam(
+                                                        "x",
+                                                        longitude
+                                                )
+                                                .queryParam(
+                                                        "y",
+                                                        latitude
+                                                )
+                                                .queryParam(
+                                                        "radius",
+                                                        radius
+                                                )
+                                                .queryParam(
+                                                        "sort",
+                                                        "distance"
+                                                )
+                                                .queryParam(
+                                                        "size",
+                                                        15
+                                                )
+                                                .build()
                         )
                         .header(
                                 "Authorization",
@@ -140,7 +171,8 @@ public class KakaoMapService {
                         )
                         .retrieve()
                         .body(
-                                new ParameterizedTypeReference<>() {}
+                                new ParameterizedTypeReference<>() {
+                                }
                         );
 
         if (response == null) {
@@ -164,36 +196,49 @@ public class KakaoMapService {
             }
 
             String placeName =
-                    string(map.get("place_name"));
+                    string(
+                            map.get(
+                                    "place_name"
+                            )
+                    );
 
             if (placeName == null) {
                 continue;
             }
 
-            /*
-             * 브랜드 검색 결과가 정확한 영화관인지 한번 더 확인
-             */
-            if (!matchesBrand(placeName, brand)) {
+            if (!matchesBrand(
+                    placeName,
+                    brand
+            )) {
                 continue;
             }
 
             String placeId =
-                    string(map.get("id"));
+                    string(
+                            map.get("id")
+                    );
 
             if (placeId == null) {
                 continue;
             }
 
             double x =
-                    doubleValue(map.get("x"));
+                    doubleValue(
+                            map.get("x")
+                    );
 
             double y =
-                    doubleValue(map.get("y"));
+                    doubleValue(
+                            map.get("y")
+                    );
 
             int distance =
-                    (int) doubleValue(
-                            map.get("distance")
-                    );
+                    (int)
+                            doubleValue(
+                                    map.get(
+                                            "distance"
+                                    )
+                            );
 
             String roadAddress =
                     string(
@@ -233,7 +278,9 @@ public class KakaoMapService {
     }
 
     private NearbyTheaterResponse upsert(
-            NearbyPlace place
+            NearbyPlace place,
+            double latitude,
+            double longitude
     ) {
         Theater theater =
                 theaters.findByKakaoPlaceId(
@@ -242,16 +289,36 @@ public class KakaoMapService {
                         Theater::new
                 );
 
-        theater.setBrand(place.brand());
-        theater.setName(place.name());
-        theater.setAddress(place.address());
+        theater.setBrand(
+                place.brand()
+        );
+
+        theater.setName(
+                place.name()
+        );
+
+        theater.setAddress(
+                place.address()
+        );
+
         theater.setKakaoPlaceId(
                 place.kakaoPlaceId()
         );
+
         theater.setActive(true);
 
         theater =
-                theaters.save(theater);
+                theaters.save(
+                        theater
+                );
+
+        Integer transitMinutes =
+                findPublicTransitMinutes(
+                        latitude,
+                        longitude,
+                        place.latitude(),
+                        place.longitude()
+                );
 
         return new NearbyTheaterResponse(
                 theater.getId(),
@@ -262,8 +329,143 @@ public class KakaoMapService {
                 place.latitude(),
                 place.longitude(),
                 place.distance(),
-                place.placeUrl()
+                place.placeUrl(),
+                transitMinutes
         );
+    }
+
+    private Integer findPublicTransitMinutes(
+            double startLatitude,
+            double startLongitude,
+            double endLatitude,
+            double endLongitude
+    ) {
+        try {
+            Map<String, Object> response =
+                    publicTransitClient.get()
+                            .uri(
+                                    uriBuilder ->
+                                            uriBuilder
+                                                    .path(
+                                                            "/affiliate/publictransit/v1/multimodal/directions"
+                                                    )
+                                                    .queryParam(
+                                                            "start",
+                                                            startLongitude
+                                                                    + ","
+                                                                    + startLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "goal",
+                                                            endLongitude
+                                                                    + ","
+                                                                    + endLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "route_type",
+                                                            "All"
+                                                    )
+                                                    .build()
+                            )
+                            .header(
+                                    "Authorization",
+                                    "KakaoAK " + restApiKey
+                            )
+                            .header(
+                                    "Content-Type",
+                                    "application/json"
+                            )
+                            .retrieve()
+                            .body(
+                                    new ParameterizedTypeReference<>() {
+                                    }
+                            );
+
+            if (response == null) {
+                return null;
+            }
+
+            Object routes =
+                    response.get("routes");
+
+            if (!(routes instanceof List<?> list)) {
+                return null;
+            }
+
+            int bestSeconds =
+                    Integer.MAX_VALUE;
+
+            for (Object route : list) {
+
+                if (!(route instanceof Map<?, ?> routeMap)) {
+                    continue;
+                }
+
+                Object resultCode =
+                        routeMap.get(
+                                "result_code"
+                        );
+
+                if (
+                        resultCode != null &&
+                                Integer.parseInt(
+                                        String.valueOf(
+                                                resultCode
+                                        )
+                                ) != 0
+                ) {
+                    continue;
+                }
+
+                Object summary =
+                        routeMap.get(
+                                "summary"
+                        );
+
+                if (!(summary instanceof Map<?, ?> summaryMap)) {
+                    continue;
+                }
+
+                Object duration =
+                        summaryMap.get(
+                                "duration"
+                        );
+
+                if (duration == null) {
+                    continue;
+                }
+
+                int seconds =
+                        Integer.parseInt(
+                                String.valueOf(
+                                        duration
+                                )
+                        );
+
+                if (
+                        seconds > 0 &&
+                                seconds < bestSeconds
+                ) {
+                    bestSeconds =
+                            seconds;
+                }
+            }
+
+            if (
+                    bestSeconds ==
+                            Integer.MAX_VALUE
+            ) {
+                return null;
+            }
+
+            return (int)
+                    Math.ceil(
+                            bestSeconds / 60.0
+                    );
+
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private boolean matchesBrand(
@@ -271,31 +473,45 @@ public class KakaoMapService {
             TheaterBrand brand
     ) {
         return switch (brand) {
+
             case CGV ->
-                    placeName.toUpperCase()
+                    placeName
+                            .toUpperCase()
                             .contains("CGV");
 
             case LOTTE_CINEMA ->
-                    placeName.contains("롯데시네마");
+                    placeName.contains(
+                            "롯데시네마"
+                    );
 
             case MEGABOX ->
-                    placeName.contains("메가박스");
+                    placeName.contains(
+                            "메가박스"
+                    );
         };
     }
 
-    private String string(Object value) {
+    private String string(
+            Object value
+    ) {
         return value == null
                 ? null
-                : String.valueOf(value);
+                : String.valueOf(
+                value
+        );
     }
 
-    private double doubleValue(Object value) {
+    private double doubleValue(
+            Object value
+    ) {
         if (value == null) {
             return 0;
         }
 
         return Double.parseDouble(
-                String.valueOf(value)
+                String.valueOf(
+                        value
+                )
         );
     }
 

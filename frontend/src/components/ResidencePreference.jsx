@@ -415,7 +415,7 @@ export default function ResidencePreference({
                 center:
                 position,
 
-                radius: 3000,
+                radius: 10000,
 
                 strokeWeight: 2,
 
@@ -518,7 +518,11 @@ export default function ResidencePreference({
         setError("");
 
         try {
-            const data = await theaterApi.nearby({ latitude, longitude, radius: 3000 });
+            const data = await theaterApi.nearby({
+                latitude,
+                longitude,
+                radius: 10000,
+            });
 
             if (
                 !Array.isArray(
@@ -558,10 +562,6 @@ export default function ResidencePreference({
                     })
                 );
 
-            /*
-             * 대중교통 시간 우선
-             * 없으면 거리순
-             */
             normalized.sort(
                 (
                     a,
@@ -1094,7 +1094,7 @@ export default function ResidencePreference({
                 <p className="help">
                     현재 위치를 기준으로
                     거주지를 자동 확인하고
-                    주변 3km 영화관을
+                    주변 10km 영화관을
                     조회합니다.
                 </p>
 
@@ -1157,7 +1157,7 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    현재 위치 기준 3km
+                    현재 위치 기준 10km
                     이내의 영화관을
                     대중교통 소요시간순으로
                     표시합니다.
