@@ -12,12 +12,21 @@ const ROWS =
 const SEATS_PER_ROW = 12;
 
 const SEAT_POSITION_LABELS = {
-    SIDE_FRONT: "좌측 · 앞",
-    SIDE_MIDDLE: "좌측 · 가운데",
-    SIDE_REAR: "좌측 · 뒤",
-    MIDDLE_FRONT: "중간 · 앞",
-    MIDDLE_MIDDLE: "중간 · 가운데",
-    MIDDLE_REAR: "중간 · 뒤",
+    SIDE_FRONT: "사이드 · 1번",
+    SIDE_MIDDLE: "사이드 · 2번",
+    SIDE_REAR: "사이드 · 3번",
+    MIDDLE_FRONT: "중앙 · 4번",
+    MIDDLE_MIDDLE: "중앙 · 5번",
+    MIDDLE_REAR: "중앙 · 6번",
+};
+
+const SEAT_ZONE_NUMBERS = {
+    SIDE_FRONT: "1",
+    SIDE_MIDDLE: "2",
+    SIDE_REAR: "3",
+    MIDDLE_FRONT: "4",
+    MIDDLE_MIDDLE: "5",
+    MIDDLE_REAR: "6",
 };
 
 function getSeatPosition(
@@ -948,37 +957,8 @@ export default function ResidencePreference({
     }
 
     function isSeatPositionHovered(position) {
-        if (!hoveredSeatPosition) {
-            return false;
-        }
-
-        const hoveredHorizontal =
-            hoveredSeatPosition.startsWith("SIDE")
-                ? "SIDE"
-                : "MIDDLE";
-
-        const hoveredVertical =
-            hoveredSeatPosition.endsWith("FRONT")
-                ? "FRONT"
-                : hoveredSeatPosition.endsWith("MIDDLE")
-                    ? "MIDDLE"
-                    : "REAR";
-
-        const positionHorizontal =
-            position.startsWith("SIDE")
-                ? "SIDE"
-                : "MIDDLE";
-
-        const positionVertical =
-            position.endsWith("FRONT")
-                ? "FRONT"
-                : position.endsWith("MIDDLE")
-                    ? "MIDDLE"
-                    : "REAR";
-
         return (
-            positionHorizontal === hoveredHorizontal ||
-            positionVertical === hoveredVertical
+            hoveredSeatPosition === position
         );
     }
 
@@ -1405,8 +1385,9 @@ export default function ResidencePreference({
 
                 <p className="help">
                     실제 영화관 좌석 배치처럼 표시됩니다.
-                    좌측/우측 사이드는 하나의 "사이드" 영역으로 취급하며,
-                    같은 앞·가운데·뒤 영역은 함께 강조됩니다.
+                    좌측/우측의 같은 번호 사이드는 하나의 영역으로 취급합니다.
+                    예를 들어 1번에 마우스를 올리면 좌측 1번과 우측 1번이 함께 반응하고,
+                    중앙 4·5·6번은 각각 독립적으로 반응합니다.
                     선호 위치는 3개까지 선택하고 선택한 순서가 우선순위가 됩니다.
                 </p>
 
@@ -1531,7 +1512,7 @@ export default function ResidencePreference({
                                     aria-label={getSeatLabel(zone.position)}
                                 >
                                     <span className="seat-zone-label">
-                                        {getSeatLabel(zone.position)}
+                                        {SEAT_ZONE_NUMBERS[zone.position]}
                                     </span>
 
                                     {priority && (
