@@ -2,6 +2,8 @@ package com.SmartTicketing.SmartTicketing.controller;
 
 import com.SmartTicketing.SmartTicketing.auth.AuthService;
 import com.SmartTicketing.SmartTicketing.auth.CustomOAuth2UserService;
+import com.SmartTicketing.SmartTicketing.dto.auth.FindLoginIdsRequest;
+import com.SmartTicketing.SmartTicketing.dto.auth.FindLoginIdsResponse;
 import com.SmartTicketing.SmartTicketing.dto.auth.LinkUrlResponse;
 import com.SmartTicketing.SmartTicketing.dto.auth.PasswordResetRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.LoginRequest;
@@ -52,12 +54,22 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/find-login-ids")
+    public ResponseEntity<FindLoginIdsResponse> findLoginIds(
+            @Valid @RequestBody FindLoginIdsRequest request
+    ) {
+        return ResponseEntity.ok(
+                auth.findLoginIds(request.name())
+        );
+    }
+
     @PostMapping("/password-reset")
     public ResponseEntity<Void> resetPassword(
             @Valid @RequestBody PasswordResetRequest request
     ) {
         auth.resetPassword(
-                request.identifier(),
+                request.name(),
+                request.loginId(),
                 request.newPassword()
         );
 
