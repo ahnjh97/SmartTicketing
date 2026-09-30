@@ -55,27 +55,28 @@ function getSeatLabel(
 function restorePreferredSeats(
     preferredSeats = []
 ) {
+    const seen = new Set();
+
     return preferredSeats
-        .map((item, index) => {
+        .map((item) => {
             const position =
                 typeof item === "string"
                     ? item
                     : item?.position;
 
-            if (!position) {
+            if (!position || seen.has(position)) {
                 return null;
             }
 
+            seen.add(position);
+
             return {
                 position,
-                priority:
-                    typeof item === "string"
-                        ? index + 1
-                        : item?.priority ?? index + 1,
+                priority: seen.size,
             };
         })
         .filter(Boolean)
-        .slice(0, 6);
+        .slice(0, 3);
 }
 
 function initializeMap(
