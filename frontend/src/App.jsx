@@ -91,6 +91,12 @@ function App() {
     const [signupPassword, setSignupPassword] =
         useState("");
 
+    const [signupPasswordConfirm, setSignupPasswordConfirm] =
+        useState("");
+
+    const [loginIdCheckStatus, setLoginIdCheckStatus] =
+        useState("idle");
+
     const [nickname, setNickname] =
         useState("");
 
@@ -353,11 +359,111 @@ function App() {
         }
     }
 
+    async function checkSignupLoginId() {
+        setError("");
+        setMessage("");
+
+        const value =
+            signupLoginId.trim();
+
+        const loginIdPattern =
+            /^[A-Za-z0-9_]+$/;
+
+        if (
+            value.length < 4 ||
+            value.length > 50
+        ) {
+            setLoginIdCheckStatus("idle");
+            setError(
+                "아이디는 4~50자로 입력해주세요."
+            );
+            return;
+        }
+
+        if (!loginIdPattern.test(value)) {
+            setLoginIdCheckStatus("idle");
+            setError(
+                "아이디는 영문, 숫자, 밑줄만 사용할 수 있습니다."
+            );
+            return;
+        }
+
+        setLoginIdCheckStatus("checking");
+
+        try {
+            const response =
+                await fetch(
+                    `${API}/api/auth/check-login-id?loginId=${encodeURIComponent(value)}`
+                );
+
+            const text =
+                await response.text();
+
+            let data = {};
+
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = {};
+            }
+
+            if (!response.ok) {
+                throw new Error(
+                    data.message ??
+                    "아이디 중복확인에 실패했습니다."
+                );
+            }
+
+            if (data.available) {
+                setLoginIdCheckStatus("available");
+                setMessage(
+                    "사용가능한 아이디 입니다."
+                );
+                setError("");
+            } else {
+                setLoginIdCheckStatus("taken");
+                setError(
+                    "이미 사용 중인 아이디입니다."
+                );
+                setMessage("");
+            }
+        } catch (e) {
+            setLoginIdCheckStatus("idle");
+            setError(
+                e.message ??
+                "아이디 중복확인에 실패했습니다."
+            );
+        }
+    }
+
     async function signup(e) {
         e.preventDefault();
 
         setError("");
         setMessage("");
+
+        const checkedLoginId =
+            signupLoginId.trim();
+
+        if (
+            loginIdCheckStatus !==
+            "available"
+        ) {
+            setError(
+                "아이디 중복확인을 완료해주세요."
+            );
+            return;
+        }
+
+        if (
+            signupPassword !==
+            signupPasswordConfirm
+        ) {
+            setError(
+                "비밀번호가 일치하지 않습니다."
+            );
+            return;
+        }
 
         try {
             const response =
@@ -380,7 +486,7 @@ function App() {
                                 signupBirthDate,
 
                                 loginId:
-                                signupLoginId,
+                                checkedLoginId,
 
                                 password:
                                 signupPassword,
@@ -417,6 +523,8 @@ function App() {
             setSignupBirthDate("");
             setSignupLoginId("");
             setSignupPassword("");
+            setSignupPasswordConfirm("");
+            setLoginIdCheckStatus("idle");
         } catch (e) {
             setError(
                 e.message ??
@@ -784,9 +892,7 @@ function App() {
                                     value={
                                         loginId
                                     }
-                                    onChange={(
-                                        e
-                                    ) =>
+                                    onChange={(e) =>
                                         setLoginId(
                                             e.target.value
                                         )
@@ -805,9 +911,7 @@ function App() {
                                     value={
                                         password
                                     }
-                                    onChange={(
-                                        e
-                                    ) =>
+                                    onChange={(e) =>
                                         setPassword(
                                             e.target.value
                                         )
@@ -894,22 +998,89 @@ function App() {
                                     아이디
                                 </label>
 
-                                <input
-                                    type="text"
-                                    value={
-                                        signupLoginId
-                                    }
-                                    onChange={(
-                                        e
-                                    ) =>
-                                        setSignupLoginId(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="영문, 숫자, 밑줄 4~50자"
-                                    autoComplete="username"
-                                    required
-                                />
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        gap: "8px",
+                                        alignItems: "stretch",
+                                    }}
+                                >
+                                    <input
+                                        type="text"
+                                        value={
+                                            signupLoginId
+                                        }
+                                        onChange={(e) => {
+                                            setSignupLoginId(
+                                                e.target.value
+                                            );
+
+                                            // 아이디가 변경되면
+                                            // 기존 중복확인 결과 무효화
+                                            setLoginIdCheckStatus(
+                                                "idle"
+                                            );
+
+                                            setError("");
+                                            setMessage("");
+                                        }}
+                                        placeholder="영문, 숫자, 밑줄 4~50자"
+                                        autoComplete="username"
+                                        required
+                                        style={{
+                                            flex: 1,
+                                        }}
+                                    />
+
+                                    <button
+                                        type="button"
+                                        className="logout-button"
+                                        onClick={
+                                            checkSignupLoginId
+                                        }
+                                        disabled={
+                                            loginIdCheckStatus ===
+                                            "checking"
+                                        }
+                                        style={{
+                                            whiteSpace:
+                                                "nowrap",
+                                        }}
+                                    >
+                                        {
+                                            loginIdCheckStatus ===
+                                            "checking"
+                                                ? "확인 중..."
+                                                : "중복확인"
+                                        }
+                                    </button>
+                                </div>
+
+                                {loginIdCheckStatus ===
+                                    "available" && (
+                                        <p
+                                            className="success-message"
+                                            style={{
+                                                marginTop: "8px",
+                                                marginBottom: 0,
+                                            }}
+                                        >
+                                            사용가능한 아이디 입니다.
+                                        </p>
+                                    )}
+
+                                {loginIdCheckStatus ===
+                                    "taken" && (
+                                        <p
+                                            className="error-message"
+                                            style={{
+                                                marginTop: "8px",
+                                                marginBottom: 0,
+                                            }}
+                                        >
+                                            이미 사용 중인 아이디입니다.
+                                        </p>
+                                    )}
 
                                 <label>
                                     비밀번호
@@ -920,9 +1091,7 @@ function App() {
                                     value={
                                         signupPassword
                                     }
-                                    onChange={(
-                                        e
-                                    ) =>
+                                    onChange={(e) =>
                                         setSignupPassword(
                                             e.target.value
                                         )
@@ -932,9 +1101,63 @@ function App() {
                                     required
                                 />
 
+                                <label>
+                                    비밀번호 확인
+                                </label>
+
+                                <input
+                                    type="password"
+                                    value={
+                                        signupPasswordConfirm
+                                    }
+                                    onChange={(e) =>
+                                        setSignupPasswordConfirm(
+                                            e.target.value
+                                        )
+                                    }
+                                    placeholder="비밀번호를 다시 입력해주세요."
+                                    autoComplete="new-password"
+                                    required
+                                />
+
+                                {signupPasswordConfirm &&
+                                    signupPassword ===
+                                    signupPasswordConfirm && (
+                                        <p
+                                            className="success-message"
+                                            style={{
+                                                marginTop: "8px",
+                                                marginBottom: 0,
+                                            }}
+                                        >
+                                            비밀번호가 일치합니다.
+                                        </p>
+                                    )}
+
+                                {signupPasswordConfirm &&
+                                    signupPassword !==
+                                    signupPasswordConfirm && (
+                                        <p
+                                            className="error-message"
+                                            style={{
+                                                marginTop: "8px",
+                                                marginBottom: 0,
+                                            }}
+                                        >
+                                            비밀번호가 일치하지 않습니다.
+                                        </p>
+                                    )}
                                 <button
                                     type="submit"
                                     className="primary-button"
+                                    disabled={
+                                        loginIdCheckStatus !==
+                                        "available" ||
+                                        signupPassword.length <
+                                        8 ||
+                                        signupPassword !==
+                                        signupPasswordConfirm
+                                    }
                                 >
                                     회원가입
                                 </button>
@@ -950,6 +1173,12 @@ function App() {
 
                                     setError("");
                                     setMessage("");
+                                    setSignupName("");
+                                    setSignupBirthDate("");
+                                    setSignupLoginId("");
+                                    setSignupPassword("");
+                                    setSignupPasswordConfirm("");
+                                    setLoginIdCheckStatus("idle");
                                 }}
                             >
                                 로그인으로 돌아가기
