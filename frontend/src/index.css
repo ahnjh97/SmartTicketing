@@ -2,6 +2,13 @@
     box-sizing: border-box;
 }
 
+:root {
+    --color-accent: #ffc426;
+    --color-accent-hover: #ffd45c;
+    --color-accent-pressed: #e9ad12;
+    --color-on-accent: #19160e;
+}
+
 html,
 body,
 #root {
@@ -240,31 +247,40 @@ input:focus {
 
     margin-top: 20px;
 
-    background:
-            linear-gradient(
-                    135deg,
-                    #e50914,
-                    #b20710
-            );
+    background: var(--color-accent);
 
-    color: white;
+    color: var(--color-on-accent);
 
     font-weight: 700;
 
     box-shadow:
             0 8px 20px
-            rgba(229, 9, 20, 0.2);
+            rgba(255, 196, 38, 0.15);
 
     transition:
             transform 0.15s ease,
-            opacity 0.15s ease;
+            background-color 0.15s ease,
+            box-shadow 0.15s ease;
 }
 
-.primary-button:hover {
-    opacity: 0.95;
+.primary-button:hover:not(:disabled),
+.primary-button:focus-visible:not(:disabled) {
+    background: var(--color-accent-hover);
+
+    box-shadow: 0 10px 24px rgba(255, 196, 38, 0.23);
 
     transform:
             translateY(-1px);
+}
+
+.primary-button:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
+.primary-button:active:not(:disabled) {
+    background: var(--color-accent-pressed);
+    transform: translateY(0);
 }
 
 .primary-button:disabled {
@@ -583,12 +599,12 @@ input:focus {
 }
 
 .theater-item.selected {
-    border-color: #e50914;
+    border-color: var(--color-accent);
 
     background:
             linear-gradient(
                     135deg,
-                    #301010,
+                    #342c17,
                     #1d1d1d
             );
 
@@ -619,7 +635,8 @@ input:focus {
 }
 
 .theater-item.selected .theater-rank {
-    background: #e50914;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
 }
 
 .theater-main {
@@ -877,13 +894,14 @@ input:focus {
 }
 
 .real-seat.selected {
-    border-color: #e50914;
+    border-color: var(--color-accent);
+    color: var(--color-on-accent);
 
     background:
             linear-gradient(
                     to bottom,
-                    #ff2a32,
-                    #c40009
+                    var(--color-accent-hover),
+                    var(--color-accent-pressed)
             );
 
     color: #fff;

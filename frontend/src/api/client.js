@@ -1,0 +1,70 @@
+import { getAccessToken, expireSession } from "../auth/session.js";
+
+export const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+
+export class ApiError extends Error {
+    constructor(message, status) {
+        super(message);
+        this.name = "ApiError";
+        this.status = status;
+    }
+}
+
+export function apiUrl(path, query) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query ?? {})) {
+        if (value !== undefined && value !== null) {
+            params.set(key, String(value));
+        }
+    }
+    const search = params.toString();
+    return `${API_BASE_URL}${path}${search ? `?${search}` : ""}`;
+}
+
+export async function request(path, {
+    method = "GET",
+    body,
+    query,
+    authenticated = true,
+    token = getAccessToken(),
+    signal,
+} = {}) {
+    if (authenticated && !token) {
+        throw new ApiError("로그인 정보가 없습니다.", 401);
+    }
+
+    const headers = { Accept: "application/json" };
+    if (authenticated) headers.Authorization = `Bearer ${token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+
+    const response = await fetch(apiUrl(path, query), {
+        method,
+        headers,
+        credentials: "include",
+        signal,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+
+    if (response.status === 204) return null;
+
+    const text = await response.text();
+    let data;
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch {
+        if (response.ok) {
+            throw new ApiError("서버 응답을 처리할 수 없습니다.", response.status);
+        }
+    }
+
+    if (!response.ok) {
+        if (response.status === 401 && authenticated) expireSession(token);
+        const fallback = response.status === 401
+            ? "로그인이 만료되었습니다. 다시 로그인해주세요."
+            : `요청에 실패했습니다. (${response.status})`;
+        throw new ApiError(data?.message || data?.detail || fallback, response.status);
+    }
+    return data;
+}
