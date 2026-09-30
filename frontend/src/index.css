@@ -1378,28 +1378,27 @@ input:focus {
     .theater-time small {
         font-size: 10px;
     }
+}
+.login-id-row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
 
-    .login-id-row {
-        display: flex;
-        flex-direction: row;
-        align-items: stretch;
-        gap: 8px;
-        width: 100%;
-        min-width: 0;
-    }
+.login-id-input {
+    width: 0;
+    flex: 1 1 0;
+    min-width: 0;
+}
 
-    .login-id-input {
-        width: 0;
-        flex: 1 1 0;
-        min-width: 0;
-    }
-
-    .login-id-check-button {
-        flex: 0 0 90px;
-        width: 90px;
-        min-width: 90px;
-        max-width: 90px;
-        white-space: nowrap;
-    }
+.login-id-check-button {
+    flex: 0 0 90px;
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+    white-space: nowrap;
 }
 
