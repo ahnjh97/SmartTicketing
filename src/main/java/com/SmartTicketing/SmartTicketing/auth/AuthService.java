@@ -35,8 +35,6 @@ public class AuthService {
         this.social = social;
         this.encoder = encoder;
         this.jwt = jwt;
-        this.redis = redis;
-        this.mailService = mailService;
     }
 
     public static UserResponse toResponse(Users user) {
