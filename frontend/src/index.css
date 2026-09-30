@@ -964,8 +964,11 @@ input:focus {
 .seat-zone-overlay {
     position: absolute;
     z-index: 2;
-    inset: 0;
-    padding: 20px 18px 26px;
+    top: 45px;
+    right: 0;
+    bottom: 26px;
+    left: 0;
+    padding: 0 18px;
     box-sizing: border-box;
     pointer-events: none;
 }
