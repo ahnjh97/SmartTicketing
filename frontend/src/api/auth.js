@@ -17,6 +17,12 @@ export const authApi = {
             authenticated: false,
         }),
 
+    findLoginId: (body) => request("/api/auth/find-login-id", { method: "POST", body, authenticated: false }),
+
+    requestPasswordReset: (body) => request("/api/auth/password-reset/request", { method: "POST", body, authenticated: false }),
+
+    resetPassword: (body) => request("/api/auth/password-reset", { method: "POST", body, authenticated: false }),
+
     checkLoginId: (loginId) =>
         request("/api/auth/check-login-id", {
             query: { loginId },
