@@ -389,13 +389,7 @@ export default function SignupPage() {
                     아이디
                 </label>
 
-                <div
-                    style={{
-                        display: "flex",
-                        gap: "8px",
-                        alignItems: "stretch"
-                    }}
-                >
+                <div className="login-id-row">
                     <input
                         id="signup-login-id"
                         type="email"
@@ -407,15 +401,12 @@ export default function SignupPage() {
                         autoComplete="username"
                         readOnly={isEmailLocked}
                         required
-                        style={{
-                            flex: 1,
-                            minWidth: 0
-                        }}
+                        className="login-id-input"
                     />
 
                     <button
                         type="button"
-                        className="logout-button"
+                        className="logout-button login-id-check-button"
                         onClick={
                             handleCheckLoginId
                         }
@@ -425,9 +416,6 @@ export default function SignupPage() {
                             || loginIdCheckStatus ===
                             "checking"
                         }
-                        style={{
-                            whiteSpace: "nowrap"
-                        }}
                     >
                         {
                             loginIdCheckStatus ===
@@ -441,12 +429,8 @@ export default function SignupPage() {
                 {loginIdCheckStatus ===
                     "available" && (
                         <p
-                            className="success-message"
+                            className="success-message field-message"
                             role="status"
-                            style={{
-                                marginTop: "8px",
-                                marginBottom: 0
-                            }}
                         >
                             사용 가능한 아이디입니다.
                         </p>
@@ -455,12 +439,8 @@ export default function SignupPage() {
                 {loginIdCheckStatus ===
                     "taken" && (
                         <p
-                            className="error-message"
+                            className="error-message field-message"
                             role="alert"
-                            style={{
-                                marginTop: "8px",
-                                marginBottom: 0
-                            }}
                         >
                             이미 사용 중인 아이디입니다.
                         </p>
@@ -506,13 +486,9 @@ export default function SignupPage() {
                     <p
                         className={
                             passwordsMatch
-                                ? "success-message"
-                                : "error-message"
+                                ? "success-message field-message"
+                                : "error-message field-message"
                         }
-                        style={{
-                            marginTop: "8px",
-                            marginBottom: 0
-                        }}
                         aria-live="polite"
                     >
                         {passwordsMatch
