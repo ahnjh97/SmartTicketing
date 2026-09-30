@@ -72,7 +72,7 @@ public class AuthService {
         String normalizedEmail = email.trim();
 
         Users user =
-                users.findByEmail(normalizedEmail)
+                users.findByEmailIgnoreCase(normalizedEmail)
                         .filter(value ->
                                 value.getStatus() == UserStatus.ACTIVE
                         )
