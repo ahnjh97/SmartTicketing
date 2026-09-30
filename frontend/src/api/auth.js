@@ -16,6 +16,13 @@ export const authApi = {
             body,
             authenticated: false,
         }),
+    findLoginIds: (body) =>
+        request("/api/auth/find-login-ids", {
+            method: "POST",
+            body,
+            authenticated: false,
+        }),
+
     resetPassword: (body) =>
         request("/api/auth/password-reset", {
             method: "POST",
