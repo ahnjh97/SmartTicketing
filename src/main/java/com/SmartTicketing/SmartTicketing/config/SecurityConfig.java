@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/auth/check-login-id",
                                 "/oauth2/**",
                                 "/login/**",
+                                "/api/admin/**",
                                 "/error"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
