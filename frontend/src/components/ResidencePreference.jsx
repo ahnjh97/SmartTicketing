@@ -4,7 +4,7 @@ import {
     useState,
 } from "react";
 
-const API = "http://localhost:8080";
+import { theaterApi, userApi } from "../api";
 
 const ROWS =
     "ABCDEFGHIJ".split("");
@@ -95,6 +95,24 @@ function getRepresentativeSeat(
     return `${ROWS[rowIndex]}${seatNumber}`;
 }
 
+function restorePreferredSeats(preferredSeats = []) {
+    return preferredSeats.map((item, index) => {
+        const position = typeof item === "string" ? item : item?.position;
+        const priority = typeof item === "string" ? index + 1 : item?.priority ?? index + 1;
+        if (!position) return null;
+        return { seatId: getRepresentativeSeat(position, priority), position };
+    }).filter(Boolean).slice(0, 6);
+}
+
+function initializeMap(mapRef, mapInstanceRef) {
+    if (!mapRef.current || !window.kakao?.maps || mapInstanceRef.current) return;
+    const kakao = window.kakao;
+    mapInstanceRef.current = new kakao.maps.Map(mapRef.current, {
+        center: new kakao.maps.LatLng(37.5665, 126.978),
+        level: 7,
+    });
+}
+
 export default function ResidencePreference({
                                                 user,
                                                 onSaved,
@@ -164,7 +182,7 @@ export default function ResidencePreference({
      * ]
      */
     const [selectedSeats, setSelectedSeats] =
-        useState([]);
+        useState(() => restorePreferredSeats(user.preferredSeats));
 
     const [locationLoading, setLocationLoading] =
         useState(false);
@@ -182,237 +200,57 @@ export default function ResidencePreference({
         useState("");
 
     useEffect(() => {
-        loadKakaoMap();
+        let active = true;
+        let script;
+
+        function handleLoad() {
+            if (!active) return;
+            if (!window.kakao?.maps) {
+                setError("카카오맵 SDK가 정상적으로 로드되지 않았습니다.");
+                return;
+            }
+            window.kakao.maps.load(() => {
+                if (!active) return;
+                kakaoReadyRef.current = true;
+                initializeMap(mapRef, mapInstanceRef);
+            });
+        }
+
+        function handleError() {
+            if (active) setError("카카오맵 SDK를 불러오지 못했습니다.");
+        }
+
+        const key = import.meta.env.VITE_KAKAO_MAP_JS_KEY;
+        if (!key) {
+            Promise.resolve().then(() => {
+                if (active) setError("VITE_KAKAO_MAP_JS_KEY가 설정되지 않았습니다.");
+            });
+        } else if (window.kakao?.maps) {
+            handleLoad();
+        } else {
+            script = document.querySelector('script[data-smart-ticketing-kakao-map="true"]');
+            const existing = Boolean(script);
+            script ??= document.createElement("script");
+            script.addEventListener("load", handleLoad);
+            script.addEventListener("error", handleError);
+            if (!existing) {
+                script.setAttribute("data-smart-ticketing-kakao-map", "true");
+                script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
+                script.async = true;
+                document.head.appendChild(script);
+            }
+        }
 
         return () => {
-            theaterMarkersRef.current.forEach(
-                (marker) =>
-                    marker.setMap(null)
-            );
-
-            theaterOverlaysRef.current.forEach(
-                (overlay) =>
-                    overlay.setMap(null)
-            );
-
-            if (
-                currentMarkerRef.current
-            ) {
-                currentMarkerRef.current.setMap(
-                    null
-                );
-            }
-
-            if (
-                currentCircleRef.current
-            ) {
-                currentCircleRef.current.setMap(
-                    null
-                );
-            }
+            active = false;
+            script?.removeEventListener("load", handleLoad);
+            script?.removeEventListener("error", handleError);
+            theaterMarkersRef.current.forEach((marker) => marker.setMap(null));
+            theaterOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+            currentMarkerRef.current?.setMap(null);
+            currentCircleRef.current?.setMap(null);
         };
     }, []);
-
-    /*
-     * 기존 선호 좌석 복원
-     */
-    useEffect(() => {
-        if (
-            !user.preferredSeats ||
-            user.preferredSeats.length === 0
-        ) {
-            setSelectedSeats([]);
-            return;
-        }
-
-        const restored =
-            user.preferredSeats
-                .map(
-                    (
-                        item,
-                        index
-                    ) => {
-                        const position =
-                            typeof item ===
-                            "string"
-                                ? item
-                                : item?.position;
-
-                        const priority =
-                            typeof item ===
-                            "string"
-                                ? index +
-                                1
-                                : item?.priority ??
-                                index +
-                                1;
-
-                        if (!position) {
-                            return null;
-                        }
-
-                        return {
-                            seatId:
-                                getRepresentativeSeat(
-                                    position,
-                                    priority
-                                ),
-                            position,
-                        };
-                    }
-                )
-                .filter(Boolean);
-
-        setSelectedSeats(
-            restored.slice(0, 6)
-        );
-    }, [
-        user.preferredSeats,
-    ]);
-
-    /*
-     * 회원이 바뀌었을 때 생년월일 / 주소도 동기화
-     */
-    useEffect(() => {
-        setBirthDate(
-            user.birthDate ?? ""
-        );
-
-        setAddress(
-            user.address ?? ""
-        );
-    }, [
-        user.id,
-        user.birthDate,
-        user.address,
-    ]);
-
-    function loadKakaoMap() {
-        const key =
-            import.meta.env
-                .VITE_KAKAO_MAP_JS_KEY;
-
-        if (!key) {
-            setError(
-                "VITE_KAKAO_MAP_JS_KEY가 설정되지 않았습니다."
-            );
-
-            return;
-        }
-
-        /*
-         * SDK가 이미 있으면 재사용
-         */
-        if (window.kakao?.maps) {
-            window.kakao.maps.load(
-                () => {
-                    kakaoReadyRef.current =
-                        true;
-
-                    initializeMap();
-                }
-            );
-
-            return;
-        }
-
-        const existingScript =
-            document.querySelector(
-                'script[data-smart-ticketing-kakao-map="true"]'
-            );
-
-        if (existingScript) {
-            existingScript.addEventListener(
-                "load",
-                handleKakaoScriptLoad
-            );
-
-            return;
-        }
-
-        const script =
-            document.createElement(
-                "script"
-            );
-
-        script.setAttribute(
-            "data-smart-ticketing-kakao-map",
-            "true"
-        );
-
-        script.src =
-            `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
-
-        script.async = true;
-
-        script.onload =
-            handleKakaoScriptLoad;
-
-        script.onerror = () => {
-            setError(
-                "카카오맵 SDK를 불러오지 못했습니다."
-            );
-        };
-
-        document.head.appendChild(
-            script
-        );
-    }
-
-    function handleKakaoScriptLoad() {
-        if (
-            !window.kakao?.maps
-        ) {
-            setError(
-                "카카오맵 SDK가 정상적으로 로드되지 않았습니다."
-            );
-
-            return;
-        }
-
-        window.kakao.maps.load(
-            () => {
-                kakaoReadyRef.current =
-                    true;
-
-                initializeMap();
-            }
-        );
-    }
-
-    function initializeMap() {
-        if (
-            !mapRef.current ||
-            !window.kakao?.maps
-        ) {
-            return;
-        }
-
-        if (
-            mapInstanceRef.current
-        ) {
-            return;
-        }
-
-        const kakao =
-            window.kakao;
-
-        const defaultPosition =
-            new kakao.maps.LatLng(
-                37.5665,
-                126.978
-            );
-
-        mapInstanceRef.current =
-            new kakao.maps.Map(
-                mapRef.current,
-                {
-                    center:
-                    defaultPosition,
-                    level: 7,
-                }
-            );
-    }
 
     function getCurrentLocation() {
         if (
@@ -523,7 +361,7 @@ export default function ResidencePreference({
         if (
             !mapInstanceRef.current
         ) {
-            initializeMap();
+            initializeMap(mapRef, mapInstanceRef);
         }
 
         if (
@@ -680,40 +518,7 @@ export default function ResidencePreference({
         setError("");
 
         try {
-            const token =
-                localStorage.getItem(
-                    "accessToken"
-                );
-
-            const response =
-                await fetch(
-                    `${API}/api/theaters/nearby?latitude=${latitude}&longitude=${longitude}&radius=3000`,
-                    {
-                        headers: {
-                            Authorization:
-                                `Bearer ${token}`,
-                        },
-                    }
-                );
-
-            const text =
-                await response.text();
-
-            let data = [];
-
-            try {
-                data =
-                    JSON.parse(text);
-            } catch {
-                data = [];
-            }
-
-            if (!response.ok) {
-                throw new Error(
-                    data?.message ??
-                    `주변 영화관 조회 실패 (${response.status})`
-                );
-            }
+            const data = await theaterApi.nearby({ latitude, longitude, radius: 3000 });
 
             if (
                 !Array.isArray(
@@ -1221,74 +1026,13 @@ export default function ResidencePreference({
         setSaving(true);
 
         try {
-            const token =
-                localStorage.getItem(
-                    "accessToken"
-                );
-
-            if (!token) {
-                throw new Error(
-                    "로그인 정보가 없습니다."
-                );
-            }
-
-            const response =
-                await fetch(
-                    `${API}/api/users/me`,
-                    {
-                        method: "PATCH",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json",
-
-                            Authorization:
-                                `Bearer ${token}`,
-                        },
-
-                        body:
-                            JSON.stringify({
-                                nickname:
-                                user.nickname,
-
-                                birthDate,
-
-                                address,
-
-                                preferredTheaterIds:
-                                theaterIds,
-
-                                preferredSeatPositions:
-                                    selectedSeats.map(
-                                        (
-                                            seat
-                                        ) =>
-                                            seat.position
-                                    ),
-                            }),
-                    }
-                );
-
-            const text =
-                await response.text();
-
-            let data = null;
-
-            try {
-                data =
-                    JSON.parse(
-                        text
-                    );
-            } catch {
-                data = null;
-            }
-
-            if (!response.ok) {
-                throw new Error(
-                    data?.message ??
-                    `회원정보 저장 실패 (${response.status})`
-                );
-            }
+            const data = await userApi.update({
+                nickname: user.nickname,
+                birthDate,
+                address,
+                preferredTheaterIds: theaterIds,
+                preferredSeatPositions: selectedSeats.map((seat) => seat.position),
+            });
 
             onSaved(
                 data
