@@ -175,47 +175,69 @@ export default function SignupPage() {
 
         let active = true;
 
-        run(async () => {
-            const data =
-                await authApi.socialSignupInfo();
+        const loadSocialSignupInfo =
+            async () => {
+                try {
+                    const data =
+                        await authApi.socialSignupInfo();
 
-            if (!active) {
-                return;
-            }
+                    console.log(
+                        "Social signup info:",
+                        data
+                    );
 
-            setName(
-                data.name ?? ""
-            );
+                    if (!active) {
+                        return;
+                    }
 
-            if (
-                data.provider === "GOOGLE"
-                || data.provider === "NAVER"
-            ) {
-                const email =
-                    data.email ?? "";
+                    setName(
+                        data.name ?? ""
+                    );
 
-                setLoginId(email);
+                    if (
+                        data.provider === "GOOGLE"
+                        || data.provider === "NAVER"
+                    ) {
+                        const email =
+                            data.email ?? "";
 
-                if (email) {
-                    await checkLoginId(email);
+                        setLoginId(email);
+
+                        if (email) {
+                            const available =
+                                await checkLoginId(
+                                    email
+                                );
+
+                            if (
+                                !active
+                                || !available
+                            ) {
+                                return;
+                            }
+                        }
+                    }
+
+                    if (
+                        data.provider === "KAKAO"
+                    ) {
+                        setLoginId("");
+                        setLoginIdCheckStatus("idle");
+                        setCheckedLoginId("");
+                    }
+                } catch (error) {
+                    if (!active) {
+                        return;
+                    }
+
+                    setError(
+                        error.message
+                        || "소셜 회원가입 정보를 가져오지 못했습니다."
+                    );
                 }
-            }
+            };
 
-            if (
-                data.provider === "KAKAO"
-            ) {
-                setLoginId("");
-                setLoginIdCheckStatus("idle");
-                setCheckedLoginId("");
-            }
-        }).catch((error) => {
-            if (active) {
-                setError(
-                    error.message
-                    || "소셜 회원가입 정보를 가져오지 못했습니다."
-                );
-            }
-        });
+        loadSocialSignupInfo();
 
         return () => {
             active = false;
@@ -223,7 +245,6 @@ export default function SignupPage() {
     }, [
         isSocial,
         checkLoginId,
-        run,
         setError
     ]);
 

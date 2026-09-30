@@ -59,6 +59,7 @@ public class CustomOAuth2UserService
                 req.getClientRegistration()
                         .getRegistrationId();
 
+
         SocialProvider provider =
                 SocialProvider.valueOf(
                         registrationId.toUpperCase()
