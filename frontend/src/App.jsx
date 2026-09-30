@@ -4,6 +4,7 @@ import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
 import EmptyPage from "./pages/EmptyPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import FindAccountPage from "./pages/FindAccountPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
 import SocialSignupPage from "./pages/SocialSignupPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
@@ -18,6 +19,7 @@ export default function App() {
             <Routes>
                 <Route element={<AppLayout />}>
                     <Route path={PAGE_PATHS.login} element={<LoginPage />} />
+                    <Route path={PAGE_PATHS.findAccount} element={<FindAccountPage />} />
                     <Route path={PAGE_PATHS.signup} element={<SignupPage />} />
                     <Route path={PAGE_PATHS.socialSignup} element={<SocialSignupPage />} />
                     <Route path={PAGE_PATHS.callback} element={<OAuthCallbackPage />} />
