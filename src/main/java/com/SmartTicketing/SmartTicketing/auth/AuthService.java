@@ -118,6 +118,7 @@ public class AuthService {
 
         Users user =
                 users.findByLoginId(loginId)
+                        .or(() -> users.findByEmailIgnoreCase(loginId))
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
                                         "아이디 또는 비밀번호가 올바르지 않습니다."
