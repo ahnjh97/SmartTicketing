@@ -52,14 +52,6 @@ function getSeatLabel(
     );
 }
 
-/*
- * 서버에는 좌석 번호가 아니라
- * 좌석 위치 + priority만 저장한다.
- *
- * 따라서 저장되어 있던 선호 위치를
- * 수정 화면에서 다시 보여주기 위해
- * 화면용 대표 좌석을 생성한다.
- */
 function getRepresentativeSeat(
     position,
     priority
@@ -95,22 +87,92 @@ function getRepresentativeSeat(
     return `${ROWS[rowIndex]}${seatNumber}`;
 }
 
-function restorePreferredSeats(preferredSeats = []) {
-    return preferredSeats.map((item, index) => {
-        const position = typeof item === "string" ? item : item?.position;
-        const priority = typeof item === "string" ? index + 1 : item?.priority ?? index + 1;
-        if (!position) return null;
-        return { seatId: getRepresentativeSeat(position, priority), position };
-    }).filter(Boolean).slice(0, 6);
+function restorePreferredSeats(
+    preferredSeats = []
+) {
+    return preferredSeats
+        .map(
+            (
+                item,
+                index
+            ) => {
+                const position =
+                    typeof item === "string"
+                        ? item
+                        : item?.position;
+
+                const priority =
+                    typeof item === "string"
+                        ? index + 1
+                        : item?.priority ??
+                        index + 1;
+
+                if (!position) {
+                    return null;
+                }
+
+                return {
+                    seatId:
+                        getRepresentativeSeat(
+                            position,
+                            priority
+                        ),
+                    position,
+                };
+            }
+        )
+        .filter(Boolean)
+        .slice(0, 6);
 }
 
-function initializeMap(mapRef, mapInstanceRef) {
-    if (!mapRef.current || !window.kakao?.maps || mapInstanceRef.current) return;
-    const kakao = window.kakao;
-    mapInstanceRef.current = new kakao.maps.Map(mapRef.current, {
-        center: new kakao.maps.LatLng(37.5665, 126.978),
-        level: 7,
-    });
+function initializeMap(
+    mapRef,
+    mapInstanceRef
+) {
+    if (
+        !mapRef.current ||
+        !window.kakao?.maps ||
+        mapInstanceRef.current
+    ) {
+        return;
+    }
+
+    const kakao =
+        window.kakao;
+
+    mapInstanceRef.current =
+        new kakao.maps.Map(
+            mapRef.current,
+            {
+                center:
+                    new kakao.maps.LatLng(
+                        37.5665,
+                        126.978
+                    ),
+                level: 7,
+            }
+        );
+}
+
+function toNullableNumber(
+    value
+) {
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+        return null;
+    }
+
+    const number =
+        Number(value);
+
+    return Number.isFinite(
+        number
+    )
+        ? number
+        : null;
 }
 
 export default function ResidencePreference({
@@ -138,13 +200,6 @@ export default function ResidencePreference({
     const kakaoReadyRef =
         useRef(false);
 
-    /*
-     * 소셜 회원 최초 설정 시
-     * 여기서 생년월일을 입력한다.
-     *
-     * 일반 회원은 이미 birthDate가 있으므로
-     * 기존 값을 사용한다.
-     */
     const [birthDate, setBirthDate] =
         useState(
             user.birthDate ?? ""
@@ -170,19 +225,13 @@ export default function ResidencePreference({
                 )
         );
 
-    /*
-     * 선택한 실제 좌석
-     *
-     * 배열 순서 = 우선순위
-     *
-     * [
-     *   { seatId: "E6", position: "MIDDLE_MIDDLE" },
-     *   { seatId: "E7", position: "MIDDLE_MIDDLE" },
-     *   { seatId: "B6", position: "MIDDLE_FRONT" }
-     * ]
-     */
     const [selectedSeats, setSelectedSeats] =
-        useState(() => restorePreferredSeats(user.preferredSeats));
+        useState(
+            () =>
+                restorePreferredSeats(
+                    user.preferredSeats
+                )
+        );
 
     const [locationLoading, setLocationLoading] =
         useState(false);
@@ -204,58 +253,137 @@ export default function ResidencePreference({
         let script;
 
         function handleLoad() {
-            if (!active) return;
-            if (!window.kakao?.maps) {
-                setError("카카오맵 SDK가 정상적으로 로드되지 않았습니다.");
+            if (!active) {
                 return;
             }
-            window.kakao.maps.load(() => {
-                if (!active) return;
-                kakaoReadyRef.current = true;
-                initializeMap(mapRef, mapInstanceRef);
-            });
+
+            if (!window.kakao?.maps) {
+                setError(
+                    "카카오맵 SDK가 정상적으로 로드되지 않았습니다."
+                );
+
+                return;
+            }
+
+            window.kakao.maps.load(
+                () => {
+                    if (!active) {
+                        return;
+                    }
+
+                    kakaoReadyRef.current =
+                        true;
+
+                    initializeMap(
+                        mapRef,
+                        mapInstanceRef
+                    );
+                }
+            );
         }
 
         function handleError() {
-            if (active) setError("카카오맵 SDK를 불러오지 못했습니다.");
+            if (active) {
+                setError(
+                    "카카오맵 SDK를 불러오지 못했습니다."
+                );
+            }
         }
 
-        const key = import.meta.env.VITE_KAKAO_MAP_JS_KEY;
+        const key =
+            import.meta.env
+                .VITE_KAKAO_MAP_JS_KEY;
+
         if (!key) {
-            Promise.resolve().then(() => {
-                if (active) setError("VITE_KAKAO_MAP_JS_KEY가 설정되지 않았습니다.");
-            });
-        } else if (window.kakao?.maps) {
+            Promise.resolve().then(
+                () => {
+                    if (active) {
+                        setError(
+                            "VITE_KAKAO_MAP_JS_KEY가 설정되지 않았습니다."
+                        );
+                    }
+                }
+            );
+        } else if (
+            window.kakao?.maps
+        ) {
             handleLoad();
         } else {
-            script = document.querySelector('script[data-smart-ticketing-kakao-map="true"]');
-            const existing = Boolean(script);
-            script ??= document.createElement("script");
-            script.addEventListener("load", handleLoad);
-            script.addEventListener("error", handleError);
+            script =
+                document.querySelector(
+                    'script[data-smart-ticketing-kakao-map="true"]'
+                );
+
+            const existing =
+                Boolean(script);
+
+            script ??=
+                document.createElement(
+                    "script"
+                );
+
+            script.addEventListener(
+                "load",
+                handleLoad
+            );
+
+            script.addEventListener(
+                "error",
+                handleError
+            );
+
             if (!existing) {
-                script.setAttribute("data-smart-ticketing-kakao-map", "true");
-                script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
+                script.setAttribute(
+                    "data-smart-ticketing-kakao-map",
+                    "true"
+                );
+
+                script.src =
+                    `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&autoload=false&libraries=services`;
+
                 script.async = true;
-                document.head.appendChild(script);
+
+                document.head.appendChild(
+                    script
+                );
             }
         }
 
         return () => {
             active = false;
-            script?.removeEventListener("load", handleLoad);
-            script?.removeEventListener("error", handleError);
-            theaterMarkersRef.current.forEach((marker) => marker.setMap(null));
-            theaterOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
-            currentMarkerRef.current?.setMap(null);
-            currentCircleRef.current?.setMap(null);
+
+            script?.removeEventListener(
+                "load",
+                handleLoad
+            );
+
+            script?.removeEventListener(
+                "error",
+                handleError
+            );
+
+            theaterMarkersRef.current.forEach(
+                (marker) =>
+                    marker.setMap(null)
+            );
+
+            theaterOverlaysRef.current.forEach(
+                (overlay) =>
+                    overlay.setMap(null)
+            );
+
+            currentMarkerRef.current?.setMap(
+                null
+            );
+
+            currentCircleRef.current?.setMap(
+                null
+            );
         };
     }, []);
 
     function getCurrentLocation() {
-        if (
-            !navigator.geolocation
-        ) {
+        if (!navigator.geolocation) {
             setError(
                 "현재 브라우저에서 위치 정보를 사용할 수 없습니다."
             );
@@ -263,9 +391,7 @@ export default function ResidencePreference({
             return;
         }
 
-        if (
-            !kakaoReadyRef.current
-        ) {
+        if (!kakaoReadyRef.current) {
             setError(
                 "카카오맵이 아직 준비되지 않았습니다."
             );
@@ -349,24 +475,19 @@ export default function ResidencePreference({
                 longitude
             );
 
-        /*
-         * 좌표는 내부 처리용.
-         * 화면에는 위도/경도를 출력하지 않는다.
-         */
         setLocation({
             latitude,
             longitude,
         });
 
-        if (
-            !mapInstanceRef.current
-        ) {
-            initializeMap(mapRef, mapInstanceRef);
+        if (!mapInstanceRef.current) {
+            initializeMap(
+                mapRef,
+                mapInstanceRef
+            );
         }
 
-        if (
-            !mapInstanceRef.current
-        ) {
+        if (!mapInstanceRef.current) {
             throw new Error(
                 "카카오맵을 초기화하지 못했습니다."
             );
@@ -433,11 +554,6 @@ export default function ResidencePreference({
                 fillOpacity: 0.08,
             });
 
-        /*
-         * Kakao JavaScript SDK Geocoder
-         *
-         * 좌표 → 주소
-         */
         const geocoder =
             new kakao.maps.services.Geocoder();
 
@@ -513,16 +629,19 @@ export default function ResidencePreference({
         latitude,
         longitude
     ) {
-        setTheaterLoading(true);
+        setTheaterLoading(
+            true
+        );
 
         setError("");
 
         try {
-            const data = await theaterApi.nearby({
-                latitude,
-                longitude,
-                radius: 10000,
-            });
+            const data =
+                await theaterApi.nearby({
+                    latitude,
+                    longitude,
+                    radius: 10000,
+                });
 
             if (
                 !Array.isArray(
@@ -538,28 +657,39 @@ export default function ResidencePreference({
                 data.map(
                     (
                         theater
-                    ) => ({
-                        ...theater,
+                    ) => {
+                        const transitMinutes =
+                            toNullableNumber(
+                                theater.transitMinutes
+                            );
 
-                        transitMinutes:
-                            Number.isFinite(
-                                Number(
-                                    theater.transitMinutes
-                                )
-                            )
-                                ? Number(
-                                    theater.transitMinutes
-                                )
-                                : Number.isFinite(
-                                    Number(
-                                        theater.durationMinutes
-                                    )
-                                )
-                                    ? Number(
-                                        theater.durationMinutes
-                                    )
-                                    : null,
-                    })
+                        const transitDistance =
+                            toNullableNumber(
+                                theater.transitDistance
+                            );
+
+                        const walkMinutes =
+                            toNullableNumber(
+                                theater.walkMinutes
+                            );
+
+                        const walkDistance =
+                            toNullableNumber(
+                                theater.walkDistance
+                            );
+
+                        return {
+                            ...theater,
+
+                            transitMinutes,
+
+                            transitDistance,
+
+                            walkMinutes,
+
+                            walkDistance,
+                        };
+                    }
                 );
 
             normalized.sort(
@@ -702,8 +832,35 @@ export default function ResidencePreference({
                         }
                     );
 
-                const minutes =
+                const transitMinutes =
                     theater.transitMinutes;
+
+                const walkMinutes =
+                    theater.walkMinutes;
+
+                const transitText =
+                    transitMinutes !=
+                    null
+                        ? `대중교통 ${transitMinutes}분`
+                        : "";
+
+                const walkText =
+                    walkMinutes !=
+                    null
+                        ? `도보 ${walkMinutes}분`
+                        : "";
+
+                const routeText =
+                    [
+                        transitText,
+                        walkText,
+                    ]
+                        .filter(
+                            Boolean
+                        )
+                        .join(
+                            " · "
+                        );
 
                 const overlay =
                     new window.kakao.maps.CustomOverlay(
@@ -717,9 +874,8 @@ export default function ResidencePreference({
                                 <div class="map-theater-label">
                                     ${index + 1}위
                                     ${
-                                minutes !=
-                                null
-                                    ? ` · ${minutes}분`
+                                routeText
+                                    ? ` · ${routeText}`
                                     : ""
                             }
                                 </div>
@@ -811,9 +967,6 @@ export default function ResidencePreference({
                     seatId
             );
 
-        /*
-         * 같은 실제 좌석 클릭 → 해제
-         */
         if (
             alreadySelected
         ) {
@@ -835,9 +988,6 @@ export default function ResidencePreference({
             return;
         }
 
-        /*
-         * 최대 6개
-         */
         if (
             selectedSeats.length >=
             6
@@ -849,10 +999,6 @@ export default function ResidencePreference({
             return;
         }
 
-        /*
-         * 같은 위치 범주라도
-         * 여러 개 선택 가능
-         */
         setSelectedSeats(
             (
                 current
@@ -952,9 +1098,6 @@ export default function ResidencePreference({
         setError("");
         setMessage("");
 
-        /*
-         * 소셜 회원이 최초 설정하는 경우
-         */
         if (!birthDate) {
             setError(
                 "생년월일을 입력해주세요."
@@ -1008,10 +1151,6 @@ export default function ResidencePreference({
         const theaterIds =
             getSelectedTheatersInPriorityOrder();
 
-        /*
-         * 현재 조회한 영화관 데이터에
-         * 선택된 영화관이 모두 있는지 확인
-         */
         if (
             theaterIds.length !==
             selectedTheaters.length
@@ -1026,13 +1165,26 @@ export default function ResidencePreference({
         setSaving(true);
 
         try {
-            const data = await userApi.update({
-                nickname: user.nickname,
-                birthDate,
-                address,
-                preferredTheaterIds: theaterIds,
-                preferredSeatPositions: selectedSeats.map((seat) => seat.position),
-            });
+            const data =
+                await userApi.update({
+                    nickname:
+                    user.nickname,
+
+                    birthDate,
+
+                    address,
+
+                    preferredTheaterIds:
+                    theaterIds,
+
+                    preferredSeatPositions:
+                        selectedSeats.map(
+                            (
+                                seat
+                            ) =>
+                                seat.position
+                        ),
+                });
 
             onSaved(
                 data
@@ -1049,8 +1201,6 @@ export default function ResidencePreference({
 
     return (
         <div className="preference-container">
-
-            {/* 생년월일 */}
 
             {!user.birthDate && (
                 <section>
@@ -1083,8 +1233,6 @@ export default function ResidencePreference({
                     />
                 </section>
             )}
-
-            {/* 거주지 */}
 
             <section>
                 <h2>
@@ -1139,8 +1287,6 @@ export default function ResidencePreference({
                     </div>
                 )}
             </section>
-
-            {/* 영화관 */}
 
             <section>
                 <div className="section-title">
@@ -1230,31 +1376,63 @@ export default function ResidencePreference({
                                     </div>
 
                                     <div className="theater-time">
-                                        {theater.transitMinutes !=
-                                        null ? (
-                                            <>
-                                                <strong>
-                                                    {
-                                                        theater.transitMinutes
-                                                    }
-                                                    분
-                                                </strong>
 
-                                                <small>
-                                                    대중교통
-                                                </small>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <strong>
-                                                    -
-                                                </strong>
+                                        <div>
+                                            <strong>
+                                                {
+                                                    theater.transitMinutes !=
+                                                    null
+                                                        ? `${theater.transitMinutes}분`
+                                                        : "-"
+                                                }
+                                            </strong>
 
-                                                <small>
-                                                    시간 정보 없음
-                                                </small>
-                                            </>
-                                        )}
+                                            <small>
+                                                대중교통
+                                            </small>
+
+                                            {theater.transitDistance !=
+                                                null && (
+                                                    <small>
+                                                        {(
+                                                            theater.transitDistance /
+                                                            1000
+                                                        ).toFixed(
+                                                            1
+                                                        )}
+                                                        km
+                                                    </small>
+                                                )}
+                                        </div>
+
+                                        <div>
+                                            <strong>
+                                                {
+                                                    theater.walkMinutes !=
+                                                    null
+                                                        ? `${theater.walkMinutes}분`
+                                                        : "-"
+                                                }
+                                            </strong>
+
+                                            <small>
+                                                도보
+                                            </small>
+
+                                            {theater.walkDistance !=
+                                                null && (
+                                                    <small>
+                                                        {(
+                                                            theater.walkDistance /
+                                                            1000
+                                                        ).toFixed(
+                                                            1
+                                                        )}
+                                                        km
+                                                    </small>
+                                                )}
+                                        </div>
+
                                     </div>
                                 </button>
                             );
@@ -1262,8 +1440,6 @@ export default function ResidencePreference({
                     )}
                 </div>
             </section>
-
-            {/* 좌석 */}
 
             <section>
                 <div className="section-title">

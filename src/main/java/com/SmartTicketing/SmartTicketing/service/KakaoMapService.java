@@ -20,7 +20,6 @@ public class KakaoMapService {
 
     private final TheaterRepository theaters;
     private final RestClient restClient;
-    private final RestClient publicTransitClient;
     private final String restApiKey;
 
     public KakaoMapService(
@@ -32,10 +31,6 @@ public class KakaoMapService {
 
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
-                .build();
-
-        this.publicTransitClient = RestClient.builder()
-                .baseUrl("https://apis-navi.kakaomobility.com")
                 .build();
     }
 
@@ -312,8 +307,16 @@ public class KakaoMapService {
                         theater
                 );
 
-        Integer transitMinutes =
-                findPublicTransitMinutes(
+        RouteInfo transit =
+                findPublicTransit(
+                        latitude,
+                        longitude,
+                        place.latitude(),
+                        place.longitude()
+                );
+
+        RouteInfo walk =
+                findWalk(
                         latitude,
                         longitude,
                         place.latitude(),
@@ -330,11 +333,14 @@ public class KakaoMapService {
                 place.longitude(),
                 place.distance(),
                 place.placeUrl(),
-                transitMinutes
+                transit.distance(),
+                transit.minutes(),
+                walk.distance(),
+                walk.minutes()
         );
     }
 
-    private Integer findPublicTransitMinutes(
+    private RouteInfo findPublicTransit(
             double startLatitude,
             double startLongitude,
             double endLatitude,
@@ -342,28 +348,36 @@ public class KakaoMapService {
     ) {
         try {
             Map<String, Object> response =
-                    publicTransitClient.get()
+                    restClient.get()
                             .uri(
                                     uriBuilder ->
                                             uriBuilder
                                                     .path(
-                                                            "/affiliate/publictransit/v1/multimodal/directions"
+                                                            "/v2/routing/publictraffic"
                                                     )
                                                     .queryParam(
-                                                            "start",
+                                                            "start_x",
                                                             startLongitude
-                                                                    + ","
-                                                                    + startLatitude
                                                     )
                                                     .queryParam(
-                                                            "goal",
+                                                            "start_y",
+                                                            startLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "end_x",
                                                             endLongitude
-                                                                    + ","
-                                                                    + endLatitude
                                                     )
                                                     .queryParam(
-                                                            "route_type",
-                                                            "All"
+                                                            "end_y",
+                                                            endLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "input_coord",
+                                                            "WGS84"
+                                                    )
+                                                    .queryParam(
+                                                            "output_coord",
+                                                            "WGS84"
                                                     )
                                                     .build()
                             )
@@ -371,26 +385,31 @@ public class KakaoMapService {
                                     "Authorization",
                                     "KakaoAK " + restApiKey
                             )
-                            .header(
-                                    "Content-Type",
-                                    "application/json"
-                            )
                             .retrieve()
                             .body(
                                     new ParameterizedTypeReference<>() {
                                     }
                             );
 
-            if (response == null) {
-                return null;
+            if (
+                    response == null ||
+                            !"OK".equals(
+                                    String.valueOf(
+                                            response.get("status")
+                                    )
+                            )) {
+                return RouteInfo.empty();
             }
 
             Object routes =
                     response.get("routes");
 
             if (!(routes instanceof List<?> list)) {
-                return null;
+                return RouteInfo.empty();
             }
+
+            int bestDistance =
+                    Integer.MAX_VALUE;
 
             int bestSeconds =
                     Integer.MAX_VALUE;
@@ -401,53 +420,47 @@ public class KakaoMapService {
                     continue;
                 }
 
-                Object resultCode =
+                Object properties =
                         routeMap.get(
-                                "result_code"
+                                "properties"
                         );
 
-                if (
-                        resultCode != null &&
-                                Integer.parseInt(
-                                        String.valueOf(
-                                                resultCode
-                                        )
-                                ) != 0
-                ) {
+                if (!(properties instanceof Map<?, ?> propertiesMap)) {
                     continue;
                 }
 
-                Object summary =
-                        routeMap.get(
-                                "summary"
+                Integer distance =
+                        integerValue(
+                                propertiesMap.get(
+                                        "totalDistance"
+                                )
                         );
 
-                if (!(summary instanceof Map<?, ?> summaryMap)) {
-                    continue;
-                }
-
-                Object duration =
-                        summaryMap.get(
-                                "duration"
-                        );
-
-                if (duration == null) {
-                    continue;
-                }
-
-                int seconds =
-                        Integer.parseInt(
-                                String.valueOf(
-                                        duration
+                Integer seconds =
+                        integerValue(
+                                propertiesMap.get(
+                                        "totalTime"
                                 )
                         );
 
                 if (
-                        seconds > 0 &&
-                                seconds < bestSeconds
+                        distance == null ||
+                                seconds == null ||
+                                distance < 0 ||
+                                seconds <= 0
+                ) {
+                    continue;
+                }
+
+                if (
+                        seconds <
+                                bestSeconds
                 ) {
                     bestSeconds =
                             seconds;
+
+                    bestDistance =
+                            distance;
                 }
             }
 
@@ -455,15 +468,153 @@ public class KakaoMapService {
                     bestSeconds ==
                             Integer.MAX_VALUE
             ) {
-                return null;
+                return RouteInfo.empty();
             }
 
-            return (int)
-                    Math.ceil(
-                            bestSeconds / 60.0
-                    );
+            return new RouteInfo(
+                    bestDistance,
+                    (int)
+                            Math.ceil(
+                                    bestSeconds / 60.0
+                            )
+            );
 
         } catch (Exception ignored) {
+            return RouteInfo.empty();
+        }
+    }
+
+    private RouteInfo findWalk(
+            double startLatitude,
+            double startLongitude,
+            double endLatitude,
+            double endLongitude
+    ) {
+        try {
+            Map<String, Object> response =
+                    restClient.get()
+                            .uri(
+                                    uriBuilder ->
+                                            uriBuilder
+                                                    .path(
+                                                            "/v2/routing/walk"
+                                                    )
+                                                    .queryParam(
+                                                            "start_x",
+                                                            startLongitude
+                                                    )
+                                                    .queryParam(
+                                                            "start_y",
+                                                            startLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "end_x",
+                                                            endLongitude
+                                                    )
+                                                    .queryParam(
+                                                            "end_y",
+                                                            endLatitude
+                                                    )
+                                                    .queryParam(
+                                                            "input_coord",
+                                                            "WGS84"
+                                                    )
+                                                    .queryParam(
+                                                            "output_coord",
+                                                            "WGS84"
+                                                    )
+                                                    .queryParam(
+                                                            "route_mode",
+                                                            "BROAD_FIRST"
+                                                    )
+                                                    .build()
+                            )
+                            .header(
+                                    "Authorization",
+                                    "KakaoAK " + restApiKey
+                            )
+                            .retrieve()
+                            .body(
+                                    new ParameterizedTypeReference<>() {
+                                    }
+                            );
+
+            if (
+                    response == null ||
+                            !"OK".equals(
+                                    String.valueOf(
+                                            response.get("status")
+                                    )
+                            )) {
+                return RouteInfo.empty();
+            }
+
+            Object route =
+                    response.get("route");
+
+            if (!(route instanceof Map<?, ?> routeMap)) {
+                return RouteInfo.empty();
+            }
+
+            Object properties =
+                    routeMap.get(
+                            "properties"
+                    );
+
+            if (!(properties instanceof Map<?, ?> propertiesMap)) {
+                return RouteInfo.empty();
+            }
+
+            Integer distance =
+                    integerValue(
+                            propertiesMap.get(
+                                    "totalDistance"
+                            )
+                    );
+
+            Integer seconds =
+                    integerValue(
+                            propertiesMap.get(
+                                    "totalTime"
+                            )
+                    );
+
+            if (
+                    distance == null ||
+                            seconds == null ||
+                            distance < 0 ||
+                            seconds <= 0
+            ) {
+                return RouteInfo.empty();
+            }
+
+            return new RouteInfo(
+                    distance,
+                    (int)
+                            Math.ceil(
+                                    seconds / 60.0
+                            )
+            );
+
+        } catch (Exception ignored) {
+            return RouteInfo.empty();
+        }
+    }
+
+    private Integer integerValue(
+            Object value
+    ) {
+        if (value == null) {
+            return null;
+        }
+
+        try {
+            return Integer.parseInt(
+                    String.valueOf(
+                            value
+                    )
+            );
+        } catch (NumberFormatException ignored) {
             return null;
         }
     }
@@ -513,6 +664,18 @@ public class KakaoMapService {
                         value
                 )
         );
+    }
+
+    private record RouteInfo(
+            Integer distance,
+            Integer minutes
+    ) {
+        private static RouteInfo empty() {
+            return new RouteInfo(
+                    null,
+                    null
+            );
+        }
     }
 
     private record NearbyPlace(
