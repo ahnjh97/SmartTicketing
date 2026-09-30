@@ -66,6 +66,7 @@ public class SecurityConfig {
                                 "/api/auth/social-signup",
                                 "/oauth2/**",
                                 "/login/**",
+                                "/api/admin/**",
                                 "/error"
                         ).permitAll()
 
