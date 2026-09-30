@@ -143,9 +143,11 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public boolean isLoginIdTaken(String loginId) {
-        return users.existsByLoginId(
-                loginId.trim()
-        );
+        String normalizedLoginId = loginId.trim();
+
+        return users.existsByLoginId(normalizedLoginId)
+                || users.findByEmailIgnoreCase(normalizedLoginId).isPresent()
+                || social.existsByEmailIgnoreCase(normalizedLoginId);
     }
 
     public TokenResponse completeSocialSignup(
