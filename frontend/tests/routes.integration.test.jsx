@@ -45,6 +45,7 @@ beforeEach(() => {
     localStorage.clear();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
         if (url === "/api/auth/login") return new Response(JSON.stringify({ accessToken: "login-token" }));
+        if (url.startsWith("/api/auth/check-login-id?")) return new Response(JSON.stringify({ available: true }));
         if (url === "/api/auth/signup") return new Response(JSON.stringify(completedUser));
         if (url === "/api/auth/logout") return new Response(null, { status: 204 });
         if (url === "/api/users/me") return new Response(JSON.stringify(completedUser));
@@ -85,14 +86,67 @@ test("signup posts the existing fields and returns to login with a success messa
     mount("/signup");
     fireEvent.change(await screen.findByLabelText("이름"), { target: { value: "테스터" } });
     fireEvent.change(screen.getByLabelText("생년월일"), { target: { value: "2000-01-01" } });
-    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: " tester " } });
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
+    await screen.findByText("사용가능한 아이디 입니다.");
     fireEvent.click(screen.getByRole("button", { name: "회원가입", exact: true }));
     await at("/login");
     expect((await screen.findByRole("status")).textContent).toContain("회원가입이 완료되었습니다.");
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    expect(fetch.mock.calls[0][0]).toBe("/api/auth/check-login-id?loginId=tester");
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
         name: "테스터", birthDate: "2000-01-01", loginId: "tester", password: "password123",
     });
+});
+
+test("signup requires matching passwords and rechecking a changed login ID", async () => {
+    mount("/signup");
+    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "otherpassword" } });
+    fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
+    await screen.findByText("사용가능한 아이디 입니다.");
+    const submit = screen.getByRole("button", { name: "회원가입", exact: true });
+    expect(submit.disabled).toBe(true);
+    expect(screen.getByText("비밀번호가 일치하지 않습니다.")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "different_id" } });
+    expect(submit.disabled).toBe(true);
+    expect(screen.queryByText("사용가능한 아이디 입니다.")).toBe(null);
+    expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+test("an already taken login ID keeps signup disabled", async () => {
+    fetch.mockResolvedValueOnce(new Response(JSON.stringify({ available: false })));
+    mount("/signup");
+    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
+    await screen.findByText("이미 사용 중인 아이디입니다.");
+    expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+test("a late availability response cannot approve an edited login ID", async () => {
+    let resolveCheck;
+    fetch.mockImplementationOnce(() => new Promise((resolve) => { resolveCheck = resolve; }));
+    mount("/signup");
+    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "changed_id" } });
+    await act(async () => { resolveCheck(new Response(JSON.stringify({ available: true }))); });
+    expect(screen.queryByText("사용가능한 아이디 입니다.")).toBe(null);
+    expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
+    await screen.findByText("사용가능한 아이디 입니다.");
+    expect(fetch.mock.calls[1][0]).toBe("/api/auth/check-login-id?loginId=changed_id");
+    expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(false);
 });
 
 test("normal login retrieves the member and opens the existing profile", async () => {
