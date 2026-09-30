@@ -1,24 +1,42 @@
 # SmartTicketing
-Spring Boot + React 기반 / 사용자 선호 기반 좌석 추천과 동시성 제어를 적용한 스마트 영화 예매 시스템
 
-## 로컬 실행 설정
+사용자의 거주지와 영화관·좌석 선호를 관리하는 Spring Boot + React 기반 영화 예매 프로젝트입니다. 사용자 선호 기반 좌석 추천과 예매 동시성 제어를 목표로 개발하고 있습니다.
 
-IntelliJ의 Run → Edit Configurations → Environment variables에 각 PC의 값을 설정합니다.
+## 주요 기능
 
-- `DB_USERNAME`: MySQL 계정 (생략하면 `root`)
-- `DB_PASSWORD`: MySQL 비밀번호
-- `JWT_SECRET`: UTF-8 기준 32바이트 이상의 토큰 서명 키
+| 영역 | 구현 내용 |
+| --- | --- |
+| 회원 인증 | 일반 회원가입·로그인, JWT 인증, Google·Naver·Kakao 소셜 로그인 |
+| 회원정보 | 회원정보 조회·수정·탈퇴, 최초 로그인 시 닉네임 및 선호정보 설정 |
+| 거주지·영화관 | 현재 위치 기반 거주지 확인, 주변 영화관 조회, 선호 영화관 선택 |
+| 좌석 선호 | 좌석 위치와 우선순위 저장, 같은 위치 범주의 복수 선호 지원 |
+| 티켓 API | 내 티켓 목록·상세 조회, 확정된 예매의 티켓 발급 |
+| 알림 API | 알림 목록 조회, 개별·전체 읽음 처리, 삭제 |
 
-기본 DB URL은 `localhost:3306/smart_ticketing`이며 DB가 없으면 생성합니다. MySQL 서버가 실행 중이고 계정에 DB 생성 권한이 있어야 합니다. `DB_URL`을 별도로 지정하면 자동 생성이 필요한 경우 `createDatabaseIfNotExist=true`도 포함하세요.
+## 기술 스택
 
-소셜 로그인은 기본적으로 비활성화되어 연동 키 없이 실행할 수 있습니다. 사용할 제공자만 `SPRING_PROFILES_ACTIVE`에 지정하고 해당 키를 설정하세요.
+| 구분 | 기술 |
+| --- | --- |
+| 프런트엔드 | React 19, React Router, Vite, JavaScript·JSX |
+| 백엔드 | Java 21, Spring Boot 4, Spring Security, Spring Data JPA |
+| 데이터베이스 | MySQL |
+| 인증·외부 연동 | JWT, OAuth 2.0, Kakao Maps |
+| 프런트엔드 검증 | Vitest, React Testing Library, Node.js Test Runner, ESLint |
 
-| 제공자 | 활성 프로필 | 필요한 환경변수 |
-| --- | --- | --- |
-| Google | `oauth-google` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-| Naver | `oauth-naver` | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` |
-| Kakao | `oauth-kakao` | `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET` |
+## 설계
 
-여러 제공자는 `SPRING_PROFILES_ACTIVE=oauth-google,oauth-naver,oauth-kakao`처럼 지정합니다. 기존 프로필이 있으면 쉼표로 추가하세요. 활성화한 제공자는 실제 발급된 키가 필요합니다. 클라이언트 ID와 시크릿은 앱의 연동 정보이며 사용자 로그인 아이디/비밀번호가 아닙니다. 시크릿은 서버에서 관리합니다.
+프런트엔드는 화면 컴포넌트, 공통 레이아웃, 인증 상태, API 요청 계층을 분리했습니다. 페이지별 URL과 브라우저 방문 기록을 연결하고, 회원 전용 화면과 최초 설정 흐름은 공통 라우트 가드에서 관리합니다.
 
-주변 영화관 검색은 `KAKAO_MAP_REST_API_KEY`로 별도 설정할 수 있으며, 생략하면 `KAKAO_CLIENT_ID`를 사용합니다. 둘 다 없으면 앱은 실행되지만 주변 영화관 조회는 HTTP 503을 반환합니다. 지도 기능은 소셜 로그인 프로필과 독립적입니다.
+API 요청 계층은 JWT 전달과 응답·오류 처리를 공통으로 담당합니다. 인증 만료와 일반 요청 실패를 구분하고, 이전 로그인에서 늦게 도착한 오류가 새 로그인 상태를 지우지 않도록 처리합니다.
+
+좌석 선호는 실제 좌석 번호 대신 위치 범주와 우선순위로 저장합니다. 수정 화면에서는 저장된 선호를 대표 좌석으로 복원해 선택 순서를 확인할 수 있습니다.
+
+## 검증
+
+프런트엔드 테스트는 API 요청 계약, 회원가입·로그인·로그아웃, 페이지 이동과 로그인 복원, OAuth 최초 설정 순서, 인증 만료 처리, 선호 좌석 복원을 검증합니다. 외부 지도 SDK와 서버 응답은 테스트에서 대체하며 실제 외부 서비스 연동과 구분합니다.
+
+## 개발 범위
+
+현재 웹 화면은 공통 투명 헤더와 회원 인증·회원정보·선호정보 관리 중심으로 구성했습니다. 홈·영화·극장은 공통 레이아웃과 경로를 마련한 단계이며, 티켓·알림은 API 연결 계층을 제공합니다. 좌석 추천, 예매 생성, 결제, 대기열 및 동시성 제어는 후속 개발 범위입니다.
+
+프런트엔드 구조는 [웹 애플리케이션 문서](frontend/README.md)에서 확인할 수 있습니다.

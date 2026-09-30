@@ -1,16 +1,56 @@
-# React + Vite
+# SmartTicketing 웹
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 기반 SmartTicketing 웹 애플리케이션입니다. 회원 인증과 사용자 선호정보를 관리하며, 공통 투명 헤더를 통해 각 화면으로 이동합니다.
 
-Currently, two official plugins are available:
+## 환경변수
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+프런트 환경변수는 프로젝트 최상위 `SmartTicketing/.env`에서 관리합니다. 기존 `.env`에 `VITE_KAKAO_MAP_JS_KEY`(카카오 JavaScript 키)를 입력하고, 별도 API 서버를 사용할 때는 `VITE_API_BASE_URL`도 설정합니다. `VITE_API_BASE_URL`이 비어 있으면 개발 서버가 API 요청을 `localhost:8080`으로 전달합니다.
 
-## React Compiler
+Vite는 `VITE_`로 시작하는 변수만 브라우저에 제공합니다. 서버에서 사용하는 REST API 키, 클라이언트 시크릿, DB 비밀번호에는 이 접두사를 붙이지 마세요. 환경변수를 변경한 뒤에는 프런트 개발 서버를 재시작합니다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 화면 구성
 
-## Expanding the ESLint configuration
+- 일반 회원가입·로그인 및 Google·Naver·Kakao 소셜 로그인
+- 카카오 최초 닉네임 설정과 최초 선호정보 설정
+- 회원정보 조회·수정·탈퇴
+- 거주지 확인, 주변 영화관 조회, 영화관·좌석 선호 관리
+- 홈·영화·극장의 공통 레이아웃과 페이지 경로
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 코드 구조
+
+| 경로 | 역할 |
+| --- | --- |
+| src/main.jsx | React 앱과 BrowserRouter 시작 |
+| src/App.jsx | 화면별 Route 구성 |
+| src/layouts/AppLayout.jsx | 공통 투명 헤더와 본문 Outlet |
+| src/pages/ | 페이지별 JSX 컴포넌트 |
+| src/components/ | 공통 헤더, 인증 폼 레이아웃, 선호정보 폼, 라우트 가드 |
+| src/auth/ | 로그인 복원, 사용자 상태와 세션 관리 |
+| src/api/ | 인증·회원·영화관·티켓·알림 API 모듈과 공통 요청 처리 |
+| tests/ | API 계약과 React 화면 흐름 테스트 |
+
+## 구현 포인트
+
+### URL 기반 화면 전환
+
+React Router의 Routes/Route, NavLink, useNavigate로 페이지 이동과 브라우저 방문 기록을 연결합니다. 회원 전용 화면 접근과 최초 설정 순서는 공통 라우트 가드가 관리합니다.
+
+### 인증 상태와 API 요청 분리
+
+AuthProvider가 로그인 복원과 사용자 상태를 담당하고, 각 화면은 필요한 상태와 동작을 가져와 사용합니다. API 요청은 공통 클라이언트에서 JWT 전달, JSON 응답, 본문 없는 응답과 오류를 처리합니다.
+
+인증이 필요한 요청의 401 응답은 세션 만료로 처리하며, 일반 로그인 실패나 권한 오류와 구분합니다. 이전 세션의 지연 응답이 새 로그인 상태를 지우지 않도록 요청 토큰을 확인합니다.
+
+### OAuth 및 최초 설정 흐름
+
+OAuth 콜백에서 토큰을 읽은 뒤 주소에서 제거하고 회원정보를 조회합니다. 최초 설정이 필요한 회원은 닉네임 설정과 선호정보 설정을 차례로 완료한 후 회원정보 화면으로 이동합니다. StrictMode에서도 초기 로그인 복원 요청을 공유해 중복 조회를 방지합니다.
+
+### 저장된 선호정보 복원
+
+사용자 ID를 기준으로 선호정보 폼을 초기화합니다. 저장된 좌석 위치와 우선순위는 최초 렌더링부터 대표 좌석으로 복원하며, 같은 위치 범주의 여러 선호도 유지합니다.
+
+## 검증 범위
+
+API 테스트는 요청 경로·메서드·인증·응답 처리 계약을 검증합니다. React 통합 테스트는 회원가입·로그인·로그아웃, 페이지 이동과 방문 기록, 직접 접속 시 로그인 복원, 최초 설정 순서, 인증 만료 후 이동, 선호 좌석 복원을 검증합니다.
+
+외부 지도 SDK와 서버 응답은 테스트에서 대체합니다. 티켓·알림은 API 모듈을 제공하는 단계이며, 해당 내부 화면은 후속 개발 범위입니다.
