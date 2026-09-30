@@ -1,5 +1,6 @@
 package com.SmartTicketing.SmartTicketing.auth;
 
+import com.SmartTicketing.SmartTicketing.dto.auth.FindLoginIdsResponse;
 import com.SmartTicketing.SmartTicketing.dto.auth.LoginRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SignupRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SocialSignupRequest;
@@ -53,36 +54,48 @@ public class AuthService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public FindLoginIdsResponse findLoginIds(String name) {
+        String normalizedName = name.trim();
+
+        java.util.List<String> loginIds =
+                users.findAllByNameAndStatusOrderByIdAsc(
+                                normalizedName,
+                                UserStatus.ACTIVE
+                        )
+                        .stream()
+                        .map(Users::getLoginId)
+                        .filter(java.util.Objects::nonNull)
+                        .filter(loginId -> !loginId.isBlank())
+                        .toList();
+
+        return new FindLoginIdsResponse(loginIds);
+    }
+
     public void resetPassword(
-            String identifier,
+            String name,
+            String loginId,
             String newPassword
     ) {
-        String normalizedIdentifier = identifier.trim();
+        String normalizedName = name.trim();
+        String normalizedLoginId = loginId.trim();
 
-        Users user = findActiveUserByIdentifier(
-                normalizedIdentifier
-        );
+        Users user = users.findByNameAndLoginId(
+                        normalizedName,
+                        normalizedLoginId
+                )
+                .filter(value -> value.getStatus() == UserStatus.ACTIVE)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "이름과 아이디가 일치하는 가입 계정을 찾을 수 없습니다."
+                        )
+                );
 
         user.setPassword(
                 encoder.encode(newPassword)
         );
 
         users.save(user);
-    }
-
-    private Users findActiveUserByIdentifier(
-            String identifier
-    ) {
-        Users user = users.findByLoginId(identifier)
-                .or(() -> users.findByEmailIgnoreCase(identifier))
-                .filter(value -> value.getStatus() == UserStatus.ACTIVE)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "가입된 아이디 또는 이메일을 찾을 수 없습니다."
-                        )
-                );
-
-        return user;
     }
 
     public TokenResponse signup(SignupRequest request) {
