@@ -2,7 +2,10 @@ package com.SmartTicketing.SmartTicketing.controller;
 
 import com.SmartTicketing.SmartTicketing.auth.AuthService;
 import com.SmartTicketing.SmartTicketing.auth.CustomOAuth2UserService;
+import com.SmartTicketing.SmartTicketing.dto.auth.FindLoginIdRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.LinkUrlResponse;
+import com.SmartTicketing.SmartTicketing.dto.auth.PasswordResetCodeRequest;
+import com.SmartTicketing.SmartTicketing.dto.auth.PasswordResetRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.LoginRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SignupRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SocialSignupInfoResponse;
@@ -49,6 +52,44 @@ public class AuthController {
         return ResponseEntity.ok(
                 auth.login(request)
         );
+    }
+
+    @PostMapping("/find-login-id")
+    public ResponseEntity<Map<String, String>> findLoginId(
+            @Valid @RequestBody FindLoginIdRequest request
+    ) {
+        return ResponseEntity.ok(
+                Map.of(
+                        "loginId",
+                        auth.findLoginIdByEmail(
+                                request.email()
+                        )
+                )
+        );
+    }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Void> requestPasswordReset(
+            @Valid @RequestBody PasswordResetCodeRequest request
+    ) {
+        auth.sendPasswordResetCode(
+                request.email()
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-reset")
+    public ResponseEntity<Void> resetPassword(
+            @Valid @RequestBody PasswordResetRequest request
+    ) {
+        auth.resetPassword(
+                request.email(),
+                request.code(),
+                request.newPassword()
+        );
+
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/check-login-id")
