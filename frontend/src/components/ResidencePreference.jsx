@@ -1382,164 +1382,144 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    선호하는 좌석 위치를 6개 영역 중
-                    3개까지 선택하세요.
-                    마우스를 올리면 같은 좌우 영역의
-                    앞·가운데·뒤 위치가 함께 강조됩니다.
-                    선택한 순서가 우선순위가 됩니다.
+                    실제 영화관 좌석 배치처럼 표시됩니다.
+                    좌측/우측 사이드는 하나의 "사이드" 영역으로 취급하며,
+                    같은 앞·가운데·뒤 영역은 함께 강조됩니다.
+                    선호 위치는 3개까지 선택하고 선택한 순서가 우선순위가 됩니다.
                 </p>
 
                 <div className="screen preference-screen">
                     SCREEN
                 </div>
 
-                <div className="seat-preference-layout">
-                    <div className="seat-preference-side">
-                        {["FRONT", "MIDDLE", "REAR"].map(
-                            (vertical) => {
-                                const position =
-                                    `SIDE_${vertical}`;
-
-                                const selected =
-                                    isSeatPositionSelected(
-                                        position
-                                    );
-
-                                const hovered =
-                                    isSeatPositionHovered(
-                                        position
-                                    );
-
-                                const priority =
-                                    selectedSeats.find(
-                                        (seat) =>
-                                            seat.position ===
-                                            position
-                                    )?.priority;
-
-                                return (
-                                    <button
-                                        type="button"
-                                        key={position}
-                                        className={[
-                                            "seat-preference-region",
-                                            "side",
-                                            selected
-                                                ? "selected"
-                                                : "",
-                                            hovered
-                                                ? "hovered"
-                                                : "",
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" ")}
-                                        onClick={() =>
-                                            toggleSeatPosition(
-                                                position
-                                            )
-                                        }
-                                        onMouseEnter={() =>
-                                            setHoveredSeatPosition(
-                                                position
-                                            )
-                                        }
-                                        onMouseLeave={() =>
-                                            setHoveredSeatPosition(
-                                                null
-                                            )
-                                        }
-                                    >
-                                        <span>사이드</span>
-                                        <strong>
-                                            {vertical === "FRONT"
-                                                ? "앞"
-                                                : vertical === "MIDDLE"
-                                                    ? "가운데"
-                                                    : "뒤"}
-                                        </strong>
-                                        {priority && (
-                                            <em>
-                                                {priority}순위
-                                            </em>
-                                        )}
-                                    </button>
-                                );
-                            }
-                        )}
+                <div className="theater-seat-map">
+                    <div className="seat-column-labels" aria-hidden="true">
+                        <span>사이드</span>
+                        <span></span>
+                        <span>중앙</span>
+                        <span></span>
+                        <span>사이드</span>
                     </div>
 
-                    <div className="seat-preference-middle">
-                        {["FRONT", "MIDDLE", "REAR"].map(
-                            (vertical) => {
-                                const position =
-                                    `MIDDLE_${vertical}`;
+                    <div className="preference-seat-grid">
+                        {ROWS.map((row, rowIndex) => (
+                            <div className="preference-seat-row" key={row}>
+                                <div className="preference-seat-cluster side-left">
+                                    {[1, 2, 3].map((number) => (
+                                        <span
+                                            className="preference-real-seat"
+                                            key={number}
+                                        >
+                                            {row}{number}
+                                        </span>
+                                    ))}
+                                </div>
 
-                                const selected =
-                                    isSeatPositionSelected(
-                                        position
-                                    );
+                                <div className="preference-seat-aisle" />
 
-                                const hovered =
-                                    isSeatPositionHovered(
-                                        position
-                                    );
+                                <div className="preference-seat-cluster center">
+                                    {[4, 5, 6, 7, 8, 9].map((number) => (
+                                        <span
+                                            className="preference-real-seat"
+                                            key={number}
+                                        >
+                                            {row}{number}
+                                        </span>
+                                    ))}
+                                </div>
 
-                                const priority =
-                                    selectedSeats.find(
-                                        (seat) =>
-                                            seat.position ===
-                                            position
-                                    )?.priority;
+                                <div className="preference-seat-aisle" />
 
-                                return (
-                                    <button
-                                        type="button"
-                                        key={position}
-                                        className={[
-                                            "seat-preference-region",
-                                            "middle",
-                                            selected
-                                                ? "selected"
-                                                : "",
-                                            hovered
-                                                ? "hovered"
-                                                : "",
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" ")}
-                                        onClick={() =>
-                                            toggleSeatPosition(
-                                                position
-                                            )
-                                        }
-                                        onMouseEnter={() =>
-                                            setHoveredSeatPosition(
-                                                position
-                                            )
-                                        }
-                                        onMouseLeave={() =>
-                                            setHoveredSeatPosition(
-                                                null
-                                            )
-                                        }
-                                    >
-                                        <span>중간</span>
+                                <div className="preference-seat-cluster side-right">
+                                    {[10, 11, 12].map((number) => (
+                                        <span
+                                            className="preference-real-seat"
+                                            key={number}
+                                        >
+                                            {row}{number}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="seat-zone-overlay">
+                        {[
+                            { side: "left", position: "SIDE_FRONT", rowStart: 1, rowSpan: 3 },
+                            { side: "middle", position: "MIDDLE_FRONT", rowStart: 1, rowSpan: 3 },
+                            { side: "right", position: "SIDE_FRONT", rowStart: 1, rowSpan: 3 },
+
+                            { side: "left", position: "SIDE_MIDDLE", rowStart: 4, rowSpan: 4 },
+                            { side: "middle", position: "MIDDLE_MIDDLE", rowStart: 4, rowSpan: 4 },
+                            { side: "right", position: "SIDE_MIDDLE", rowStart: 4, rowSpan: 4 },
+
+                            { side: "left", position: "SIDE_REAR", rowStart: 8, rowSpan: 3 },
+                            { side: "middle", position: "MIDDLE_REAR", rowStart: 8, rowSpan: 3 },
+                            { side: "right", position: "SIDE_REAR", rowStart: 8, rowSpan: 3 },
+                        ].map((zone) => {
+                            const selected =
+                                isSeatPositionSelected(zone.position);
+
+                            const hovered =
+                                isSeatPositionHovered(zone.position);
+
+                            const priority =
+                                selectedSeats.find(
+                                    (seat) =>
+                                        seat.position === zone.position
+                                )?.priority;
+
+                            return (
+                                <button
+                                    type="button"
+                                    key={zone.side + zone.position}
+                                    className={[
+                                        "seat-zone-button",
+                                        zone.side,
+                                        selected ? "selected" : "",
+                                        hovered ? "hovered" : "",
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" ")}
+                                    style={{
+                                        gridColumn:
+                                            zone.side === "left"
+                                                ? "1 / 4"
+                                                : zone.side === "middle"
+                                                    ? "5 / 11"
+                                                    : "12 / 15",
+                                        gridRow:
+                                            zone.rowStart +
+                                            " / span " +
+                                            zone.rowSpan,
+                                    }}
+                                    onClick={() =>
+                                        toggleSeatPosition(zone.position)
+                                    }
+                                    onMouseEnter={() =>
+                                        setHoveredSeatPosition(
+                                            zone.position
+                                        )
+                                    }
+                                    onMouseLeave={() =>
+                                        setHoveredSeatPosition(null)
+                                    }
+                                    aria-pressed={selected}
+                                    aria-label={getSeatLabel(zone.position)}
+                                >
+                                    <span className="seat-zone-label">
+                                        {getSeatLabel(zone.position)}
+                                    </span>
+
+                                    {priority && (
                                         <strong>
-                                            {vertical === "FRONT"
-                                                ? "앞"
-                                                : vertical === "MIDDLE"
-                                                    ? "가운데"
-                                                    : "뒤"}
+                                            {priority}순위
                                         </strong>
-                                        {priority && (
-                                            <em>
-                                                {priority}순위
-                                            </em>
-                                        )}
-                                    </button>
-                                );
-                            }
-                        )}
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -1549,24 +1529,20 @@ export default function ResidencePreference({
                             선택된 선호 좌석 위치가 없습니다.
                         </span>
                     ) : (
-                        selectedSeats.map(
-                            (seat) => (
-                                <div
-                                    key={seat.position}
-                                    className="seat-summary-item"
-                                >
-                                    <strong>
-                                        {seat.priority}위
-                                    </strong>
+                        selectedSeats.map((seat) => (
+                            <div
+                                key={seat.position}
+                                className="seat-summary-item"
+                            >
+                                <strong>
+                                    {seat.priority}위
+                                </strong>
 
-                                    <span>
-                                        {getSeatLabel(
-                                            seat.position
-                                        )}
-                                    </span>
-                                </div>
-                            )
-                        )
+                                <span>
+                                    {getSeatLabel(seat.position)}
+                                </span>
+                            </div>
+                        ))
                     )}
                 </div>
             </section>
