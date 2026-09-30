@@ -10,4 +10,5 @@ public interface UserSocialAccountRepository extends JpaRepository<UserSocialAcc
     Optional<UserSocialAccount> findByProviderAndProviderUserId(SocialProvider provider, String providerUserId);
     Optional<UserSocialAccount> findByUserIdAndProvider(Long userId, SocialProvider provider);
     List<UserSocialAccount> findByUserId(Long userId);
+    boolean existsByEmailIgnoreCase(String email);
 }
