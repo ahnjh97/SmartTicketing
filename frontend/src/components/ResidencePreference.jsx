@@ -52,75 +52,28 @@ function getSeatLabel(
     );
 }
 
-function getRepresentativeSeat(
-    position,
-    priority
-) {
-    const rows =
-        position.endsWith(
-            "_FRONT"
-        )
-            ? [0, 1, 2]
-            : position.endsWith(
-                "_MIDDLE"
-            )
-                ? [3, 4, 5, 6]
-                : [7, 8, 9];
-
-    const rowIndex =
-        rows[
-        (priority - 1) %
-        rows.length
-            ];
-
-    const seatNumbers =
-        position.startsWith("SIDE")
-            ? [1, 12]
-            : [5, 6, 7, 8, 9, 10];
-
-    const seatNumber =
-        seatNumbers[
-        (priority - 1) %
-        seatNumbers.length
-            ];
-
-    return `${ROWS[rowIndex]}${seatNumber}`;
-}
-
 function restorePreferredSeats(
     preferredSeats = []
 ) {
     return preferredSeats
-        .map(
-            (
-                item,
-                index
-            ) => {
-                const position =
-                    typeof item === "string"
-                        ? item
-                        : item?.position;
+        .map((item, index) => {
+            const position =
+                typeof item === "string"
+                    ? item
+                    : item?.position;
 
-                const priority =
+            if (!position) {
+                return null;
+            }
+
+            return {
+                position,
+                priority:
                     typeof item === "string"
                         ? index + 1
-                        : item?.priority ??
-                        index + 1;
-
-                if (!position) {
-                    return null;
-                }
-
-                return {
-                    seatId:
-                        getRepresentativeSeat(
-                            position,
-                            priority
-                        ),
-                    position,
-                };
-            }
-        )
+                        : item?.priority ?? index + 1,
+            };
+        })
         .filter(Boolean)
         .slice(0, 6);
 }
@@ -940,74 +893,43 @@ export default function ResidencePreference({
         );
     }
 
-    function toggleSeat(
-        row,
-        seatNumber
-    ) {
-        const seatId =
-            `${row}${seatNumber}`;
-
-        const rowIndex =
-            ROWS.indexOf(
-                row
-            );
-
-        const position =
-            getSeatPosition(
-                rowIndex,
-                seatNumber
-            );
-
+    function toggleSeatPosition(position) {
         const alreadySelected =
             selectedSeats.some(
-                (
-                    seat
-                ) =>
-                    seat.seatId ===
-                    seatId
+                (seat) => seat.position === position
             );
 
-        if (
-            alreadySelected
-        ) {
+        if (alreadySelected) {
             setSelectedSeats(
-                (
+                (current) =>
                     current
-                ) =>
-                    current.filter(
-                        (
-                            seat
-                        ) =>
-                            seat.seatId !==
-                            seatId
-                    )
+                        .filter(
+                            (seat) =>
+                                seat.position !== position
+                        )
+                        .map((seat, index) => ({
+                            ...seat,
+                            priority: index + 1,
+                        }))
             );
 
             setError("");
-
             return;
         }
 
-        if (
-            selectedSeats.length >=
-            6
-        ) {
+        if (selectedSeats.length >= 3) {
             setError(
-                "선호 좌석은 최대 6개까지 선택할 수 있습니다."
+                "선호 좌석 위치는 최대 3개까지 선택할 수 있습니다."
             );
-
             return;
         }
 
         setSelectedSeats(
-            (
-                current
-            ) => [
+            (current) => [
                 ...current,
-
                 {
-                    seatId,
                     position,
+                    priority: current.length + 1,
                 },
             ]
         );
@@ -1015,20 +937,23 @@ export default function ResidencePreference({
         setError("");
     }
 
-    function isSeatSelected(
-        row,
-        seatNumber
-    ) {
-        const seatId =
-            `${row}${seatNumber}`;
-
+    function isSeatPositionSelected(position) {
         return selectedSeats.some(
-            (
-                seat
-            ) =>
-                seat.seatId ===
-                seatId
+            (seat) => seat.position === position
         );
+    }
+
+    function isSeatPositionHovered(position) {
+        if (!hoveredSeatPosition) {
+            return false;
+        }
+
+        const hoveredHorizontal =
+            hoveredSeatPosition.startsWith("SIDE")
+                ? "SIDE"
+                : "MIDDLE";
+
+        return position.startsWith(hoveredHorizontal);
     }
 
     function getSelectedTheatersInPriorityOrder() {
@@ -1448,128 +1373,192 @@ export default function ResidencePreference({
                     </h2>
 
                     <span>
-                        {selectedSeats.length}
-                        /6
+                        {selectedSeats.length}/3
                     </span>
                 </div>
 
                 <p className="help">
-                    실제 영화관 좌석에서
-                    선호하는 좌석을 선택하세요.
-                    같은 위치 범주의 좌석도
-                    여러 개 선택할 수 있으며,
-                    선택한 순서가 우선순위가
-                    됩니다.
+                    선호하는 좌석 위치를 6개 영역 중
+                    3개까지 선택하세요.
+                    마우스를 올리면 같은 좌우 영역의
+                    앞·가운데·뒤 위치가 함께 강조됩니다.
+                    선택한 순서가 우선순위가 됩니다.
                 </p>
 
-                <div className="screen">
+                <div className="screen preference-screen">
                     SCREEN
                 </div>
 
-                <div className="seat-grid-real">
-                    {ROWS.map(
-                        (
-                            row,
-                            rowIndex
-                        ) => (
-                            <div
-                                className="seat-row"
-                                key={row}
-                            >
-                                {Array.from(
-                                    {
-                                        length:
-                                        SEATS_PER_ROW,
-                                    },
-                                    (
-                                        _,
-                                        index
-                                    ) => {
-                                        const seatNumber =
-                                            index +
-                                            1;
+                <div className="seat-preference-layout">
+                    <div className="seat-preference-side">
+                        {["FRONT", "MIDDLE", "REAR"].map(
+                            (vertical) => {
+                                const position =
+                                    `SIDE_${vertical}`;
 
-                                        const position =
-                                            getSeatPosition(
-                                                rowIndex,
-                                                seatNumber
-                                            );
+                                const selected =
+                                    isSeatPositionSelected(
+                                        position
+                                    );
 
-                                        const selected =
-                                            isSeatSelected(
-                                                row,
-                                                seatNumber
-                                            );
+                                const hovered =
+                                    isSeatPositionHovered(
+                                        position
+                                    );
 
-                                        return (
-                                            <button
-                                                type="button"
-                                                key={`${row}${seatNumber}`}
-                                                className={
-                                                    selected
-                                                        ? "real-seat selected"
-                                                        : "real-seat"
-                                                }
-                                                onClick={() =>
-                                                    toggleSeat(
-                                                        row,
-                                                        seatNumber
-                                                    )
-                                                }
-                                                title={
-                                                    getSeatLabel(
-                                                        position
-                                                    )
-                                                }
-                                            >
-                                                {
-                                                    row
-                                                }
-                                                {
-                                                    seatNumber
-                                                }
-                                            </button>
-                                        );
-                                    }
-                                )}
-                            </div>
-                        )
-                    )}
+                                const priority =
+                                    selectedSeats.find(
+                                        (seat) =>
+                                            seat.position ===
+                                            position
+                                    )?.priority;
+
+                                return (
+                                    <button
+                                        type="button"
+                                        key={position}
+                                        className={[
+                                            "seat-preference-region",
+                                            "side",
+                                            selected
+                                                ? "selected"
+                                                : "",
+                                            hovered
+                                                ? "hovered"
+                                                : "",
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                        onClick={() =>
+                                            toggleSeatPosition(
+                                                position
+                                            )
+                                        }
+                                        onMouseEnter={() =>
+                                            setHoveredSeatPosition(
+                                                position
+                                            )
+                                        }
+                                        onMouseLeave={() =>
+                                            setHoveredSeatPosition(
+                                                null
+                                            )
+                                        }
+                                    >
+                                        <span>사이드</span>
+                                        <strong>
+                                            {vertical === "FRONT"
+                                                ? "앞"
+                                                : vertical === "MIDDLE"
+                                                    ? "가운데"
+                                                    : "뒤"}
+                                        </strong>
+                                        {priority && (
+                                            <em>
+                                                {priority}순위
+                                            </em>
+                                        )}
+                                    </button>
+                                );
+                            }
+                        )}
+                    </div>
+
+                    <div className="seat-preference-middle">
+                        {["FRONT", "MIDDLE", "REAR"].map(
+                            (vertical) => {
+                                const position =
+                                    `MIDDLE_${vertical}`;
+
+                                const selected =
+                                    isSeatPositionSelected(
+                                        position
+                                    );
+
+                                const hovered =
+                                    isSeatPositionHovered(
+                                        position
+                                    );
+
+                                const priority =
+                                    selectedSeats.find(
+                                        (seat) =>
+                                            seat.position ===
+                                            position
+                                    )?.priority;
+
+                                return (
+                                    <button
+                                        type="button"
+                                        key={position}
+                                        className={[
+                                            "seat-preference-region",
+                                            "middle",
+                                            selected
+                                                ? "selected"
+                                                : "",
+                                            hovered
+                                                ? "hovered"
+                                                : "",
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                        onClick={() =>
+                                            toggleSeatPosition(
+                                                position
+                                            )
+                                        }
+                                        onMouseEnter={() =>
+                                            setHoveredSeatPosition(
+                                                position
+                                            )
+                                        }
+                                        onMouseLeave={() =>
+                                            setHoveredSeatPosition(
+                                                null
+                                            )
+                                        }
+                                    >
+                                        <span>중간</span>
+                                        <strong>
+                                            {vertical === "FRONT"
+                                                ? "앞"
+                                                : vertical === "MIDDLE"
+                                                    ? "가운데"
+                                                    : "뒤"}
+                                        </strong>
+                                        {priority && (
+                                            <em>
+                                                {priority}순위
+                                            </em>
+                                        )}
+                                    </button>
+                                );
+                            }
+                        )}
+                    </div>
                 </div>
 
                 <div className="seat-selection-summary">
-                    {selectedSeats.length ===
-                    0 ? (
+                    {selectedSeats.length === 0 ? (
                         <span className="empty-selection">
-                            선택된 선호 좌석이 없습니다.
+                            선택된 선호 좌석 위치가 없습니다.
                         </span>
                     ) : (
                         selectedSeats.map(
-                            (
-                                seat,
-                                index
-                            ) => (
+                            (seat) => (
                                 <div
-                                    key={
-                                        seat.seatId
-                                    }
+                                    key={seat.position}
                                     className="seat-summary-item"
                                 >
                                     <strong>
-                                        {index + 1}
-                                        위
+                                        {seat.priority}위
                                     </strong>
 
                                     <span>
-                                        {
-                                            seat.seatId
-                                        }
-                                        {" · "}
-                                        {
-                                            getSeatLabel(
-                                                seat.position
-                                            )
-                                        }
+                                        {getSeatLabel(
+                                            seat.position
+                                        )}
                                     </span>
                                 </div>
                             )
