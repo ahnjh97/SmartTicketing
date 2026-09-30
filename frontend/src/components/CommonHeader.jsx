@@ -29,14 +29,23 @@ export default function CommonHeader({
         if (typeof ResizeObserver === "undefined") return;
         const observer = new ResizeObserver(() => {
             const inner = innerRef.current;
+            const brand = brandRef.current;
+            const nav = navRef.current;
+            const account = accountRef.current;
+
+            if (!inner || !brand || !nav || !account) return;
+
             const style = getComputedStyle(inner);
-            const requiredWidth = brandRef.current.scrollWidth + navRef.current.scrollWidth
-                + accountRef.current.scrollWidth + 40 + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+            const requiredWidth = brand.scrollWidth + nav.scrollWidth
+                + account.scrollWidth + 40 + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
             const needsCompact = inner.clientWidth < requiredWidth;
             setCompact(needsCompact);
             if (!needsCompact) setOpenLocation(null);
         });
-        [innerRef, brandRef, navRef, accountRef].forEach((ref) => observer.observe(ref.current));
+        [innerRef, brandRef, navRef, accountRef]
+            .map((ref) => ref.current)
+            .filter(Boolean)
+            .forEach((element) => observer.observe(element));
         return () => observer.disconnect();
     }, []);
 
