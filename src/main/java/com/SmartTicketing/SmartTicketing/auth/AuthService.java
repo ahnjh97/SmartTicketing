@@ -12,8 +12,12 @@ import com.SmartTicketing.SmartTicketing.entity.enums.UserStatus;
 import com.SmartTicketing.SmartTicketing.repository.UserSocialAccountRepository;
 import com.SmartTicketing.SmartTicketing.repository.UsersRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.security.SecureRandom;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Transactional
@@ -23,17 +27,28 @@ public class AuthService {
     private final UserSocialAccountRepository social;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final StringRedisTemplate redis;
+    private final PasswordResetMailService mailService;
+
+    private static final String PASSWORD_RESET_KEY_PREFIX =
+            "auth:password-reset:";
+    private static final long PASSWORD_RESET_TTL_MINUTES = 5;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     public AuthService(
             UsersRepository users,
             UserSocialAccountRepository social,
             PasswordEncoder encoder,
-            JwtService jwt
+            JwtService jwt,
+            StringRedisTemplate redis,
+            PasswordResetMailService mailService
     ) {
         this.users = users;
         this.social = social;
         this.encoder = encoder;
         this.jwt = jwt;
+        this.redis = redis;
+        this.mailService = mailService;
     }
 
     public static UserResponse toResponse(Users user) {
@@ -50,6 +65,100 @@ public class AuthService {
                 java.util.List.of(),
                 java.util.List.of()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public String findLoginIdByEmail(String email) {
+        String normalizedEmail = email.trim();
+
+        Users user =
+                users.findByEmail(normalizedEmail)
+                        .filter(value ->
+                                value.getStatus() == UserStatus.ACTIVE
+                        )
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "가입된 이메일을 찾을 수 없습니다."
+                                )
+                        );
+
+        return user.getLoginId();
+    }
+
+    public void sendPasswordResetCode(String email) {
+        String normalizedEmail =
+                email.trim().toLowerCase();
+
+        users.findByEmail(normalizedEmail)
+                .filter(user ->
+                        user.getStatus() == UserStatus.ACTIVE
+                )
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "가입된 이메일을 찾을 수 없습니다."
+                        )
+                );
+
+        String code =
+                String.format(
+                        "%06d",
+                        RANDOM.nextInt(1_000_000)
+                );
+
+        redis.opsForValue().set(
+                PASSWORD_RESET_KEY_PREFIX + normalizedEmail,
+                code,
+                PASSWORD_RESET_TTL_MINUTES,
+                TimeUnit.MINUTES
+        );
+
+        mailService.sendVerificationCode(
+                normalizedEmail,
+                code
+        );
+    }
+
+    public void resetPassword(
+            String email,
+            String code,
+            String newPassword
+    ) {
+        String normalizedEmail =
+                email.trim().toLowerCase();
+
+        String key =
+                PASSWORD_RESET_KEY_PREFIX
+                        + normalizedEmail;
+
+        String savedCode =
+                redis.opsForValue().get(key);
+
+        if (
+                savedCode == null
+                        || !savedCode.equals(code.trim())
+        ) {
+            throw new IllegalArgumentException(
+                    "인증코드가 올바르지 않거나 만료되었습니다."
+            );
+        }
+
+        Users user =
+                users.findByEmail(normalizedEmail)
+                        .filter(value ->
+                                value.getStatus() == UserStatus.ACTIVE
+                        )
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "가입된 이메일을 찾을 수 없습니다."
+                                )
+                        );
+
+        user.setPassword(
+                encoder.encode(newPassword)
+        );
+
+        users.save(user);
+        redis.delete(key);
     }
 
     public TokenResponse signup(SignupRequest request) {
