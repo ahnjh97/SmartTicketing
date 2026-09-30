@@ -77,6 +77,11 @@ public class SecurityConfig {
                                 "/**"
                         ).permitAll()
 
+                        .requestMatchers(HttpMethod.GET, "/api/theaters/nearby").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/movies", "/api/movies/{id}",
+                                "/api/theaters", "/api/theaters/{id}", "/api/theaters/{id}/movies",
+                                "/api/showtimes", "/api/showtimes/{id}/seats").permitAll()
+
                         .anyRequest()
                         .authenticated()
                 )

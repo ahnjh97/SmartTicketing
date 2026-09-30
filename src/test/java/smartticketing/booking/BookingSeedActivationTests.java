@@ -1,6 +1,9 @@
 package smartticketing.booking;
 
 import smartticketing.config.BookingSeedConfiguration;
+import smartticketing.config.BookingQueryConfiguration;
+import smartticketing.service.BookingCatalogService;
+import smartticketing.service.ShowtimeQueryService;
 import smartticketing.service.BookingSeedService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -11,7 +14,8 @@ import static org.mockito.Mockito.*;
 class BookingSeedActivationTests {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(EntityManager.class, () -> mock(EntityManager.class))
-            .withUserConfiguration(BookingSeedConfiguration.class, BookingSeedService.class);
+            .withUserConfiguration(BookingSeedConfiguration.class, BookingSeedService.class,
+                    BookingQueryConfiguration.class, BookingCatalogService.class, ShowtimeQueryService.class);
 
     @Test void cannotEnableWithoutDevelopmentOrTestProfile() {
         runner.withPropertyValues("booking.seed.enabled=true").run(context -> {
