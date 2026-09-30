@@ -866,6 +866,107 @@ input:focus {
     filter: blur(4px);
 }
 
+
+.seat-preference-layout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: min(760px, 100%);
+    margin: 0 auto;
+}
+
+.seat-preference-side,
+.seat-preference-middle {
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.seat-preference-region {
+    position: relative;
+    min-height: 112px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #414141;
+    border-radius: 14px;
+    background: linear-gradient(
+            145deg,
+            #292929,
+            #1d1d1d
+    );
+    color: #aaa;
+    transition:
+            transform 0.18s ease,
+            background 0.18s ease,
+            border-color 0.18s ease,
+            box-shadow 0.18s ease;
+}
+
+.seat-preference-region span {
+    color: #888;
+    font-size: 12px;
+}
+
+.seat-preference-region strong {
+    color: #ddd;
+    font-size: 20px;
+}
+
+.seat-preference-region em {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: rgba(255, 196, 38, 0.16);
+    color: var(--color-accent-hover);
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 800;
+}
+
+.seat-preference-region:hover,
+.seat-preference-region.hovered {
+    transform: translateY(-2px);
+    border-color: #777;
+    background: linear-gradient(
+            145deg,
+            #414141,
+            #292929
+    );
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.seat-preference-region:hover strong,
+.seat-preference-region.hovered strong {
+    color: #fff;
+}
+
+.seat-preference-region.selected {
+    border-color: var(--color-accent);
+    background: linear-gradient(
+            145deg,
+            #4a3d17,
+            #282414
+    );
+    color: #fff;
+    box-shadow:
+            0 0 0 1px rgba(255, 196, 38, 0.18),
+            0 8px 22px rgba(255, 196, 38, 0.12);
+}
+
+.seat-preference-region.selected strong {
+    color: var(--color-accent-hover);
+}
+
+.preference-screen {
+    margin-bottom: 32px;
+}
+
 .seat-grid-real {
     width: 100%;
 
@@ -1205,6 +1306,20 @@ input:focus {
 
     .screen {
         width: 90%;
+    }
+
+    .seat-preference-layout {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .seat-preference-side,
+    .seat-preference-middle {
+        gap: 10px;
+    }
+
+    .seat-preference-region {
+        min-height: 92px;
     }
 
     .seat-grid-real {
