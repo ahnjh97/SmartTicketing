@@ -1532,3 +1532,84 @@ input:focus {
     white-space: nowrap;
 }
 
+
+
+/* account find */
+.account-find-tabs {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 24px 0 26px;
+    border-bottom: 1px solid #333;
+}
+
+.account-find-tabs button {
+    flex: 1;
+    padding: 12px 8px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #777;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.account-find-tabs button:hover,
+.account-find-tabs button.active {
+    color: #fff;
+}
+
+.account-find-tabs button.active {
+    border-bottom-color: #ffcc00;
+}
+
+.account-choice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 18px 0;
+}
+
+.account-choice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid #333;
+    border-radius: 9px;
+    background: #202020;
+    color: #ddd;
+    text-align: left;
+    cursor: pointer;
+}
+
+.account-choice:hover {
+    background: #292929;
+    border-color: #555;
+}
+
+.account-choice.selected {
+    border-color: #ffcc00;
+    background: #292929;
+    color: #fff;
+}
+
+.account-choice-check {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #555;
+    border-radius: 50%;
+    color: #ffcc00;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.account-choice.selected .account-choice-check {
+    border-color: #ffcc00;
+}
