@@ -1,9 +1,4 @@
-import {
-    Navigate,
-    Route,
-    Routes
-} from "react-router-dom";
-
+import { Navigate, Route, Routes } from "react-router-dom";
 import AuthProvider from "./auth/AuthProvider.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
@@ -21,85 +16,21 @@ export default function App() {
     return (
         <AuthProvider>
             <Routes>
-                <Route
-                    element={<AppLayout />}
-                >
-                    <Route
-                        path={PAGE_PATHS.login}
-                        element={<LoginPage />}
-                    />
+                <Route element={<AppLayout />}>
+                    <Route path={PAGE_PATHS.login} element={<LoginPage />} />
+                    <Route path={PAGE_PATHS.signup} element={<SignupPage />} />
+                    <Route path={PAGE_PATHS.socialSignup} element={<SocialSignupPage />} />
+                    <Route path={PAGE_PATHS.callback} element={<OAuthCallbackPage />} />
 
-                    <Route
-                        path={PAGE_PATHS.signup}
-                        element={<SignupPage />}
-                    />
-
-                    <Route
-                        path={PAGE_PATHS.socialSignup}
-                        element={
-                            <SocialSignupPage />
-                        }
-                    />
-
-                    <Route
-                        path={PAGE_PATHS.callback}
-                        element={
-                            <OAuthCallbackPage />
-                        }
-                    />
-
-                    <Route
-                        element={<RouteGuard />}
-                    >
-                        <Route
-                            path={PAGE_PATHS.home}
-                            element={<EmptyPage />}
-                        />
-
-                        <Route
-                            path={PAGE_PATHS.movies}
-                            element={<EmptyPage />}
-                        />
-
-                        <Route
-                            path={PAGE_PATHS.theaters}
-                            element={<EmptyPage />}
-                        />
-
-                        <Route
-                            path={PAGE_PATHS.profile}
-                            element={
-                                <ProfilePage />
-                            }
-                        />
-
-                        <Route
-                            path={PAGE_PATHS.preferences}
-                            element={
-                                <PreferencesPage />
-                            }
-                        />
-
-                        <Route
-                            path={
-                                PAGE_PATHS.preferenceSetup
-                            }
-                            element={
-                                <PreferenceSetupPage />
-                            }
-                        />
-
-                        <Route
-                            path="*"
-                            element={
-                                <Navigate
-                                    to={
-                                        PAGE_PATHS.home
-                                    }
-                                    replace
-                                />
-                            }
-                        />
+                    <Route element={<RouteGuard />}>
+                        <Route path={PAGE_PATHS.home} element={<EmptyPage />} />
+                        <Route path={PAGE_PATHS.movies} element={<EmptyPage />} />
+                        <Route path={PAGE_PATHS.theaters} element={<EmptyPage />} />
+                        <Route path={PAGE_PATHS.tickets} element={<EmptyPage />} />
+                        <Route path={PAGE_PATHS.profile} element={<ProfilePage />} />
+                        <Route path={PAGE_PATHS.preferences} element={<PreferencesPage />} />
+                        <Route path={PAGE_PATHS.preferenceSetup} element={<PreferenceSetupPage />} />
+                        <Route path="*" element={<Navigate to={PAGE_PATHS.home} replace />} />
                     </Route>
                 </Route>
             </Routes>

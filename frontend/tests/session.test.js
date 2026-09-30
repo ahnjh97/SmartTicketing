@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { restoreSession } from "../src/auth/bootstrap.js";
 import {
-    getAccessToken, setAccessToken, needsNicknameSetup, needsPreferenceSetup,
-    nicknameSetupKey, subscribeToSessionExpiration,
+    getAccessToken, setAccessToken, needsPreferenceSetup,
+    subscribeToSessionExpiration,
 } from "../src/auth/session.js";
 import { userApi, authApi } from "../src/api/index.js";
 
@@ -72,14 +72,9 @@ test("a late 401 from an old login cannot expire the current login", async () =>
     assert.equal(getAccessToken(), "new-token");
 });
 
-test("existing Kakao and preference completion rules remain distinct", () => {
+test("Kakao users only need the same preference information as other members", () => {
     const user = { id: 1, linkedProviders: ["KAKAO"], email: null };
-    assert.equal(needsNicknameSetup(user), true);
-    localStorage.setItem(nicknameSetupKey(user.id), "true");
-    assert.equal(needsNicknameSetup(user), false);
     assert.equal(needsPreferenceSetup(user), true);
     assert.equal(needsPreferenceSetup({ ...user, birthDate: "2000-01-01", address: "서울",
         preferredTheaters: [{}, {}, {}], preferredSeats: ["MIDDLE_MIDDLE"] }), false);
-    assert.equal(needsNicknameSetup({ ...user, id: 2, email: "test@example.com" }), false);
-    assert.equal(needsNicknameSetup({ ...user, id: 2, linkedProviders: ["LOCAL"] }), false);
 });

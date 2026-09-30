@@ -4,10 +4,10 @@ import useAuth from "../hooks/useAuth.js";
 import { PAGE_PATHS } from "../navigation.js";
 
 export default function AppLayout() {
-    const { user, loading, nicknameSetupRequired, preferenceSetupRequired, logout } = useAuth();
+    const { user, loading, preferenceSetupRequired, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
-    const empty = [PAGE_PATHS.home, PAGE_PATHS.movies, PAGE_PATHS.theaters].includes(location.pathname);
+    const empty = [PAGE_PATHS.home, PAGE_PATHS.movies, PAGE_PATHS.theaters, PAGE_PATHS.tickets].includes(location.pathname);
 
     async function handleLogout() {
         try {
@@ -24,7 +24,7 @@ export default function AppLayout() {
             <CommonHeader
                 user={user}
                 disabled={loading}
-                setupRequired={nicknameSetupRequired || preferenceSetupRequired}
+                setupRequired={preferenceSetupRequired}
                 onLogout={handleLogout}
             />
             <main className={empty && !loading ? "app-shell-empty" : undefined}>

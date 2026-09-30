@@ -61,17 +61,31 @@ afterEach(() => {
 test("header navigation changes paths and browser history without adding page bodies", async () => {
     mount("/login");
     await screen.findByLabelText("아이디");
+    const movies = screen.getByRole("link", { name: "영화" });
+    const theaters = screen.getByRole("link", { name: "극장" });
+    expect(movies.getAttribute("aria-current")).toBe(null);
+    expect(theaters.getAttribute("aria-current")).toBe(null);
     fireEvent.click(screen.getByRole("link", { name: "회원가입" }));
     await at("/signup");
     await screen.findByLabelText("이름");
+    expect(movies.getAttribute("aria-current")).toBe(null);
+    expect(theaters.getAttribute("aria-current")).toBe(null);
     fireEvent.click(screen.getByRole("button", { name: "테스트 뒤로가기" }));
     await at("/login");
     fireEvent.click(screen.getByRole("link", { name: "영화" }));
     await at("/movies");
+    expect(movies.getAttribute("aria-current")).toBe("page");
+    expect(theaters.getAttribute("aria-current")).toBe(null);
     expect(screen.getByRole("main").textContent).toBe("");
     fireEvent.click(screen.getByRole("link", { name: "극장" }));
     await at("/theaters");
+    expect(movies.getAttribute("aria-current")).toBe(null);
+    expect(theaters.getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("main").textContent).toBe("");
+    fireEvent.click(screen.getByRole("link", { name: "SmartTicketing" }));
+    await at("/");
+    expect(movies.getAttribute("aria-current")).toBe("page");
+    expect(theaters.getAttribute("aria-current")).toBe(null);
     expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -82,7 +96,45 @@ test("guest direct access to a member page reaches login", async () => {
     expect(fetch).not.toHaveBeenCalled();
 });
 
-test("signup posts the existing fields and returns to login with a success message", async () => {
+test("social signup retains its direct route and loads provider information", async () => {
+    fetch.mockImplementation(async (url) => new Response(JSON.stringify(
+        url === "/api/auth/social-signup-info"
+            ? { provider: "GOOGLE", name: "소셜 테스터", email: "social@example.com" }
+            : { available: true },
+    )));
+    mount("/signup/social?social=GOOGLE");
+    await screen.findByRole("heading", { name: "소셜 회원가입" });
+    await screen.findByText("사용 가능한 이메일입니다.");
+    await at("/signup/social?social=GOOGLE");
+    expect(screen.getByLabelText("이메일").value).toBe("social@example.com");
+    expect(screen.getByLabelText("이메일").readOnly).toBe(true);
+    expect(screen.queryByLabelText("닉네임")).toBe(null);
+});
+
+test("tickets remain empty for members and redirect guests to login", async () => {
+    mount("/tickets");
+    await screen.findByLabelText("아이디");
+    await at("/login");
+    expect(screen.queryByRole("link", { name: "내 티켓" })).toBe(null);
+    cleanup();
+    localStorage.setItem("accessToken", "saved-token");
+    mount("/tickets");
+    await screen.findByRole("link", { name: "내 티켓" });
+    await at("/tickets");
+    expect(screen.getByRole("main").textContent).toBe("");
+});
+
+test("signup accepts a non-email login ID and opens preference setup with its issued token", async () => {
+    const originalWindow = window;
+    const assign = vi.fn();
+    const testWindow = Object.create(originalWindow);
+    Object.defineProperty(testWindow, "location", { value: {
+        get href() { return originalWindow.location.href; }, assign,
+    } });
+    vi.stubGlobal("window", testWindow);
+    fetch.mockImplementation(async (url) => new Response(JSON.stringify(
+        url === "/api/auth/signup" ? { accessToken: "signup-token" } : { available: true },
+    )));
     mount("/signup");
     fireEvent.change(await screen.findByLabelText("이름"), { target: { value: "테스터" } });
     fireEvent.change(screen.getByLabelText("생년월일"), { target: { value: "2000-01-01" } });
@@ -90,10 +142,10 @@ test("signup posts the existing fields and returns to login with a success messa
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
-    await screen.findByText("사용가능한 아이디 입니다.");
+    await screen.findByText("사용 가능한 아이디입니다.");
     fireEvent.click(screen.getByRole("button", { name: "회원가입", exact: true }));
-    await at("/login");
-    expect((await screen.findByRole("status")).textContent).toContain("회원가입이 완료되었습니다.");
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/setup/preferences"));
+    expect(localStorage.getItem("accessToken")).toBe("signup-token");
     expect(fetch.mock.calls[0][0]).toBe("/api/auth/check-login-id?loginId=tester");
     expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
         name: "테스터", birthDate: "2000-01-01", loginId: "tester", password: "password123",
@@ -102,26 +154,28 @@ test("signup posts the existing fields and returns to login with a success messa
 
 test("signup requires matching passwords and rechecking a changed login ID", async () => {
     mount("/signup");
-    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(await screen.findByLabelText("이름"), { target: { value: "테스터" } });
+    fireEvent.change(screen.getByLabelText("생년월일"), { target: { value: "2000-01-01" } });
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "tester@example.com" } });
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "otherpassword" } });
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
-    await screen.findByText("사용가능한 아이디 입니다.");
+    await screen.findByText("사용 가능한 아이디입니다.");
     const submit = screen.getByRole("button", { name: "회원가입", exact: true });
     expect(submit.disabled).toBe(true);
     expect(screen.getByText("비밀번호가 일치하지 않습니다.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
     expect(submit.disabled).toBe(false);
-    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "different_id" } });
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "different@example.com" } });
     expect(submit.disabled).toBe(true);
-    expect(screen.queryByText("사용가능한 아이디 입니다.")).toBe(null);
+    expect(screen.queryByText("사용 가능한 아이디입니다.")).toBe(null);
     expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 test("an already taken login ID keeps signup disabled", async () => {
     fetch.mockResolvedValueOnce(new Response(JSON.stringify({ available: false })));
     mount("/signup");
-    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester@example.com" } });
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
@@ -134,18 +188,20 @@ test("a late availability response cannot approve an edited login ID", async () 
     let resolveCheck;
     fetch.mockImplementationOnce(() => new Promise((resolve) => { resolveCheck = resolve; }));
     mount("/signup");
-    fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
+    fireEvent.change(await screen.findByLabelText("이름"), { target: { value: "테스터" } });
+    fireEvent.change(screen.getByLabelText("생년월일"), { target: { value: "2000-01-01" } });
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "tester@example.com" } });
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "changed_id" } });
+    fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "changed@example.com" } });
     await act(async () => { resolveCheck(new Response(JSON.stringify({ available: true }))); });
-    expect(screen.queryByText("사용가능한 아이디 입니다.")).toBe(null);
+    expect(screen.queryByText("사용 가능한 아이디입니다.")).toBe(null);
     expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
-    await screen.findByText("사용가능한 아이디 입니다.");
-    expect(fetch.mock.calls[1][0]).toBe("/api/auth/check-login-id?loginId=changed_id");
+    await screen.findByText("사용 가능한 아이디입니다.");
+    expect(fetch.mock.calls[1][0]).toBe("/api/auth/check-login-id?loginId=changed%40example.com");
     expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(false);
 });
 
@@ -169,24 +225,18 @@ test("refresh restores a preferences deep link once even under StrictMode", asyn
     expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer saved-token");
 });
 
-test("OAuth removes URL credentials and progresses nickname, preferences, then profile", async () => {
+test("OAuth removes URL credentials and goes directly to preferences, then profile", async () => {
     const kakaoUser = { id: 2, nickname: "카카오", linkedProviders: ["KAKAO"], email: null };
-    fetch.mockImplementation(async (_, options) => new Response(JSON.stringify(
-        options.method === "PATCH" ? { ...kakaoUser, nickname: JSON.parse(options.body).nickname } : kakaoUser,
-    )));
+    fetch.mockResolvedValue(new Response(JSON.stringify(kakaoUser)));
     mount("/oauth2/callback#token=oauth-token");
-    await screen.findByRole("heading", { name: "닉네임 설정" });
-    await at("/setup/nickname");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer oauth-token");
-    fireEvent.change(screen.getByLabelText("닉네임"), { target: { value: "영화팬" } });
-    fireEvent.click(screen.getByRole("button", { name: "닉네임 저장" }));
     await screen.findByRole("heading", { name: "선호 정보 설정" });
     await at("/setup/preferences");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer oauth-token");
     fireEvent.click(screen.getByRole("button", { name: "선호정보 저장 테스트" }));
     await screen.findByRole("heading", { name: "회원정보", exact: true });
     await at("/profile");
-    expect(localStorage.getItem("kakaoProfileSetupDone:2")).toBe("true");
+    expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 test("401 during a member API call clears authentication and redirects the mounted page", async () => {

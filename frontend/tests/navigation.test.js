@@ -14,32 +14,24 @@ test("guests can browse public screens and are redirected from member screens", 
     for (const page of ["home", "movies", "theaters", "login", "signup"]) {
         assert.equal(redirectPage({ page, authenticated: false }), null);
     }
-    for (const page of ["profile", "preferences", "nicknameSetup", "preferenceSetup", "callback"]) {
+    for (const page of ["tickets", "profile", "preferences", "preferenceSetup", "callback"]) {
         assert.equal(redirectPage({ page, authenticated: false }), "login");
     }
 });
 
-test("nickname setup takes priority over preferences without redirecting itself", () => {
-    const state = { authenticated: true, nicknameSetupRequired: true, preferenceSetupRequired: true };
+test("incomplete users go directly to preferences without redirecting the setup screen", () => {
+    const state = { authenticated: true, preferenceSetupRequired: true };
     for (const page of ["home", "profile", "preferences", "callback", "preferenceSetup"]) {
-        assert.equal(redirectPage({ ...state, page }), "nicknameSetup");
+        assert.equal(redirectPage({ ...state, page }), page === "preferenceSetup" ? null : "preferenceSetup");
     }
-    assert.equal(redirectPage({ ...state, page: "nicknameSetup" }), null);
-});
-
-test("nickname completion advances to the existing initial preference screen", () => {
-    const state = { authenticated: true, nicknameSetupRequired: false, preferenceSetupRequired: true };
-    assert.equal(redirectPage({ ...state, page: "nicknameSetup" }), "preferenceSetup");
-    assert.equal(redirectPage({ ...state, page: "preferences" }), "preferenceSetup");
-    assert.equal(redirectPage({ ...state, page: "preferenceSetup" }), null);
 });
 
 test("completed users keep deep links and leave completed setup and auth pages", () => {
-    const state = { authenticated: true, nicknameSetupRequired: false, preferenceSetupRequired: false };
-    for (const page of ["home", "movies", "theaters", "profile", "preferences"]) {
+    const state = { authenticated: true, preferenceSetupRequired: false };
+    for (const page of ["home", "movies", "theaters", "tickets", "profile", "preferences"]) {
         assert.equal(redirectPage({ ...state, page }), null);
     }
-    for (const page of ["nicknameSetup", "preferenceSetup", "login", "signup", "callback"]) {
+    for (const page of ["preferenceSetup", "login", "signup", "callback"]) {
         assert.equal(redirectPage({ ...state, page }), "profile");
     }
 });

@@ -53,7 +53,7 @@
 .common-header-nav,
 .common-header-account {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
 }
 
@@ -62,8 +62,12 @@
 }
 
 .common-header-nav .common-header-link {
+    min-width: 68px;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 600;
+    border-radius: 0;
+    color: rgb(255 255 255 / 70%);
+    transition: color 300ms ease;
 }
 
 .common-header-link {
@@ -74,9 +78,13 @@
     color: rgb(255 255 255 / 78%);
 }
 
-.common-header-link[aria-current="page"],
-.common-header-link:hover:not(:disabled):not([aria-disabled="true"]) {
-    background: rgb(255 255 255 / 10%);
+.common-header-nav .common-header-menu-link.is-active {
+    color: #fff;
+    font-weight: 700;
+}
+
+.common-header-nav .common-header-menu-link:hover:not([aria-disabled="true"]),
+.common-header-nav .common-header-menu-link:focus-visible {
     color: #fff;
 }
 
@@ -132,47 +140,127 @@
     background: transparent;
 }
 
-@media (max-width: 600px) {
-    .app-layout {
-        --common-header-height: 124px;
+.common-header-desktop {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 20px;
+}
+
+.common-header-brand,
+.common-header-nav,
+.common-header-account {
+    flex-shrink: 0;
+}
+
+.common-header-compact .common-header-desktop {
+    position: fixed;
+    inset: 0 auto auto 0;
+    transform: translateX(-100%);
+    width: max-content;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.common-header-compact .common-header-inner {
+    gap: 8px;
+}
+
+.common-header-compact-nav {
+    margin-left: auto;
+}
+
+.common-header-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 180ms ease;
+}
+
+.common-header-menu-toggle svg {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.common-header-menu-toggle:hover {
+    background: rgb(255 255 255 / 10%);
+}
+
+.common-header-mobile-menu {
+    position: absolute;
+    top: 100%;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: max-content;
+    min-width: 148px;
+    max-width: calc(100% - 24px);
+    padding: 8px;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 12px;
+    background: #181818;
+    box-shadow: 0 12px 36px rgb(0 0 0 / 35%);
+}
+
+.common-header-mobile-menu .common-header-link {
+    justify-content: flex-start;
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.common-header-mobile-menu .common-header-menu-link.is-active {
+    color: #fff;
+    font-weight: 700;
+}
+
+.common-header-mobile-menu .common-header-link:not(.common-header-signup):hover:not(:disabled):not([aria-disabled="true"]) {
+    background: rgb(255 255 255 / 10%);
+    color: #fff;
+}
+
+@media (max-width: 420px) {
+    .common-header-compact .common-header-inner {
+        padding-inline: 12px;
     }
 
-    .common-header-inner {
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 12px;
+    .common-header-compact .common-header-brand {
+        font-size: clamp(14px, 4.3vw, 18px);
+        padding-right: 0;
     }
 
-    .common-header-brand {
-        width: 100%;
-        font-size: 22px;
+    .common-header-compact-nav .common-header-link {
+        min-width: 44px;
+        padding-inline: 6px;
+        font-size: 16px;
     }
 
-    .common-header-link {
-        padding: 10px;
-        min-height: 44px;
+    .common-header-compact-nav {
+        gap: 0;
     }
 
-    .common-header-signup {
-        min-width: auto;
-    }
-
-    .common-header-nav {
-        gap: 4px;
-    }
-
-    .common-header-nav .common-header-link {
-        font-size: 18px;
-    }
-
-    .common-header-account {
-        gap: 6px;
+    .common-header-mobile-menu {
+        right: 12px;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .common-header-brand,
-    .common-header-link {
+    .common-header-link,
+    .common-header-menu-toggle {
         transition: none;
     }
 }
