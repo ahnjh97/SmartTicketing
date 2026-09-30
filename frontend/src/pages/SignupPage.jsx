@@ -104,16 +104,6 @@ export default function SignupPage() {
                     return false;
                 }
 
-                if (
-                    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                        .test(trimmed)
-                ) {
-                    setError(
-                        "올바른 이메일 형식으로 입력해주세요."
-                    );
-                    return false;
-                }
-
                 setLoginIdCheckStatus("checking");
 
                 try {
@@ -392,12 +382,12 @@ export default function SignupPage() {
                 <div className="login-id-row">
                     <input
                         id="signup-login-id"
-                        type="email"
+                        type="text"
                         value={loginId}
                         onChange={
                             handleLoginIdChange
                         }
-                        placeholder="이메일을 입력해주세요."
+                        placeholder="아이디를 입력해주세요."
                         autoComplete="username"
                         readOnly={isEmailLocked}
                         required
