@@ -150,7 +150,7 @@ export default function LoginPage() {
                 </div>
             </form>
             <button type="button" className="text-button" onClick={() => navigate(PAGE_PATHS.findAccount)}>
-                비밀번호 재설정
+                아이디 / 비밀번호 찾기
             </button>
 
             <div className="divider"><span>또는</span></div>
