@@ -1,10 +1,14 @@
 import {
     useCallback,
+    useEffect,
     useRef,
     useState
 } from "react";
 
-import { useNavigate } from "react-router-dom";
+import {
+    useNavigate,
+    useSearchParams
+} from "react-router-dom";
 
 import { PAGE_PATHS } from "../navigation.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
@@ -12,8 +16,34 @@ import { authApi } from "../api/auth.js";
 import { setAccessToken } from "../auth/session.js";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
 
-export default function SignupPage() {
+const EMAIL_PATTERN =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const SOCIAL_PROVIDERS = [
+    "GOOGLE",
+    "NAVER",
+    "KAKAO"
+];
+
+export default function SocialSignupPage() {
     const navigate = useNavigate();
+
+    const [searchParams] =
+        useSearchParams();
+
+    const social =
+        searchParams
+            .get("social")
+            ?.toUpperCase() || null;
+
+    const isSocial =
+        SOCIAL_PROVIDERS.includes(
+            social
+        );
+
+    const isEmailLocked =
+        social === "GOOGLE"
+        || social === "NAVER";
 
     const [name, setName] =
         useState("");
@@ -54,7 +84,8 @@ export default function SignupPage() {
         password === passwordConfirm;
 
     const canSubmit =
-        Boolean(name.trim())
+        isSocial
+        && Boolean(name.trim())
         && Boolean(birthDate)
         && loginIdCheckStatus === "available"
         && checkedLoginId === loginId.trim()
@@ -72,14 +103,33 @@ export default function SignupPage() {
 
                 setError("");
                 setCheckedLoginId("");
-                setLoginIdCheckStatus("idle");
+                setLoginIdCheckStatus(
+                    "idle"
+                );
+
+                if (!trimmed) {
+                    setError(
+                        "이메일은 필수입니다."
+                    );
+                    return false;
+                }
 
                 if (
-                    trimmed.length < 1
-                    || trimmed.length > 255
+                    !EMAIL_PATTERN.test(
+                        trimmed
+                    )
                 ) {
                     setError(
-                        "아이디는 255자 이하로 입력해주세요."
+                        "올바른 이메일 형식으로 입력해주세요."
+                    );
+                    return false;
+                }
+
+                if (
+                    trimmed.length > 255
+                ) {
+                    setError(
+                        "이메일은 255자 이하로 입력해주세요."
                     );
                     return false;
                 }
@@ -106,7 +156,7 @@ export default function SignupPage() {
                         !== "boolean"
                     ) {
                         throw new Error(
-                            "아이디 중복확인 응답을 처리할 수 없습니다."
+                            "이메일 중복확인 응답을 처리할 수 없습니다."
                         );
                     }
 
@@ -135,7 +185,7 @@ export default function SignupPage() {
 
                     setError(
                         error.message
-                        || "아이디 중복확인에 실패했습니다."
+                        || "이메일 중복확인에 실패했습니다."
                     );
 
                     return false;
@@ -144,7 +194,99 @@ export default function SignupPage() {
             [setError]
         );
 
+    useEffect(() => {
+        if (!isSocial) {
+            return;
+        }
+
+        let active = true;
+
+        const loadSocialSignupInfo =
+            async () => {
+                try {
+                    const data =
+                        await authApi.socialSignupInfo();
+
+                    if (!active) {
+                        return;
+                    }
+
+                    setName(
+                        data.name ?? ""
+                    );
+
+                    if (
+                        data.provider ===
+                        "GOOGLE"
+                        || data.provider ===
+                        "NAVER"
+                    ) {
+                        const email =
+                            data.email ?? "";
+
+                        setLoginId(
+                            email
+                        );
+
+                        if (email) {
+                            const available =
+                                await checkLoginId(
+                                    email
+                                );
+
+                            if (
+                                !active
+                                || !available
+                            ) {
+                                return;
+                            }
+                        }
+                    }
+
+                    if (
+                        data.provider ===
+                        "KAKAO"
+                    ) {
+                        setLoginId(
+                            ""
+                        );
+
+                        setLoginIdCheckStatus(
+                            "idle"
+                        );
+
+                        setCheckedLoginId(
+                            ""
+                        );
+                    }
+                } catch (error) {
+                    if (!active) {
+                        return;
+                    }
+
+                    setError(
+                        error.message
+                        || "소셜 회원가입 정보를 가져오지 못했습니다."
+                    );
+                }
+            };
+
+        loadSocialSignupInfo();
+
+        return () => {
+            active = false;
+        };
+    }, [
+        isSocial,
+        checkLoginId,
+        setError
+    ]);
+
     function handleLoginIdChange(event) {
+        if (isEmailLocked) {
+            return;
+        }
+
         checkVersion.current++;
 
         setLoginId(
@@ -155,17 +297,39 @@ export default function SignupPage() {
             "idle"
         );
 
-        setCheckedLoginId("");
+        setCheckedLoginId(
+            ""
+        );
 
         setError("");
     }
 
     async function handleCheckLoginId() {
-        await checkLoginId(loginId);
+        await checkLoginId(
+            loginId
+        );
     }
 
     function handleSubmit(event) {
         event.preventDefault();
+
+        if (!isSocial) {
+            setError(
+                "잘못된 소셜 회원가입 요청입니다."
+            );
+            return;
+        }
+
+        if (
+            !EMAIL_PATTERN.test(
+                loginId.trim()
+            )
+        ) {
+            setError(
+                "올바른 이메일 형식으로 입력해주세요."
+            );
+            return;
+        }
 
         if (
             loginIdCheckStatus !==
@@ -174,7 +338,7 @@ export default function SignupPage() {
             loginId.trim()
         ) {
             setError(
-                "아이디 중복확인을 완료해주세요."
+                "이메일 중복확인을 완료해주세요."
             );
             return;
         }
@@ -188,13 +352,11 @@ export default function SignupPage() {
 
         run(async () => {
             const response =
-                await authApi.signup({
-                    name:
-                        name.trim(),
-                    birthDate,
+                await authApi.socialSignup({
                     loginId:
                         loginId.trim(),
-                    password
+                    password,
+                    birthDate
                 });
 
             if (
@@ -220,8 +382,13 @@ export default function SignupPage() {
             error={error}
         >
             <h2>
-                일반 회원가입
+                소셜 회원가입
             </h2>
+
+            <p className="subtitle">
+                {social} 계정으로
+                회원가입을 진행합니다.
+            </p>
 
             <form
                 onSubmit={handleSubmit}
@@ -234,11 +401,7 @@ export default function SignupPage() {
                     id="signup-name"
                     type="text"
                     value={name}
-                    onChange={(event) =>
-                        setName(
-                            event.target.value
-                        )
-                    }
+                    readOnly
                     placeholder="이름"
                     required
                 />
@@ -260,19 +423,22 @@ export default function SignupPage() {
                 />
 
                 <label htmlFor="signup-login-id">
-                    아이디
+                    이메일
                 </label>
 
                 <div className="login-id-row">
                     <input
                         id="signup-login-id"
-                        type="text"
+                        type="email"
                         value={loginId}
                         onChange={
                             handleLoginIdChange
                         }
-                        placeholder="아이디를 입력해주세요."
-                        autoComplete="username"
+                        placeholder="이메일을 입력해주세요."
+                        autoComplete="email"
+                        readOnly={
+                            isEmailLocked
+                        }
                         required
                         className="login-id-input"
                     />
@@ -285,6 +451,7 @@ export default function SignupPage() {
                         }
                         disabled={
                             pending
+                            || isEmailLocked
                             || loginIdCheckStatus ===
                             "checking"
                         }
@@ -305,7 +472,7 @@ export default function SignupPage() {
                             className="success-message field-message"
                             role="status"
                         >
-                            사용 가능한 아이디입니다.
+                            사용 가능한 이메일입니다.
                         </p>
                     )
                 }
@@ -317,7 +484,7 @@ export default function SignupPage() {
                             className="error-message field-message"
                             role="alert"
                         >
-                            이미 사용 중인 아이디입니다.
+                            이미 사용 중인 이메일입니다.
                         </p>
                     )
                 }

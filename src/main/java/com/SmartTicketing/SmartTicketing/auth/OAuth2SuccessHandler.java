@@ -98,7 +98,7 @@ public class OAuth2SuccessHandler
                 request,
                 response,
                 frontend
-                        + "/signup?social="
+                        + "/signup/social?social="
                         + provider.name()
         );
     }

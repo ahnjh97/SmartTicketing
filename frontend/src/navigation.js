@@ -4,6 +4,7 @@ export const PAGE_PATHS = {
     theaters: "/theaters",
     login: "/login",
     signup: "/signup",
+    socialSignup: "/signup/social",
     profile: "/profile",
     preferences: "/preferences",
     preferenceSetup: "/setup/preferences",
@@ -49,6 +50,7 @@ export function redirectPage({
         [
             "login",
             "signup",
+            "socialSignup",
             "callback",
             "preferenceSetup"
         ].includes(page)
