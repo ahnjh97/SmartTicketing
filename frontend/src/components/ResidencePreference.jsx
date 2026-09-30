@@ -957,7 +957,29 @@ export default function ResidencePreference({
                 ? "SIDE"
                 : "MIDDLE";
 
-        return position.startsWith(hoveredHorizontal);
+        const hoveredVertical =
+            hoveredSeatPosition.endsWith("FRONT")
+                ? "FRONT"
+                : hoveredSeatPosition.endsWith("MIDDLE")
+                    ? "MIDDLE"
+                    : "REAR";
+
+        const positionHorizontal =
+            position.startsWith("SIDE")
+                ? "SIDE"
+                : "MIDDLE";
+
+        const positionVertical =
+            position.endsWith("FRONT")
+                ? "FRONT"
+                : position.endsWith("MIDDLE")
+                    ? "MIDDLE"
+                    : "REAR";
+
+        return (
+            positionHorizontal === hoveredHorizontal ||
+            positionVertical === hoveredVertical
+        );
     }
 
     function getSelectedTheatersInPriorityOrder() {
