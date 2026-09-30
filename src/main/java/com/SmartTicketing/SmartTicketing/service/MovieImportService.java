@@ -14,6 +14,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Objects;
 
 @Slf4j
@@ -23,12 +25,14 @@ public class MovieImportService {
     private final MovieRepository movieRepository;
     private final String imageBaseUrl;
     private final List<Long> movieIds;
+    private final Map<Long, String> ratingOverrides;
 
     public MovieImportService(
             @Qualifier("tmdbRestClient") RestClient tmdbRestClient,
             MovieRepository movieRepository,
             @Value("${tmdb.image-base-url}") String imageBaseUrl,
-            @Value("${tmdb.movie-ids}") String movieIds) {
+            @Value("${tmdb.movie-ids}") String movieIds,
+            @Value("${tmdb.rating-overrides:}") String ratingOverrides) {
 
         this.tmdbRestClient = tmdbRestClient;
         this.movieRepository = movieRepository;
@@ -39,6 +43,12 @@ public class MovieImportService {
                 .filter(id -> !id.isEmpty())
                 .map(Long::valueOf)
                 .toList();
+
+        this.ratingOverrides = Arrays.stream(ratingOverrides.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> pair[1].trim()));
     }
 
     public MovieImportResult importConfiguredMovies() {
@@ -84,7 +94,9 @@ public class MovieImportService {
         movie.setTitle(response.title());
         movie.setDescription(response.overview());
         movie.setRunningTime(response.runtime());
-        movie.setRating(findKoreanRating(response));
+        // TMDB에 한국 등급이 없으면 설정 파일에 적어둔 등급 사용
+        String rating = findKoreanRating(response);
+        movie.setRating(rating != null ? rating : ratingOverrides.get(response.id()));
         movie.setReleaseDate(parseDate(response.releaseDate()));
         movie.setPosterUrl(response.posterPath() == null ? null : imageBaseUrl + response.posterPath());
         movie.setActive(true);

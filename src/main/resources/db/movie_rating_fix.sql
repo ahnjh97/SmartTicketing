@@ -1,1 +1,0 @@
-UPDATE smart_ticketing.movies SET rating = 'ALL' WHERE tmdb_movie_id = 1108427;
