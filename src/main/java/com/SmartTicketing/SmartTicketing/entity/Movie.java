@@ -37,6 +37,9 @@ public class Movie {
     @Column(name = "poster_url", length = 500)
     private String posterUrl;
 
+    @Column(name = "trailer_url", length = 500)
+    private String trailerUrl;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 }

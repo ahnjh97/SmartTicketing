@@ -61,3 +61,16 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// 로컬 MySQL에 임시 DB를 생성하여 검증하고 종료 시 제거한다.
+tasks.register('bookingFoundationTest', Test) {
+	group = 'verification'
+	description = 'Runs booking contracts against an isolated temporary MySQL database.'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform()
+	outputs.upToDateWhen { false }
+	filter {
+		includeTestsMatching 'com.SmartTicketing.SmartTicketing.booking.*'
+	}
+}

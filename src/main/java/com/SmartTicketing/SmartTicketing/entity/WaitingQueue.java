@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
                 @UniqueConstraint(
                         name = "uk_waiting_queue_showtime_number",
                         columnNames = {"showtime_id", "queue_number"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_waiting_queue_group_showtime",
+                        columnNames = {"request_group_id", "showtime_id"}
                 )
         },
         indexes = {
@@ -43,11 +47,16 @@ public class WaitingQueue {
     @JoinColumn(name = "showtime_id", nullable = false)
     private Showtime showtime;
 
+    // 인원·선호조건은 그룹의 신청 당시 스냅샷을 공유한다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "request_group_id")
+    private BookingRequestGroup requestGroup;
+
     @Column(name = "queue_number", nullable = false)
     private Integer queueNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
     private QueueStatus status = QueueStatus.WAITING;
 
     @Column(name = "opportunity_expires_at")

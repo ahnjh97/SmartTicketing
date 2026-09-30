@@ -37,6 +37,13 @@ public class Seat {
     @Column(name = "seat_position", nullable = false, length = 30)
     private SeatPosition seatPosition;
 
+    // 동일 행에서도 통로가 다르면 다른 구간이다. null은 배치 미확인 상태다.
+    @Column(name = "adjacency_segment", length = 40)
+    private String adjacencySegment;
+
+    @Column(name = "position_in_segment")
+    private Integer positionInSegment;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 }

@@ -1,11 +1,8 @@
 package com.SmartTicketing.SmartTicketing.entity.enums;
 
-public enum QueueStatus {
-    WAITING,
-    PAUSED,
-    NOTIFIED,
+public enum BookingGroupStatus {
+    ACTIVE,
     HOLDING,
     COMPLETED,
-    EXPIRED,
     CANCELLED
 }
