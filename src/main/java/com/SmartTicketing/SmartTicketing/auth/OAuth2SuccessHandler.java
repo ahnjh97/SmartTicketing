@@ -1,155 +1,105 @@
 package com.SmartTicketing.SmartTicketing.auth;
 
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
 @Component
 public class OAuth2SuccessHandler
-        implements AuthenticationSuccessHandler {
+        extends SimpleUrlAuthenticationSuccessHandler {
 
-    private final AuthService auth;
+    private final AuthService authService;
     private final String frontend;
-    private final HttpServletRequest request;
 
     public OAuth2SuccessHandler(
-            AuthService a,
+            AuthService authService,
             @Value("${app.frontend-url:http://localhost:5173}")
-            String f,
-            HttpServletRequest r
+            String frontend
     ) {
-        auth = a;
-        frontend = f;
-        request = r;
+        this.authService = authService;
+        this.frontend = frontend;
     }
 
     @Override
     public void onAuthenticationSuccess(
-            HttpServletRequest req,
-            HttpServletResponse res,
+            HttpServletRequest request,
+            HttpServletResponse response,
             Authentication authentication
-    ) throws IOException {
+    ) throws IOException, ServletException {
 
-        OAuth2AuthenticationToken token =
+        OAuth2AuthenticationToken oauth =
                 (OAuth2AuthenticationToken) authentication;
-
-        OAuth2User principal =
-                token.getPrincipal();
 
         SocialProvider provider =
                 SocialProvider.valueOf(
-                        token
-                                .getAuthorizedClientRegistrationId()
+                        oauth.getAuthorizedClientRegistrationId()
                                 .toUpperCase()
                 );
 
-        Long linkId = linkUserId();
+        HttpSession session =
+                request.getSession(true);
 
+        Object linkUserId =
+                session.getAttribute(
+                        CustomOAuth2UserService.LINK_USER_ID
+                );
 
-        if (linkId != null) {
+        if (linkUserId != null) {
 
-            String providerId =
+            session.removeAttribute(
+                    CustomOAuth2UserService.LINK_USER_ID
+            );
+
+            String providerUserId =
                     String.valueOf(
-                            principal.getAttributes()
+                            oauth.getPrincipal()
+                                    .getAttributes()
                                     .get("providerUserId")
                     );
 
-            String email =
-                    (String) principal.getAttributes()
+            Object emailObject =
+                    oauth.getPrincipal()
+                            .getAttributes()
                             .get("email");
 
-            auth.linkSocialAccount(
-                    linkId,
+            String email =
+                    emailObject == null
+                            ? null
+                            : String.valueOf(emailObject);
+
+            authService.linkSocialAccount(
+                    Long.valueOf(
+                            String.valueOf(linkUserId)
+                    ),
                     provider,
-                    providerId,
+                    providerUserId,
                     email
             );
 
-            var session =
-                    request.getSession(false);
-
-            if (session != null) {
-                session.removeAttribute(
-                        CustomOAuth2UserService.LINK_USER_ID
-                );
-            }
-
-            res.sendRedirect(
-                    frontend
-                            + "/oauth2/callback?linked="
-                            + provider.name()
+            getRedirectStrategy().sendRedirect(
+                    request,
+                    response,
+                    frontend + "/profile"
             );
 
             return;
         }
 
-        String providerId =
-                String.valueOf(
-                        principal.getAttributes()
-                                .get("providerUserId")
-                );
-
-        String name =
-                (String) principal.getAttributes()
-                        .get("name");
-
-        String email =
-                (String) principal.getAttributes()
-                        .get("email");
-
-        var session =
-                request.getSession(true);
-
-        session.setAttribute(
-                CustomOAuth2UserService.SOCIAL_PROVIDER,
-                provider.name()
-        );
-
-        session.setAttribute(
-                CustomOAuth2UserService.SOCIAL_PROVIDER_USER_ID,
-                providerId
-        );
-
-        session.setAttribute(
-                CustomOAuth2UserService.SOCIAL_NAME,
-                name
-        );
-
-        session.setAttribute(
-                CustomOAuth2UserService.SOCIAL_EMAIL,
-                email
-        );
-
-        res.sendRedirect(
-                frontend + "/signup?social="
+        getRedirectStrategy().sendRedirect(
+                request,
+                response,
+                frontend
+                        + "/signup?social="
                         + provider.name()
         );
-    }
-
-    private Long linkUserId() {
-
-        var session =
-                request.getSession(false);
-
-        if (session == null) {
-            return null;
-        }
-
-        Object value =
-                session.getAttribute(
-                        CustomOAuth2UserService.LINK_USER_ID
-                );
-
-        return value instanceof Long
-                ? (Long) value
-                : null;
     }
 }

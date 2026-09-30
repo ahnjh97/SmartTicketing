@@ -17,7 +17,6 @@ import { setAccessToken } from "../auth/session.js";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
 
 export default function SignupPage() {
-
     const navigate = useNavigate();
 
     const [searchParams] =
@@ -85,7 +84,6 @@ export default function SignupPage() {
     const checkLoginId =
         useCallback(
             async (value) => {
-
                 const version =
                     ++checkVersion.current;
 
@@ -94,16 +92,14 @@ export default function SignupPage() {
 
                 setError("");
                 setCheckedLoginId("");
-                setLoginIdCheckStatus(
-                    "idle"
-                );
+                setLoginIdCheckStatus("idle");
 
                 if (
-                    trimmed.length < 4
+                    trimmed.length < 1
                     || trimmed.length > 255
                 ) {
                     setError(
-                        "아이디는 4~255자로 입력해주세요."
+                        "아이디는 255자 이하로 입력해주세요."
                     );
                     return false;
                 }
@@ -118,12 +114,9 @@ export default function SignupPage() {
                     return false;
                 }
 
-                setLoginIdCheckStatus(
-                    "checking"
-                );
+                setLoginIdCheckStatus("checking");
 
                 try {
-
                     const data =
                         await authApi.checkLoginId(
                             trimmed
@@ -145,9 +138,7 @@ export default function SignupPage() {
                         );
                     }
 
-                    setCheckedLoginId(
-                        trimmed
-                    );
+                    setCheckedLoginId(trimmed);
 
                     setLoginIdCheckStatus(
                         data.available
@@ -156,9 +147,7 @@ export default function SignupPage() {
                     );
 
                     return data.available;
-
                 } catch (error) {
-
                     if (
                         version !==
                         checkVersion.current
@@ -166,9 +155,7 @@ export default function SignupPage() {
                         return false;
                     }
 
-                    setLoginIdCheckStatus(
-                        "idle"
-                    );
+                    setLoginIdCheckStatus("idle");
 
                     setError(
                         error.message
@@ -182,7 +169,6 @@ export default function SignupPage() {
         );
 
     useEffect(() => {
-
         if (!isSocial) {
             return;
         }
@@ -190,7 +176,6 @@ export default function SignupPage() {
         let active = true;
 
         run(async () => {
-
             const data =
                 await authApi.socialSignupInfo();
 
@@ -206,19 +191,13 @@ export default function SignupPage() {
                 data.provider === "GOOGLE"
                 || data.provider === "NAVER"
             ) {
-
                 const email =
                     data.email ?? "";
 
-                setLoginId(
-                    email
-                );
-
+                setLoginId(email);
 
                 if (email) {
-                    await checkLoginId(
-                        email
-                    );
+                    await checkLoginId(email);
                 }
             }
 
@@ -226,30 +205,29 @@ export default function SignupPage() {
                 data.provider === "KAKAO"
             ) {
                 setLoginId("");
-                setLoginIdCheckStatus(
-                    "idle"
-                );
+                setLoginIdCheckStatus("idle");
                 setCheckedLoginId("");
             }
-
-        }).catch(() => {
-
+        }).catch((error) => {
+            if (active) {
+                setError(
+                    error.message
+                    || "소셜 회원가입 정보를 가져오지 못했습니다."
+                );
+            }
         });
 
         return () => {
             active = false;
         };
-
     }, [
         isSocial,
         checkLoginId,
-        run
+        run,
+        setError
     ]);
 
-    function handleLoginIdChange(
-        event
-    ) {
-
+    function handleLoginIdChange(event) {
         if (isEmailLocked) {
             return;
         }
@@ -260,23 +238,16 @@ export default function SignupPage() {
             event.target.value
         );
 
-        setLoginIdCheckStatus(
-            "idle"
-        );
-
+        setLoginIdCheckStatus("idle");
         setCheckedLoginId("");
-
         setError("");
     }
 
     async function handleCheckLoginId() {
-        await checkLoginId(
-            loginId
-        );
+        await checkLoginId(loginId);
     }
 
     function handleSubmit(event) {
-
         event.preventDefault();
 
         if (
@@ -299,53 +270,42 @@ export default function SignupPage() {
         }
 
         run(async () => {
+            let response;
 
             if (isSocial) {
-
-                const response =
+                response =
                     await authApi.socialSignup({
                         loginId:
                             loginId.trim(),
                         password,
-                        birthDate,
+                        birthDate
                     });
-
-                if (
-                    !response?.accessToken
-                ) {
-                    throw new Error(
-                        "회원가입 응답을 처리할 수 없습니다."
-                    );
-                }
-
-                setAccessToken(
-                    response.accessToken
-                );
-
-                window.location.assign(
-                    PAGE_PATHS.preferenceSetup
-                );
-
-                return;
+            } else {
+                response =
+                    await authApi.signup({
+                        name:
+                            name.trim(),
+                        birthDate,
+                        loginId:
+                            loginId.trim(),
+                        password
+                    });
             }
 
-            await authApi.signup({
-                name,
-                birthDate,
-                loginId:
-                    loginId.trim(),
-                password,
-            });
+            if (
+                !response?.accessToken
+            ) {
+                throw new Error(
+                    "회원가입 응답을 처리할 수 없습니다."
+                );
+            }
 
-            navigate(
-                PAGE_PATHS.login,
-                {
-                    replace: true,
-                    state: {
-                        message:
-                            "회원가입이 완료되었습니다. 로그인해주세요.",
-                    },
-                }
+            setAccessToken(
+                response.accessToken
+            );
+
+            window.location.assign(
+                PAGE_PATHS.preferenceSetup
             );
         });
     }
@@ -354,7 +314,6 @@ export default function SignupPage() {
         <AuthFormLayout
             error={error}
         >
-
             <h2>
                 {isSocial
                     ? "회원가입"
@@ -371,11 +330,6 @@ export default function SignupPage() {
             <form
                 onSubmit={handleSubmit}
             >
-
-                {/* ==================== */}
-                {/* 이름 */}
-                {/* ==================== */}
-
                 <label htmlFor="signup-name">
                     이름
                 </label>
@@ -394,10 +348,6 @@ export default function SignupPage() {
                     required
                 />
 
-                {/* ==================== */}
-                {/* 생년월일 */}
-                {/* ==================== */}
-
                 <label htmlFor="signup-birth-date">
                     생년월일
                 </label>
@@ -414,10 +364,6 @@ export default function SignupPage() {
                     required
                 />
 
-                {/* ==================== */}
-                {/* 아이디 */}
-                {/* ==================== */}
-
                 <label htmlFor="signup-login-id">
                     아이디
                 </label>
@@ -426,10 +372,9 @@ export default function SignupPage() {
                     style={{
                         display: "flex",
                         gap: "8px",
-                        alignItems: "stretch",
+                        alignItems: "stretch"
                     }}
                 >
-
                     <input
                         id="signup-login-id"
                         type="email"
@@ -439,13 +384,11 @@ export default function SignupPage() {
                         }
                         placeholder="이메일을 입력해주세요."
                         autoComplete="username"
-                        readOnly={
-                            isEmailLocked
-                        }
+                        readOnly={isEmailLocked}
                         required
                         style={{
                             flex: 1,
-                            minWidth: 0,
+                            minWidth: 0
                         }}
                     />
 
@@ -462,7 +405,7 @@ export default function SignupPage() {
                             "checking"
                         }
                         style={{
-                            whiteSpace: "nowrap",
+                            whiteSpace: "nowrap"
                         }}
                     >
                         {
@@ -472,18 +415,16 @@ export default function SignupPage() {
                                 : "중복확인"
                         }
                     </button>
-
                 </div>
 
                 {loginIdCheckStatus ===
                     "available" && (
-
                         <p
                             className="success-message"
                             role="status"
                             style={{
                                 marginTop: "8px",
-                                marginBottom: 0,
+                                marginBottom: 0
                             }}
                         >
                             사용 가능한 아이디입니다.
@@ -492,22 +433,17 @@ export default function SignupPage() {
 
                 {loginIdCheckStatus ===
                     "taken" && (
-
                         <p
                             className="error-message"
                             role="alert"
                             style={{
                                 marginTop: "8px",
-                                marginBottom: 0,
+                                marginBottom: 0
                             }}
                         >
                             이미 사용 중인 아이디입니다.
                         </p>
                     )}
-
-                {/* ==================== */}
-                {/* 비밀번호 */}
-                {/* ==================== */}
 
                 <label htmlFor="signup-password">
                     비밀번호
@@ -526,10 +462,6 @@ export default function SignupPage() {
                     autoComplete="new-password"
                     required
                 />
-
-                {/* ==================== */}
-                {/* 비밀번호 확인 */}
-                {/* ==================== */}
 
                 <label htmlFor="signup-password-confirm">
                     비밀번호 확인
@@ -558,7 +490,7 @@ export default function SignupPage() {
                         }
                         style={{
                             marginTop: "8px",
-                            marginBottom: 0,
+                            marginBottom: 0
                         }}
                         aria-live="polite"
                     >
@@ -567,10 +499,6 @@ export default function SignupPage() {
                             : "비밀번호가 일치하지 않습니다."}
                     </p>
                 )}
-
-                {/* ==================== */}
-                {/* 가입 */}
-                {/* ==================== */}
 
                 <button
                     type="submit"
@@ -582,7 +510,6 @@ export default function SignupPage() {
                 >
                     회원가입
                 </button>
-
             </form>
 
             <button
@@ -596,7 +523,6 @@ export default function SignupPage() {
             >
                 로그인으로 돌아가기
             </button>
-
         </AuthFormLayout>
     );
 }

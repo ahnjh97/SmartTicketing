@@ -25,36 +25,36 @@ public class AuthService {
     private final JwtService jwt;
 
     public AuthService(
-            UsersRepository u,
-            UserSocialAccountRepository s,
-            PasswordEncoder e,
-            JwtService j
+            UsersRepository users,
+            UserSocialAccountRepository social,
+            PasswordEncoder encoder,
+            JwtService jwt
     ) {
-        users = u;
-        social = s;
-        encoder = e;
-        jwt = j;
+        this.users = users;
+        this.social = social;
+        this.encoder = encoder;
+        this.jwt = jwt;
     }
 
-    public static UserResponse toResponse(Users u) {
+    public static UserResponse toResponse(Users user) {
         return new UserResponse(
-                u.getId(),
-                u.getName(),
-                u.getBirthDate(),
-                u.getLoginId(),
-                u.getEmail(),
-                u.getNickname(),
-                u.getAddress(),
-                u.getStatus(),
+                user.getId(),
+                user.getName(),
+                user.getBirthDate(),
+                user.getLoginId(),
+                user.getEmail(),
+                user.getNickname(),
+                user.getAddress(),
+                user.getStatus(),
                 java.util.List.of(),
                 java.util.List.of(),
                 java.util.List.of()
         );
     }
 
-    public UserResponse signup(SignupRequest r) {
+    public TokenResponse signup(SignupRequest request) {
 
-        String loginId = r.loginId().trim();
+        String loginId = request.loginId().trim();
 
         if (users.existsByLoginId(loginId)) {
             throw new IllegalArgumentException(
@@ -62,29 +62,28 @@ public class AuthService {
             );
         }
 
-        Users u = new Users();
+        Users user = new Users();
 
-        u.setName(r.name());
-        u.setBirthDate(r.birthDate());
-        u.setLoginId(loginId);
-        u.setPassword(
-                encoder.encode(r.password())
+        user.setName(request.name().trim());
+        user.setBirthDate(request.birthDate());
+        user.setLoginId(loginId);
+        user.setPassword(
+                encoder.encode(request.password())
         );
-        u.setNickname(loginId);
-        u.setStatus(UserStatus.ACTIVE);
+        user.setNickname(loginId);
+        user.setStatus(UserStatus.ACTIVE);
 
-        return toResponse(
-                users.save(u)
-        );
+        user = users.save(user);
+
+        return createTokenResponse(user);
     }
 
-
     @Transactional(readOnly = true)
-    public TokenResponse login(LoginRequest r) {
+    public TokenResponse login(LoginRequest request) {
 
-        String loginId = r.loginId().trim();
+        String loginId = request.loginId().trim();
 
-        Users u =
+        Users user =
                 users.findByLoginId(loginId)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
@@ -93,11 +92,11 @@ public class AuthService {
                         );
 
         if (
-                u.getStatus() != UserStatus.ACTIVE
-                        || u.getPassword() == null
+                user.getStatus() != UserStatus.ACTIVE
+                        || user.getPassword() == null
                         || !encoder.matches(
-                        r.password(),
-                        u.getPassword()
+                        request.password(),
+                        user.getPassword()
                 )
         ) {
             throw new IllegalArgumentException(
@@ -105,11 +104,7 @@ public class AuthService {
             );
         }
 
-        return new TokenResponse(
-                jwt.issueAccessToken(u.getId()),
-                "Bearer",
-                jwt.getExpirationSeconds()
-        );
+        return createTokenResponse(user);
     }
 
     @Transactional(readOnly = true)
@@ -119,31 +114,54 @@ public class AuthService {
         );
     }
 
-
     public TokenResponse completeSocialSignup(
             String providerName,
             String providerUserId,
             String oauthName,
             String oauthEmail,
-            SocialSignupRequest r
+            SocialSignupRequest request
     ) {
+
         SocialProvider provider =
-                SocialProvider.valueOf(
-                        providerName.toUpperCase()
-                );
+                parseProvider(providerName);
 
         String loginId =
-                r.loginId().trim();
+                request.loginId().trim();
 
+        if (
+                providerUserId == null
+                        || providerUserId.isBlank()
+        ) {
+            throw new IllegalArgumentException(
+                    "소셜 계정 정보를 확인할 수 없습니다."
+            );
+        }
+
+        if (
+                oauthName == null
+                        || oauthName.isBlank()
+        ) {
+            throw new IllegalArgumentException(
+                    "소셜 계정의 이름을 확인할 수 없습니다."
+            );
+        }
 
         if (
                 provider == SocialProvider.GOOGLE
                         || provider == SocialProvider.NAVER
         ) {
+
             if (
                     oauthEmail == null
                             || oauthEmail.isBlank()
-                            || !oauthEmail.equalsIgnoreCase(loginId)
+            ) {
+                throw new IllegalArgumentException(
+                        "소셜 로그인 이메일을 가져오지 못했습니다."
+                );
+            }
+
+            if (
+                    !oauthEmail.equalsIgnoreCase(loginId)
             ) {
                 throw new IllegalArgumentException(
                         "소셜 로그인 이메일과 아이디가 일치하지 않습니다."
@@ -151,15 +169,11 @@ public class AuthService {
             }
         }
 
-
-        if (!loginId.matches(
-                "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
-        )) {
+        if (!isValidEmail(loginId)) {
             throw new IllegalArgumentException(
                     "올바른 이메일 형식으로 입력해주세요."
             );
         }
-
 
         if (users.existsByLoginId(loginId)) {
             throw new IllegalArgumentException(
@@ -178,7 +192,6 @@ public class AuthService {
             );
         }
 
-
         if (
                 oauthEmail != null
                         && !oauthEmail.isBlank()
@@ -191,41 +204,30 @@ public class AuthService {
 
         Users user = new Users();
 
-        user.setName(
-                oauthName == null || oauthName.isBlank()
-                        ? "소셜회원"
-                        : oauthName
-        );
-
-
+        user.setName(oauthName.trim());
         user.setLoginId(loginId);
 
-
         user.setEmail(
-                oauthEmail == null || oauthEmail.isBlank()
+                oauthEmail == null
+                        || oauthEmail.isBlank()
                         ? null
-                        : oauthEmail
+                        : oauthEmail.trim()
         );
-
 
         user.setPassword(
-                encoder.encode(r.password())
+                encoder.encode(
+                        request.password()
+                )
         );
-
 
         user.setBirthDate(
-                r.birthDate()
+                request.birthDate()
         );
-
 
         user.setNickname(loginId);
-
-        user.setStatus(
-                UserStatus.ACTIVE
-        );
+        user.setStatus(UserStatus.ACTIVE);
 
         user = users.save(user);
-
 
         UserSocialAccount account =
                 new UserSocialAccount();
@@ -237,18 +239,13 @@ public class AuthService {
 
         social.save(account);
 
-
-        return new TokenResponse(
-                jwt.issueAccessToken(user.getId()),
-                "Bearer",
-                jwt.getExpirationSeconds()
-        );
+        return createTokenResponse(user);
     }
 
     @Transactional(readOnly = true)
     public Users getUserForLink(Long userId) {
 
-        Users u =
+        Users user =
                 users.findById(userId)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
@@ -257,7 +254,7 @@ public class AuthService {
                         );
 
         if (
-                u.getStatus()
+                user.getStatus()
                         != UserStatus.ACTIVE
         ) {
             throw new IllegalStateException(
@@ -265,9 +262,8 @@ public class AuthService {
             );
         }
 
-        return u;
+        return user;
     }
-
 
     public void linkSocialAccount(
             Long userId,
@@ -275,13 +271,23 @@ public class AuthService {
             String providerUserId,
             String email
     ) {
-        Users u =
+
+        Users user =
                 users.findById(userId)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
                                         "회원을 찾을 수 없습니다."
                                 )
                         );
+
+        if (
+                user.getStatus()
+                        != UserStatus.ACTIVE
+        ) {
+            throw new IllegalStateException(
+                    "활성 상태의 회원만 연동할 수 있습니다."
+            );
+        }
 
         UserSocialAccount existing =
                 social.findByProviderAndProviderUserId(
@@ -318,11 +324,52 @@ public class AuthService {
         UserSocialAccount account =
                 new UserSocialAccount();
 
-        account.setUser(u);
+        account.setUser(user);
         account.setProvider(provider);
         account.setProviderUserId(providerUserId);
         account.setEmail(email);
 
         social.save(account);
+    }
+
+    private TokenResponse createTokenResponse(
+            Users user
+    ) {
+        return new TokenResponse(
+                jwt.issueAccessToken(user.getId()),
+                "Bearer",
+                jwt.getExpirationSeconds()
+        );
+    }
+
+    private SocialProvider parseProvider(
+            String providerName
+    ) {
+
+        if (
+                providerName == null
+                        || providerName.isBlank()
+        ) {
+            throw new IllegalArgumentException(
+                    "소셜 로그인 제공자가 없습니다."
+            );
+        }
+
+        try {
+            return SocialProvider.valueOf(
+                    providerName.toUpperCase()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "지원하지 않는 소셜 로그인 제공자입니다."
+            );
+        }
+    }
+
+    private boolean isValidEmail(String email) {
+        return email != null
+                && email.matches(
+                "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+        );
     }
 }

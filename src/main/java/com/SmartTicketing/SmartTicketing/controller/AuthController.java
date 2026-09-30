@@ -8,7 +8,6 @@ import com.SmartTicketing.SmartTicketing.dto.auth.SignupRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SocialSignupInfoResponse;
 import com.SmartTicketing.SmartTicketing.dto.auth.SocialSignupRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.TokenResponse;
-import com.SmartTicketing.SmartTicketing.dto.user.UserResponse;
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -25,35 +24,32 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService auth;
-    private final String frontend;
 
     public AuthController(
-            AuthService a,
+            AuthService auth,
             @Value("${app.frontend-url:http://localhost:5173}")
-            String f
+            String frontend
     ) {
-        auth = a;
-        frontend = f;
+        this.auth = auth;
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<UserResponse> signup(
-            @Valid @RequestBody SignupRequest r
+    public ResponseEntity<TokenResponse> signup(
+            @Valid @RequestBody SignupRequest request
     ) {
         return ResponseEntity.ok(
-                auth.signup(r)
+                auth.signup(request)
         );
     }
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
-            @Valid @RequestBody LoginRequest r
+            @Valid @RequestBody LoginRequest request
     ) {
         return ResponseEntity.ok(
-                auth.login(r)
+                auth.login(request)
         );
     }
-
 
     @GetMapping("/check-login-id")
     public ResponseEntity<Map<String, Boolean>> check(
@@ -119,11 +115,11 @@ public class AuthController {
 
     @PostMapping("/social-signup")
     public ResponseEntity<TokenResponse> socialSignup(
-            @Valid @RequestBody SocialSignupRequest r,
-            HttpServletRequest request
+            @Valid @RequestBody SocialSignupRequest request,
+            HttpServletRequest httpRequest
     ) {
         var session =
-                request.getSession(false);
+                httpRequest.getSession(false);
 
         if (session == null) {
             throw new IllegalStateException(
@@ -162,26 +158,18 @@ public class AuthController {
         }
 
         String provider =
-                String.valueOf(
-                        providerObject
-                );
+                String.valueOf(providerObject);
 
         String providerUserId =
-                String.valueOf(
-                        providerUserIdObject
-                );
+                String.valueOf(providerUserIdObject);
 
         String name =
-                String.valueOf(
-                        nameObject
-                );
+                String.valueOf(nameObject);
 
         String email =
                 emailObject == null
                         ? null
-                        : String.valueOf(
-                        emailObject
-                );
+                        : String.valueOf(emailObject);
 
         TokenResponse response =
                 auth.completeSocialSignup(
@@ -189,9 +177,8 @@ public class AuthController {
                         providerUserId,
                         name,
                         email,
-                        r
+                        request
                 );
-
 
         session.removeAttribute(
                 CustomOAuth2UserService.SOCIAL_PROVIDER
@@ -226,9 +213,7 @@ public class AuthController {
         request.getSession(true)
                 .setAttribute(
                         CustomOAuth2UserService.LINK_USER_ID,
-                        Long.valueOf(
-                                jwt.getSubject()
-                        )
+                        Long.valueOf(jwt.getSubject())
                 );
 
         return ResponseEntity.ok(
