@@ -9,6 +9,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
@@ -22,7 +24,7 @@ public class KakaoMapService {
 
     public KakaoMapService(
             TheaterRepository theaters,
-            @Value("${kakao.map.rest-api-key}") String restApiKey
+            @Value("${kakao.map.rest-api-key:}") String restApiKey
     ) {
         this.theaters = theaters;
         this.restApiKey = restApiKey;
@@ -36,6 +38,10 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
+        if (restApiKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "카카오 지도 연동이 설정되지 않았습니다.");
+        }
         if (radius < 0 || radius > 20000) {
             throw new IllegalArgumentException(
                     "검색 반경은 0~20000m까지 가능합니다."
