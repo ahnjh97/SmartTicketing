@@ -30,23 +30,66 @@ afterEach(() => {
     vi.unstubAllEnvs();
 });
 
-test("saved seat priorities restore immediately and remain editable with repeated positions", () => {
-    const { container } = render(<StrictMode><ResidencePreference key={user.id} user={user} onSaved={vi.fn()} /></StrictMode>);
-    expect([...container.querySelectorAll(".real-seat.selected")].map((seat) => seat.textContent.trim()))
-        .toEqual(["C1", "D5", "E6"]);
+test("saved seat priorities restore immediately and remain editable", () => {
+    const { container } = render(
+        <StrictMode>
+            <ResidencePreference
+                key={user.id}
+                user={user}
+                onSaved={vi.fn()}
+            />
+        </StrictMode>
+    );
+
+    expect(
+        [...container.querySelectorAll(".seat-preference-region.selected")]
+            .map((seat) => seat.querySelector("span").textContent + " " + seat.querySelector("strong").textContent)
+    ).toEqual([
+        "중간 가운데",
+        "사이드 앞",
+    ]);
+
+    expect(
+        container.querySelectorAll(".seat-preference-region.selected")
+    ).toHaveLength(2);
+
     expect(window.kakao.maps.Map).toHaveBeenCalledTimes(1);
     expect(screen.getByText("서울")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "D5", exact: true }));
-    expect(container.querySelectorAll(".real-seat.selected")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "D6", exact: true }));
-    expect(container.querySelectorAll(".real-seat.selected")).toHaveLength(3);
+
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: /중간 가운데/,
+        })
+    );
+
+    expect(
+        container.querySelectorAll(".seat-preference-region.selected")
+    ).toHaveLength(1);
+
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: /중간 뒤/,
+        })
+    );
+
+    fireEvent.click(
+        screen.getByRole("button", {
+            name: /사이드 가운데/,
+        })
+    );
+
+    expect(
+        container.querySelectorAll(".seat-preference-region.selected")
+    ).toHaveLength(3);
 });
 
 test("a different member starts with that member's address and preferences", () => {
     const { container, rerender } = render(<ResidencePreference key={user.id} user={user} onSaved={vi.fn()} />);
     const nextUser = { ...user, id: 2, address: "부산", preferredTheaters: [], preferredSeats: [] };
     rerender(<ResidencePreference key={nextUser.id} user={nextUser} onSaved={vi.fn()} />);
-    expect(container.querySelectorAll(".real-seat.selected")).toHaveLength(0);
+    expect(
+        container.querySelectorAll(".seat-preference-region.selected")
+    ).toHaveLength(0);
     expect(screen.queryByText("서울")).toBe(null);
     expect(screen.getByText("부산")).toBeTruthy();
 });
