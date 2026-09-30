@@ -45,9 +45,13 @@ public record OAuth2UserInfo(
                 Map<String, Object> p =
                         map(k.get("profile"));
 
+                /*
+                 * Kakao 이메일은 사용하지 않는다.
+                 * 우리 서비스 회원가입 화면에서 직접 입력한다.
+                 */
                 yield new OAuth2UserInfo(
                         str(a.get("id")),
-                        str(k.get("email")),
+                        null,
                         first(
                                 str(p.get("nickname")),
                                 str(p.get("profile_nickname"))
@@ -68,7 +72,10 @@ public record OAuth2UserInfo(
                 : String.valueOf(v);
     }
 
-    private static String first(String a, String b) {
+    private static String first(
+            String a,
+            String b
+    ) {
         return a != null && !a.isBlank()
                 ? a
                 : b;

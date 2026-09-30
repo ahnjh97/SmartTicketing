@@ -1,11 +1,13 @@
 package com.SmartTicketing.SmartTicketing.auth;
 
-import com.SmartTicketing.SmartTicketing.entity.Users;
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.oauth2.client.userinfo.*;
-import org.springframework.security.oauth2.core.user.*;
+import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
+import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -17,6 +19,18 @@ public class CustomOAuth2UserService
 
     public static final String LINK_USER_ID =
             "OAUTH2_LINK_USER_ID";
+
+    public static final String SOCIAL_PROVIDER =
+            "SOCIAL_SIGNUP_PROVIDER";
+
+    public static final String SOCIAL_PROVIDER_USER_ID =
+            "SOCIAL_SIGNUP_PROVIDER_USER_ID";
+
+    public static final String SOCIAL_NAME =
+            "SOCIAL_SIGNUP_NAME";
+
+    public static final String SOCIAL_EMAIL =
+            "SOCIAL_SIGNUP_EMAIL";
 
     private final DefaultOAuth2UserService delegate =
             new DefaultOAuth2UserService();
@@ -39,22 +53,24 @@ public class CustomOAuth2UserService
         OAuth2User source =
                 delegate.loadUser(req);
 
-        String reg =
+        String registrationId =
                 req.getClientRegistration()
                         .getRegistrationId();
 
-        SocialProvider p =
+        SocialProvider provider =
                 SocialProvider.valueOf(
-                        reg.toUpperCase()
+                        registrationId.toUpperCase()
                 );
 
         OAuth2UserInfo info =
                 OAuth2UserInfo.from(
-                        reg,
+                        registrationId,
                         source.getAttributes()
                 );
 
-        if (info.providerUserId() == null) {
+        if (info.providerUserId() == null
+                || info.providerUserId().isBlank()) {
+
             throw new IllegalStateException(
                     "소셜 계정 정보를 가져오지 못했습니다."
             );
@@ -62,16 +78,33 @@ public class CustomOAuth2UserService
 
         Long linkId = linkUserId();
 
-        Users user;
-
         if (linkId != null) {
-            user = authServiceLinkTarget(linkId);
-        } else {
-            user = authService.findOrCreateSocialUser(
-                    p,
-                    info.providerUserId(),
-                    info.email(),
-                    info.name()
+
+            var user =
+                    authService.getUserForLink(linkId);
+
+            Map<String, Object> attrs =
+                    new HashMap<>(
+                            source.getAttributes()
+                    );
+
+            attrs.put("userId", user.getId());
+            attrs.put("provider", provider.name());
+            attrs.put(
+                    "providerUserId",
+                    info.providerUserId()
+            );
+            attrs.put(
+                    "email",
+                    info.email()
+            );
+
+            return new DefaultOAuth2User(
+                    AuthorityUtils.createAuthorityList(
+                            "ROLE_USER"
+                    ),
+                    attrs,
+                    "userId"
             );
         }
 
@@ -80,47 +113,49 @@ public class CustomOAuth2UserService
                         source.getAttributes()
                 );
 
-        attrs.put("userId", user.getId());
-        attrs.put("provider", p.name());
+        attrs.put(
+                "provider",
+                provider.name()
+        );
+
         attrs.put(
                 "providerUserId",
                 info.providerUserId()
         );
 
-        /*
-         * Google / Naver
-         * → 이메일 자동 저장
-         *
-         * Kakao
-         * → 이메일이 없으면 null
-         */
-        attrs.put("email", info.email());
+        attrs.put(
+                "name",
+                info.name()
+        );
+
+        attrs.put(
+                "email",
+                info.email()
+        );
 
         return new DefaultOAuth2User(
                 AuthorityUtils.createAuthorityList(
                         "ROLE_USER"
                 ),
                 attrs,
-                "userId"
+                "providerUserId"
         );
     }
 
-    private Users authServiceLinkTarget(Long id) {
-        return authService.getUserForLink(id);
-    }
-
     private Long linkUserId() {
-        var s = request.getSession(false);
 
-        if (s == null) {
+        var session =
+                request.getSession(false);
+
+        if (session == null) {
             return null;
         }
 
-        Object v =
-                s.getAttribute(LINK_USER_ID);
+        Object value =
+                session.getAttribute(LINK_USER_ID);
 
-        return v instanceof Long
-                ? (Long) v
+        return value instanceof Long
+                ? (Long) value
                 : null;
     }
 }

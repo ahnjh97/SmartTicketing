@@ -2,11 +2,15 @@ package com.SmartTicketing.SmartTicketing.auth;
 
 import com.SmartTicketing.SmartTicketing.dto.auth.LoginRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.SignupRequest;
+import com.SmartTicketing.SmartTicketing.dto.auth.SocialSignupRequest;
 import com.SmartTicketing.SmartTicketing.dto.auth.TokenResponse;
 import com.SmartTicketing.SmartTicketing.dto.user.UserResponse;
-import com.SmartTicketing.SmartTicketing.entity.*;
-import com.SmartTicketing.SmartTicketing.entity.enums.*;
-import com.SmartTicketing.SmartTicketing.repository.*;
+import com.SmartTicketing.SmartTicketing.entity.UserSocialAccount;
+import com.SmartTicketing.SmartTicketing.entity.Users;
+import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
+import com.SmartTicketing.SmartTicketing.entity.enums.UserStatus;
+import com.SmartTicketing.SmartTicketing.repository.UserSocialAccountRepository;
+import com.SmartTicketing.SmartTicketing.repository.UsersRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +53,10 @@ public class AuthService {
     }
 
     public UserResponse signup(SignupRequest r) {
-        if (users.existsByLoginId(r.loginId())) {
+
+        String loginId = r.loginId().trim();
+
+        if (users.existsByLoginId(loginId)) {
             throw new IllegalArgumentException(
                     "이미 사용 중인 아이디입니다."
             );
@@ -59,21 +66,26 @@ public class AuthService {
 
         u.setName(r.name());
         u.setBirthDate(r.birthDate());
-        u.setLoginId(r.loginId());
+        u.setLoginId(loginId);
         u.setPassword(
                 encoder.encode(r.password())
         );
-        u.setNickname(r.loginId());
+        u.setNickname(loginId);
         u.setStatus(UserStatus.ACTIVE);
 
-        return toResponse(users.save(u));
+        return toResponse(
+                users.save(u)
+        );
     }
+
 
     @Transactional(readOnly = true)
     public TokenResponse login(LoginRequest r) {
 
+        String loginId = r.loginId().trim();
+
         Users u =
-                users.findByLoginId(r.loginId())
+                users.findByLoginId(loginId)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
                                         "아이디 또는 비밀번호가 올바르지 않습니다."
@@ -101,96 +113,141 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public boolean isLoginIdTaken(
-            String loginId
-    ) {
-        return users.existsByLoginId(loginId);
+    public boolean isLoginIdTaken(String loginId) {
+        return users.existsByLoginId(
+                loginId.trim()
+        );
     }
 
-    public Users findOrCreateSocialUser(
-            SocialProvider provider,
+
+    public TokenResponse completeSocialSignup(
+            String providerName,
             String providerUserId,
-            String email,
-            String name
+            String oauthName,
+            String oauthEmail,
+            SocialSignupRequest r
     ) {
-        UserSocialAccount a =
-                social.findByProviderAndProviderUserId(
-                        provider,
-                        providerUserId
-                ).orElse(null);
+        SocialProvider provider =
+                SocialProvider.valueOf(
+                        providerName.toUpperCase()
+                );
 
-        if (a != null) {
+        String loginId =
+                r.loginId().trim();
 
+
+        if (
+                provider == SocialProvider.GOOGLE
+                        || provider == SocialProvider.NAVER
+        ) {
             if (
-                    a.getUser().getStatus()
-                            != UserStatus.ACTIVE
+                    oauthEmail == null
+                            || oauthEmail.isBlank()
+                            || !oauthEmail.equalsIgnoreCase(loginId)
             ) {
-                throw new IllegalStateException(
-                        "탈퇴한 회원의 소셜 계정입니다."
+                throw new IllegalArgumentException(
+                        "소셜 로그인 이메일과 아이디가 일치하지 않습니다."
                 );
             }
-
-            return a.getUser();
         }
 
-        /*
-         * 이메일이 존재하는 Google/Naver
-         * → 기존 이메일과 중복 가입 방지
-         *
-         * Kakao처럼 이메일이 없는 경우
-         * → 이 검사를 하지 않는다.
-         */
-        if (
-                email != null
-                        && !email.isBlank()
-                        && users.findByEmail(email).isPresent()
-        ) {
-            throw new IllegalStateException(
-                    "이미 가입된 이메일입니다. 일반 로그인 후 소셜 계정을 연동해주세요."
+
+        if (!loginId.matches(
+                "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+        )) {
+            throw new IllegalArgumentException(
+                    "올바른 이메일 형식으로 입력해주세요."
             );
         }
 
-        Users u = new Users();
 
-        String userName =
-                name == null || name.isBlank()
-                        ? "소셜회원"
-                        : name;
-
-        u.setName(userName);
-
-        if (email != null && !email.isBlank()) {
-            u.setEmail(email);
-            u.setNickname(email);
-        } else {
-            /*
-             * Kakao
-             * → 이메일은 나중에 우리 서비스에서 입력
-             */
-            u.setNickname(userName);
+        if (users.existsByLoginId(loginId)) {
+            throw new IllegalArgumentException(
+                    "이미 사용 중인 아이디입니다."
+            );
         }
 
-        u.setStatus(UserStatus.ACTIVE);
+        if (
+                social.findByProviderAndProviderUserId(
+                        provider,
+                        providerUserId
+                ).isPresent()
+        ) {
+            throw new IllegalStateException(
+                    "이미 가입된 소셜 계정입니다."
+            );
+        }
 
-        u = users.save(u);
 
-        UserSocialAccount sa =
+        if (
+                oauthEmail != null
+                        && !oauthEmail.isBlank()
+                        && users.findByEmail(oauthEmail).isPresent()
+        ) {
+            throw new IllegalStateException(
+                    "이미 가입된 이메일입니다."
+            );
+        }
+
+        Users user = new Users();
+
+        user.setName(
+                oauthName == null || oauthName.isBlank()
+                        ? "소셜회원"
+                        : oauthName
+        );
+
+
+        user.setLoginId(loginId);
+
+
+        user.setEmail(
+                oauthEmail == null || oauthEmail.isBlank()
+                        ? null
+                        : oauthEmail
+        );
+
+
+        user.setPassword(
+                encoder.encode(r.password())
+        );
+
+
+        user.setBirthDate(
+                r.birthDate()
+        );
+
+
+        user.setNickname(loginId);
+
+        user.setStatus(
+                UserStatus.ACTIVE
+        );
+
+        user = users.save(user);
+
+
+        UserSocialAccount account =
                 new UserSocialAccount();
 
-        sa.setUser(u);
-        sa.setProvider(provider);
-        sa.setProviderUserId(providerUserId);
-        sa.setEmail(email);
+        account.setUser(user);
+        account.setProvider(provider);
+        account.setProviderUserId(providerUserId);
+        account.setEmail(oauthEmail);
 
-        social.save(sa);
+        social.save(account);
 
-        return u;
+
+        return new TokenResponse(
+                jwt.issueAccessToken(user.getId()),
+                "Bearer",
+                jwt.getExpirationSeconds()
+        );
     }
 
     @Transactional(readOnly = true)
-    public Users getUserForLink(
-            Long userId
-    ) {
+    public Users getUserForLink(Long userId) {
+
         Users u =
                 users.findById(userId)
                         .orElseThrow(() ->
@@ -199,9 +256,10 @@ public class AuthService {
                                 )
                         );
 
-        if (u.getStatus()
-                != UserStatus.ACTIVE) {
-
+        if (
+                u.getStatus()
+                        != UserStatus.ACTIVE
+        ) {
             throw new IllegalStateException(
                     "활성 상태의 회원만 연동할 수 있습니다."
             );
@@ -210,13 +268,13 @@ public class AuthService {
         return u;
     }
 
+
     public void linkSocialAccount(
             Long userId,
             SocialProvider provider,
             String providerUserId,
             String email
     ) {
-
         Users u =
                 users.findById(userId)
                         .orElseThrow(() ->
@@ -257,14 +315,14 @@ public class AuthService {
             );
         }
 
-        UserSocialAccount sa =
+        UserSocialAccount account =
                 new UserSocialAccount();
 
-        sa.setUser(u);
-        sa.setProvider(provider);
-        sa.setProviderUserId(providerUserId);
-        sa.setEmail(email);
+        account.setUser(u);
+        account.setProvider(provider);
+        account.setProviderUserId(providerUserId);
+        account.setEmail(email);
 
-        social.save(sa);
+        social.save(account);
     }
 }
