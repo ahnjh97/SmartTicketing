@@ -1,134 +1,105 @@
 package com.SmartTicketing.SmartTicketing.auth;
 
 import com.SmartTicketing.SmartTicketing.entity.enums.SocialProvider;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 @Component
 public class OAuth2SuccessHandler
-        implements AuthenticationSuccessHandler {
+        extends SimpleUrlAuthenticationSuccessHandler {
 
-    private final JwtService jwt;
-    private final AuthService auth;
+    private final AuthService authService;
     private final String frontend;
-    private final HttpServletRequest request;
 
     public OAuth2SuccessHandler(
-            JwtService j,
-            AuthService a,
+            AuthService authService,
             @Value("${app.frontend-url:http://localhost:5173}")
-            String f,
-            HttpServletRequest r
+            String frontend
     ) {
-        jwt = j;
-        auth = a;
-        frontend = f;
-        request = r;
+        this.authService = authService;
+        this.frontend = frontend;
     }
 
     @Override
     public void onAuthenticationSuccess(
-            HttpServletRequest req,
-            HttpServletResponse res,
+            HttpServletRequest request,
+            HttpServletResponse response,
             Authentication authentication
-    ) throws IOException {
+    ) throws IOException, ServletException {
 
-        OAuth2AuthenticationToken token =
+        OAuth2AuthenticationToken oauth =
                 (OAuth2AuthenticationToken) authentication;
-
-        OAuth2User p = token.getPrincipal();
 
         SocialProvider provider =
                 SocialProvider.valueOf(
-                        token
-                                .getAuthorizedClientRegistrationId()
+                        oauth.getAuthorizedClientRegistrationId()
                                 .toUpperCase()
                 );
 
-        Long linkId = linkUserId();
+        HttpSession session =
+                request.getSession(true);
 
-        String providerId =
-                String.valueOf(
-                        p.getAttributes()
-                                .get("providerUserId")
+        Object linkUserId =
+                session.getAttribute(
+                        CustomOAuth2UserService.LINK_USER_ID
                 );
 
-        String email =
-                (String) p.getAttributes()
-                        .get("email");
+        if (linkUserId != null) {
 
-        if (linkId != null) {
+            session.removeAttribute(
+                    CustomOAuth2UserService.LINK_USER_ID
+            );
 
-            auth.linkSocialAccount(
-                    linkId,
+            String providerUserId =
+                    String.valueOf(
+                            oauth.getPrincipal()
+                                    .getAttributes()
+                                    .get("providerUserId")
+                    );
+
+            Object emailObject =
+                    oauth.getPrincipal()
+                            .getAttributes()
+                            .get("email");
+
+            String email =
+                    emailObject == null
+                            ? null
+                            : String.valueOf(emailObject);
+
+            authService.linkSocialAccount(
+                    Long.valueOf(
+                            String.valueOf(linkUserId)
+                    ),
                     provider,
-                    providerId,
+                    providerUserId,
                     email
             );
 
-            var session = request.getSession(false);
-
-            if (session != null) {
-                session.removeAttribute(
-                        CustomOAuth2UserService.LINK_USER_ID
-                );
-            }
-
-            res.sendRedirect(
-                    frontend
-                            + "/oauth2/callback?linked="
-                            + provider.name()
+            getRedirectStrategy().sendRedirect(
+                    request,
+                    response,
+                    frontend + "/profile"
             );
 
             return;
         }
 
-        Object id =
-                p.getAttributes()
-                        .get("userId");
-
-        String access =
-                jwt.issueAccessToken(
-                        ((Number) id).longValue()
-                );
-
-        res.sendRedirect(
+        getRedirectStrategy().sendRedirect(
+                request,
+                response,
                 frontend
-                        + "/oauth2/callback#token="
-                        + URLEncoder.encode(
-                        access,
-                        StandardCharsets.UTF_8
-                )
+                        + "/signup/social?social="
+                        + provider.name()
         );
     }
-
-    private Long linkUserId() {
-
-        var s =
-                request.getSession(false);
-
-        if (s == null) {
-            return null;
-        }
-
-        Object v =
-                s.getAttribute(
-                        CustomOAuth2UserService.LINK_USER_ID
-                );
-
-        return v instanceof Long
-                ? (Long) v
-                : null;
-    }
 }
-

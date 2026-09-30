@@ -11,6 +11,7 @@ public record NearbyTheaterResponse(
         double latitude,
         double longitude,
         int distance,
-        String placeUrl
+        String placeUrl,
+        Integer transitMinutes
 ) {
 }
