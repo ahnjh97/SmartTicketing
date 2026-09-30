@@ -20,15 +20,6 @@ const SEAT_POSITION_LABELS = {
     MIDDLE_REAR: "중앙 · 6번",
 };
 
-const SEAT_ZONE_NUMBERS = {
-    SIDE_FRONT: "1",
-    SIDE_MIDDLE: "2",
-    SIDE_REAR: "3",
-    MIDDLE_FRONT: "4",
-    MIDDLE_MIDDLE: "5",
-    MIDDLE_REAR: "6",
-};
-
 function getSeatPosition(
     rowIndex,
     seatNumber
@@ -1511,10 +1502,6 @@ export default function ResidencePreference({
                                     aria-pressed={selected}
                                     aria-label={getSeatLabel(zone.position)}
                                 >
-                                    <span className="seat-zone-label">
-                                        {SEAT_ZONE_NUMBERS[zone.position]}
-                                    </span>
-
                                     {priority && (
                                         <strong>
                                             {priority}순위
