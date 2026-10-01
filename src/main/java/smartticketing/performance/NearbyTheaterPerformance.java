@@ -15,8 +15,12 @@ public class NearbyTheaterPerformance {
     private final ThreadLocal<Metrics> metrics =
             new ThreadLocal<>();
 
+    public void start(String address) {
+        metrics.set(new Metrics(address));
+    }
+
     public void start(double latitude, double longitude) {
-        metrics.set(new Metrics(latitude, longitude));
+        start("좌표 기반 조회 (lat=" + latitude + ", lon=" + longitude + ")");
     }
 
     public <T> T measureTheaterSearch(Supplier<T> action) {
@@ -55,7 +59,7 @@ public class NearbyTheaterPerformance {
             log.info(
                     """
                     [NEARBY_THEATER_PERFORMANCE]
-                    location=(lat={}, lon={})
+                    location={}
                     theaterCount={}
 
                     Kakao API
@@ -71,8 +75,7 @@ public class NearbyTheaterPerformance {
                     TOTAL
                       - totalResponseTime={}ms
                     """,
-                    current.latitude,
-                    current.longitude,
+                    current.address,
                     current.theaterCount,
                     current.theaterSearchCallCount,
                     current.publicTransitCallCount,
@@ -139,8 +142,7 @@ public class NearbyTheaterPerformance {
         private final long totalStartNanos =
                 System.nanoTime();
 
-        private final double latitude;
-        private final double longitude;
+        private final String address;
 
         private long apiResponseTimeNanos;
         private long dbSaveTimeNanos;
@@ -151,9 +153,8 @@ public class NearbyTheaterPerformance {
         private int walkCallCount;
         private int theaterCount;
 
-        private Metrics(double latitude, double longitude) {
-            this.latitude = latitude;
-            this.longitude = longitude;
+        private Metrics(String address) {
+            this.address = address;
         }
     }
 }
