@@ -81,7 +81,8 @@ public class MovieImportService {
 
         for (Long tmdbId : movieIds) {
             var existing = movieRepository.findByTmdbMovieId(tmdbId);
-            if (!refresh && existing.isPresent() && existing.get().getMetadataFetchedAt() != null) {
+            if (!refresh && existing.isPresent() && existing.get().getMetadataFetchedAt() != null
+                    && existing.get().getImageMetadataFetchedAt() != null) {
                 skippedCount++;
                 continue;
             }
@@ -174,6 +175,7 @@ public class MovieImportService {
         movie.setTrailerUrl(findTrailer(response));
         movie.setLogoUrl(findLogo(response));
         movie.setMetadataFetchedAt(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
+        movie.setImageMetadataFetchedAt(movie.getMetadataFetchedAt());
         movie.setActive(true);
         movie.setAudienceCount(audienceSeeds.getOrDefault(response.id(), 0L));
         return movie;

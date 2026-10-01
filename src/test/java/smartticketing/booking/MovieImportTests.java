@@ -58,6 +58,7 @@ class MovieImportTests {
         assertThat(movie.getRating()).isEqualTo("ALL");
         assertThat(movie.getAudienceCount()).isEqualTo(10000L);
         assertThat(movie.getMetadataFetchedAt()).isNotNull();
+        assertThat(movie.getImageMetadataFetchedAt()).isNotNull();
         assertThat(MovieMedia.from(movie).type()).isEqualTo("TRAILER");
     }
 
@@ -92,6 +93,7 @@ class MovieImportTests {
 
     @Test void configuredImportSkipsCheckedMoviesAndContinuesAfterFailure() {
         var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(checked));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/12?"))).andRespond(withServerError());
         var result = service.importConfiguredMovies();
@@ -112,6 +114,44 @@ class MovieImportTests {
         assertThat(result.failedIds()).isEmpty();
     }
 
+    @Test void legacyMoviesCollectImagesOnceEvenWhenNoImagesAreAvailable() {
+        var stored = new java.util.HashMap<Long, Movie>();
+        for (long id : new long[]{11L, 12L}) {
+            var legacy = new Movie(); legacy.setTmdbMovieId(id);
+            legacy.setMetadataFetchedAt(LocalDateTime.now()); stored.put(id, legacy);
+        }
+        when(movies.findByTmdbMovieId(anyLong())).thenAnswer(call -> Optional.ofNullable(stored.get(call.getArgument(0))));
+        when(writer.saveMissing(any())).thenAnswer(call -> {
+            Movie incoming = call.getArgument(0); stored.put(incoming.getTmdbMovieId(), incoming); return incoming;
+        });
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
+                .andRespond(withSuccess("{\"id\":11,\"title\":\"가로\",\"backdrop_path\":\"/wide.jpg\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/12?")))
+                .andRespond(withSuccess("{\"id\":12,\"title\":\"이미지 없음\"}", MediaType.APPLICATION_JSON));
+        assertThat(service.importConfiguredMovies().updatedCount()).isEqualTo(2);
+        assertThat(stored.get(11L).getBackdropUrl()).isEqualTo("https://backdrops.test/wide.jpg");
+        assertThat(stored.get(12L).getBackdropUrl()).isNull();
+        assertThat(stored.get(12L).getImageMetadataFetchedAt()).isNotNull();
+        assertThat(service.importConfiguredMovies().skippedCount()).isEqualTo(2);
+        verify(writer, times(2)).saveMissing(any());
+    }
+
+    @Test void failedLegacyImageCollectionRemainsEligibleForRetry() {
+        var legacy = new Movie(); legacy.setMetadataFetchedAt(LocalDateTime.now());
+        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        checked.setImageMetadataFetchedAt(LocalDateTime.now());
+        when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(legacy));
+        when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?"))).andRespond(withServerError());
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
+                .andRespond(withSuccess("{\"id\":11,\"title\":\"재시도\"}", MediaType.APPLICATION_JSON));
+        assertThat(service.importConfiguredMovies().failedIds()).containsExactly(11L);
+        assertThat(legacy.getImageMetadataFetchedAt()).isNull();
+        verifyNoInteractions(writer);
+        assertThat(service.importConfiguredMovies().updatedCount()).isEqualTo(1);
+        verify(writer).saveMissing(any());
+    }
+
     @Test void mismatchedResponseIsNotSaved() {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
                 .andRespond(withSuccess("{\"id\":12,\"title\":\"잘못된 응답\"}", MediaType.APPLICATION_JSON));
@@ -121,6 +161,7 @@ class MovieImportTests {
 
     @Test void explicitRefreshCanRecheckMoviesWithPreviouslyMissingVideos() {
         var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(checked));
         when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
