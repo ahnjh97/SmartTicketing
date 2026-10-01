@@ -13,9 +13,21 @@ public record TmdbMovieDetailResponse (
         Integer runtime,
         @JsonProperty("release_date") String releaseDate,
         @JsonProperty("poster_path") String posterPath,
+        @JsonProperty("backdrop_path") String backdropPath,
         @JsonProperty("release_dates") ReleaseDates releaseDates,
-        Videos videos
+        Videos videos,
+        Images images
 ) {
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Images(List<Logo> logos, List<Backdrop> backdrops) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Backdrop(@JsonProperty("file_path") String filePath, Integer width, Integer height) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Logo(@JsonProperty("file_path") String filePath,
+                       @JsonProperty("iso_639_1") String language) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Videos(List<Video> results) {}

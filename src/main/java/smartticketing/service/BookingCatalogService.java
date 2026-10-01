@@ -17,10 +17,16 @@ public class BookingCatalogService {
     public BookingCatalogService(EntityManager em) { this.em = em; }
 
     public Page<MovieItem> movies(int page, int size) {
+        return movies(page, size, false);
+    }
+
+    public Page<MovieItem> movies(int page, int size, boolean landscapeOnly) {
         int offset = offset(page, size);
-        var items = em.createQuery("from Movie m where m.active = true order by m.id", Movie.class)
+        String where = " where m.active = true" + (landscapeOnly
+                ? " and m.backdropUrl is not null and trim(m.backdropUrl) <> ''" : "");
+        var items = em.createQuery("from Movie m" + where + " order by m.id", Movie.class)
                 .setFirstResult(offset).setMaxResults(size).getResultList().stream().map(MovieItem::from).toList();
-        long total = em.createQuery("select count(m) from Movie m where m.active = true", Long.class).getSingleResult();
+        long total = em.createQuery("select count(m) from Movie m" + where, Long.class).getSingleResult();
         return new Page<>(items, page, size, total);
     }
 

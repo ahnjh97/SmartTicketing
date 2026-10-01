@@ -26,6 +26,8 @@ class MovieMetadataWriterTests {
         old.setRunningTime(125); old.setPosterUrl("기존 포스터"); old.setActive(false); em.persist(old);
         var fetched = new Movie(); fetched.setTmdbMovieId(11L); fetched.setTitle("외부 제목"); fetched.setRunningTime(120);
         fetched.setRating("12"); fetched.setTrailerUrl("https://www.youtube.com/watch?v=aaaaaaaaaaa");
+        fetched.setBackdropUrl("https://images.test/wide.jpg");
+        fetched.setLogoUrl("https://images.test/logo.png");
         fetched.setMetadataFetchedAt(LocalDateTime.now());
         var saved = writer.saveMissing(fetched); Long id = saved.getId(); em.clear();
         var result = em.find(Movie.class, id);
@@ -33,14 +35,22 @@ class MovieMetadataWriterTests {
         assertThat(result.getRunningTime()).isEqualTo(125); assertThat(result.isActive()).isFalse();
         assertThat(result.getPosterUrl()).isEqualTo("기존 포스터"); assertThat(result.getRating()).isEqualTo("12");
         assertThat(result.getTrailerUrl()).isEqualTo(fetched.getTrailerUrl()); assertThat(result.getMetadataFetchedAt()).isNotNull();
+        assertThat(result.getBackdropUrl()).isEqualTo(fetched.getBackdropUrl());
+        assertThat(result.getLogoUrl()).isEqualTo(fetched.getLogoUrl());
     }
 
     @Test void repeatedMetadataWriteDoesNotDuplicateMovieOrClearGoodFields() {
         var first = new Movie(); first.setTmdbMovieId(11L); first.setTitle("영화"); first.setRunningTime(120);
         first.setTrailerUrl("기존 영상"); first.setMetadataFetchedAt(LocalDateTime.now()); writer.saveMissing(first);
+        first.setBackdropUrl("기존 가로 이미지");
+        first.setLogoUrl("기존 로고");
         var second = new Movie(); second.setTmdbMovieId(11L); second.setTitle("다른 제목"); second.setMetadataFetchedAt(LocalDateTime.now());
+        second.setBackdropUrl("외부 가로 이미지");
+        second.setLogoUrl("외부 로고");
         var saved = writer.saveMissing(second);
         assertThat(saved.getTrailerUrl()).isEqualTo("기존 영상"); assertThat(saved.getRunningTime()).isEqualTo(120);
+        assertThat(saved.getBackdropUrl()).isEqualTo("기존 가로 이미지");
+        assertThat(saved.getLogoUrl()).isEqualTo("기존 로고");
         assertThat(em.createQuery("select count(m) from Movie m", Long.class).getSingleResult()).isEqualTo(1);
     }
 }

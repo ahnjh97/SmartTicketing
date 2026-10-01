@@ -14,17 +14,17 @@ public final class CatalogResponse {
 
     public record Page<T>(List<T> items, int page, int size, long totalElements) {}
 
-    public record MovieItem(Long id, String title, String posterUrl, Integer runningTime, String rating) {
+    public record MovieItem(Long id, String title, String posterUrl, Integer runningTime, String rating, String backdropUrl, String logoUrl) {
         public static MovieItem from(Movie m) {
-            return new MovieItem(m.getId(), m.getTitle(), m.getPosterUrl(), m.getRunningTime(), m.getRating());
+            return new MovieItem(m.getId(), m.getTitle(), m.getPosterUrl(), m.getRunningTime(), m.getRating(), m.getBackdropUrl(), m.getLogoUrl());
         }
     }
 
     public record MovieDetail(Long id, String title, String description, Integer runningTime,
-            String rating, LocalDate releaseDate, String posterUrl, String trailerUrl, MovieMedia media) {
+            String rating, LocalDate releaseDate, String posterUrl, String trailerUrl, MovieMedia media, String backdropUrl, String logoUrl) {
         public static MovieDetail from(Movie m) {
             return new MovieDetail(m.getId(), m.getTitle(), m.getDescription(), m.getRunningTime(),
-                    m.getRating(), m.getReleaseDate(), m.getPosterUrl(), m.getTrailerUrl(), MovieMedia.from(m));
+                    m.getRating(), m.getReleaseDate(), m.getPosterUrl(), m.getTrailerUrl(), MovieMedia.from(m), m.getBackdropUrl(), m.getLogoUrl());
         }
     }
 
