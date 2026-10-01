@@ -630,6 +630,14 @@ export default function ResidencePreference({
             );
             map.setLevel(7);
         }
+
+        const center = map.getCenter();
+
+        setLocation({
+            latitude: center.getLat(),
+            longitude: center.getLng(),
+        });
+        setLocationSource("MAP");
     }
 
     async function updateSelectedMapCenter() {
@@ -1384,10 +1392,13 @@ export default function ResidencePreference({
 
                 <button
                     type="button"
-                    className="secondary-button"
+                    className={
+                        isMapSelectionMode
+                            ? "primary-button map-search-button"
+                            : "secondary-button map-search-button"
+                    }
                     onClick={finishMapSelection}
                     disabled={
-                        !location ||
                         !isMapSelectionMode ||
                         locationLoading ||
                         theaterLoading
