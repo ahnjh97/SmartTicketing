@@ -16,8 +16,7 @@ public class TheaterController {
     public TheaterController(
             KakaoMapService kakaoMapService
     ) {
-        this.kakaoMapService =
-                kakaoMapService;
+        this.kakaoMapService = kakaoMapService;
     }
 
     @GetMapping("/nearby")
@@ -25,15 +24,15 @@ public class TheaterController {
             @RequestParam double latitude,
             @RequestParam double longitude,
             @RequestParam(required = false) String address,
-            @RequestParam(defaultValue = "10000")
-            int radius
+            @RequestParam(defaultValue = "DISTANCE") String sort
     ) {
         return ResponseEntity.ok(
                 kakaoMapService.findNearbyTheaters(
                         address,
                         latitude,
                         longitude,
-                        radius
+                        10_000,
+                        sort
                 )
         );
     }
