@@ -170,6 +170,9 @@ export default function ResidencePreference({
     const [locationSource, setLocationSource] =
         useState(null);
 
+    const [isMapSelectionMode, setIsMapSelectionMode] =
+        useState(false);
+
     const [theaters, setTheaters] =
         useState([]);
 
@@ -235,6 +238,14 @@ export default function ResidencePreference({
                     initializeMap(
                         mapRef,
                         mapInstanceRef
+                    );
+
+                    kakao.maps.event.addListener(
+                        mapInstanceRef.current,
+                        "dragend",
+                        () => {
+                            updateSelectedMapCenter();
+                        }
                     );
                 }
             );
@@ -459,11 +470,29 @@ export default function ResidencePreference({
             6
         );
 
-        moveLocationMarker(
-            latitude,
-            longitude,
-            "현재 위치"
-        );
+        clearMapSearchVisuals();
+        setIsMapSelectionMode(false);
+        showSelectionPin(false);
+
+        currentMarkerRef.current =
+            new kakao.maps.Marker({
+                map: mapInstanceRef.current,
+                position,
+                title: "현재 위치",
+            });
+
+        currentCircleRef.current =
+            new kakao.maps.Circle({
+                map: mapInstanceRef.current,
+                center: position,
+                radius: 10000,
+                strokeWeight: 2,
+                strokeColor: "#222222",
+                strokeOpacity: 0.7,
+                strokeStyle: "solid",
+                fillColor: "#555555",
+                fillOpacity: 0.08,
+            });
 
         const geocoder =
             new kakao.maps.services.Geocoder();
@@ -537,95 +566,138 @@ export default function ResidencePreference({
         );
     }
 
-    function moveLocationMarker(
-        latitude,
-        longitude,
-        title
-    ) {
-        const kakao =
-            window.kakao;
+    function showSelectionPin(show) {
+        if (!mapRef.current) {
+            return;
+        }
 
-        const position =
-            new kakao.maps.LatLng(
-                latitude,
-                longitude
+        mapRef.current.classList.toggle(
+            "map-selection-active",
+            show
+        );
+    }
+
+    function clearMapSearchVisuals() {
+        theaterMarkersRef.current.forEach((marker) =>
+            marker.setMap(null)
+        );
+        theaterMarkersRef.current = [];
+
+        theaterOverlaysRef.current.forEach((overlay) =>
+            overlay.setMap(null)
+        );
+        theaterOverlaysRef.current = [];
+
+        currentMarkerRef.current?.setMap(null);
+        currentMarkerRef.current = null;
+
+        currentCircleRef.current?.setMap(null);
+        currentCircleRef.current = null;
+    }
+
+    function startMapSelection() {
+        if (!kakaoReadyRef.current) {
+            setError("카카오맵이 아직 준비되지 않았습니다.");
+            return;
+        }
+
+        const map = mapInstanceRef.current;
+
+        if (!map) {
+            setError("카카오맵을 초기화하지 못했습니다.");
+            return;
+        }
+
+        setError("");
+        setMessage("");
+        setIsMapSelectionMode(true);
+        clearMapSearchVisuals();
+        showSelectionPin(true);
+
+        if (location) {
+            map.setCenter(
+                new window.kakao.maps.LatLng(
+                    location.latitude,
+                    location.longitude
+                )
             );
+        } else {
+            map.setCenter(
+                new window.kakao.maps.LatLng(
+                    37.5665,
+                    126.978
+                )
+            );
+            map.setLevel(7);
+        }
+    }
+
+    async function updateSelectedMapCenter() {
+        const map = mapInstanceRef.current;
+
+        if (!map || !isMapSelectionMode) {
+            return;
+        }
+
+        const center = map.getCenter();
+        const latitude = center.getLat();
+        const longitude = center.getLng();
 
         setLocation({
             latitude,
             longitude,
         });
+        setLocationSource("MAP");
 
-        setLocationSource(
-            title === "현재 위치"
-                ? "CURRENT"
-                : "MAP"
-        );
+        try {
+            const kakao = window.kakao;
+            const geocoder =
+                new kakao.maps.services.Geocoder();
 
-        if (!mapInstanceRef.current) {
-            initializeMap(
-                mapRef,
-                mapInstanceRef
+            const addressResult = await new Promise(
+                (resolve, reject) => {
+                    geocoder.coord2Address(
+                        longitude,
+                        latitude,
+                        (result, status) => {
+                            if (
+                                status !==
+                                kakao.maps.services.Status.OK
+                            ) {
+                                reject(
+                                    new Error(
+                                        "선택한 위치의 주소를 가져오지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            resolve(result);
+                        }
+                    );
+                }
             );
-        }
 
-        if (!mapInstanceRef.current) {
-            return;
-        }
+            const first = addressResult?.[0];
+            const resolvedAddress =
+                first?.road_address?.address_name ??
+                first?.address?.address_name;
 
-        if (currentMarkerRef.current) {
-            currentMarkerRef.current.setMap(
-                null
-            );
-        }
-
-        currentMarkerRef.current =
-            new kakao.maps.Marker({
-                map:
-                    mapInstanceRef.current,
-                position,
-                title,
-                draggable: true,
-            });
-
-        kakao.maps.event.addListener(
-            currentMarkerRef.current,
-            "dragend",
-            () => {
-                const markerPosition =
-                    currentMarkerRef.current.getPosition();
-
-                moveLocationMarker(
-                    markerPosition.getLat(),
-                    markerPosition.getLng(),
-                    "지도 선택 위치"
-                );
+            if (resolvedAddress) {
+                setAddress(resolvedAddress);
             }
-        );
-
-        if (currentCircleRef.current) {
-            currentCircleRef.current.setMap(
-                null
+        } catch (e) {
+            setError(
+                e.message ??
+                "선택한 위치의 주소를 확인하지 못했습니다."
             );
         }
+    }
 
-        currentCircleRef.current =
-            new kakao.maps.Circle({
-                map:
-                    mapInstanceRef.current,
-                center: position,
-                radius: 10000,
-                strokeWeight: 2,
-                strokeColor: "#222222",
-                strokeOpacity: 0.7,
-                strokeStyle: "solid",
-                fillColor: "#555555",
-                fillOpacity: 0.08,
-            });
-
-        mapInstanceRef.current.setCenter(
-            position
-        );
+    function finishMapSelection() {
+        setIsMapSelectionMode(false);
+        showSelectionPin(false);
+        searchSelectedLocation();
     }
 
     async function searchSelectedLocation() {
@@ -1244,57 +1316,78 @@ export default function ResidencePreference({
                     조회합니다.
                 </p>
 
-                <button
-                    type="button"
-                    className="primary-button"
-                    onClick={
-                        getCurrentLocation
-                    }
-                    disabled={
-                        locationLoading
-                    }
-                >
-                    {
-                        locationLoading
+                <div className="location-action-buttons">
+                    <button
+                        type="button"
+                        className="primary-button location-current-button"
+                        onClick={getCurrentLocation}
+                        disabled={locationLoading}
+                    >
+                        {locationLoading
                             ? "현재 위치 확인 중..."
-                            : "현재 위치로 조회"
-                    }
-                </button>
+                            : "⌖ 현재 사용자 위치에서 조회"}
+                    </button>
 
-                <div
-                    ref={mapRef}
-                    className="kakao-map"
-                />
+                    <button
+                        type="button"
+                        className={
+                            isMapSelectionMode
+                                ? "secondary-button location-map-button active"
+                                : "secondary-button location-map-button"
+                        }
+                        onClick={startMapSelection}
+                        disabled={locationLoading}
+                    >
+                        🗺️ {isMapSelectionMode
+                            ? "위치 선택 중"
+                            : "다른 위치 선택하기"}
+                    </button>
+                </div>
 
-                <p className="help">
-                    지도에서 원하는 위치를 클릭하거나
-                    마커를 드래그한 뒤 아래 버튼으로
-                    해당 위치의 주변 영화관을 조회할 수 있습니다.
+                <div className="map-selection-wrapper">
+                    <div
+                        ref={mapRef}
+                        className="kakao-map"
+                    />
+                    {isMapSelectionMode && (
+                        <div
+                            className="map-center-pin"
+                            aria-hidden="true"
+                        >
+                            <span>📍</span>
+                        </div>
+                    )}
+                </div>
+
+                <p className="help map-selection-help">
+                    {isMapSelectionMode
+                        ? "지도를 드래그하면 중앙 핀 위치가 이동합니다. 원하는 위치에 맞춘 뒤 아래 버튼을 눌러 영화관을 조회하세요."
+                        : "다른 위치를 찾으려면 '다른 위치 선택하기'를 누른 뒤 지도를 드래그하세요."}
                 </p>
 
                 <button
                     type="button"
                     className="secondary-button"
-                    onClick={
-                        searchSelectedLocation
-                    }
+                    onClick={finishMapSelection}
                     disabled={
                         !location ||
+                        !isMapSelectionMode ||
                         locationLoading ||
                         theaterLoading
                     }
                 >
-                    {
-                        locationLoading
-                            ? "위치 확인 중..."
-                            : "이 위치에서 영화관 조회"
-                    }
+                    {locationLoading
+                        ? "위치 확인 중..."
+                        : "이 위치에서 영화관 조회"}
                 </button>
 
                 {location && (
                     <div className="location-info">
-                        현재 위치를
-                        확인했습니다.
+                        <span>
+                            {locationSource === "MAP"
+                                ? "선택한 위치"
+                                : "현재 사용자 위치"}
+                        </span>
                     </div>
                 )}
 
