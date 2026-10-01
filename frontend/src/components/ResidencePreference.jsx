@@ -1149,9 +1149,6 @@ export default function ResidencePreference({
                             mapInstanceRef.current,
 
                             position,
-
-                            title:
-                            theater.name,
                         }
                     );
 
