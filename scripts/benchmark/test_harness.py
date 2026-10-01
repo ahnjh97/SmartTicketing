@@ -3,6 +3,7 @@ import http.client
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import threading
 import unittest
 from types import SimpleNamespace
@@ -11,7 +12,7 @@ from urllib.parse import urlencode
 
 from harness import (Client, FixtureServer, default_fixtures, percentile, summarize,
                      validate_fixtures, validate_response)
-from runner import BRANCHES, FIELDS, measure, report, seed_sql
+from runner import BRANCHES, FIELDS, java_executable, measure, report, seed_sql, stop_server
 
 
 class QualityTests(unittest.TestCase):
@@ -109,15 +110,37 @@ class QualityTests(unittest.TestCase):
                     writer = csv.DictWriter(raw, fieldnames=FIELDS)
                     writer.writeheader()
                     with self.assertRaisesRegex(RuntimeError, 'preflight failed'):
-                        measure(build, 1, self.scenario, args, {'BENCH_JWT_SECRET': 'test'},
+                        measure(build, 1, self.scenario, args, {'BENCH_JWT_SECRET': 'test', 'BENCH_JAVA': 'java'},
                                 out, writer, raw, None)
                 self.assertEqual([c.args[0] for c in db.call_args_list], ['CREATE', 'DROP'])
-                process.terminate.assert_called_once()
+                process.wait.assert_called_once()
+                self.assertTrue((out / 'round-1/api-original/0/stop').exists())
                 client.close.assert_called_once()
                 with (out / 'raw.csv').open() as raw:
                     rows = list(csv.DictReader(raw))
                 self.assertEqual(rows[0]['valid'], 'False')
                 self.assertEqual(rows[0]['phase'], 'preflight')
+
+    def test_java_launcher_resolves_to_real_jvm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'bin').mkdir()
+            for name in ('java', 'java.exe'):
+                (home / 'bin' / name).touch()
+            env = {'JAVA_HOME': '/launcher'}
+            with patch('runner.subprocess.run', return_value=SimpleNamespace(stderr=f'    java.home = {home}\n')):
+                executable = java_executable(env)
+            self.assertEqual(Path(executable).parent.parent, home)
+            self.assertEqual(env['JAVA_HOME'], str(home))
+
+    def test_shutdown_timeout_kills_actual_owned_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            process = Mock()
+            process.poll.return_value = None
+            process.wait.side_effect = [subprocess.TimeoutExpired('java', 30), 0]
+            stop_server(process, Path(tmp) / 'stop')
+            process.kill.assert_called_once()
+            self.assertEqual(process.wait.call_count, 2)
 
 
 class HttpTests(unittest.TestCase):

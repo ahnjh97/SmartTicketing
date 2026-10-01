@@ -38,6 +38,24 @@ def git(*args):
     return subprocess.check_output(['git', '-C', str(REPO), *args], text=True).strip()
 
 
+def java_executable(env):
+    """Resolve the actual JVM, not Oracle's javapath launcher which leaves a child behind."""
+    binary = 'java.exe' if os.name == 'nt' else 'java'
+    candidate = str(Path(env['JAVA_HOME']) / 'bin' / binary) if env.get('JAVA_HOME') else shutil.which(binary)
+    if not candidate:
+        raise RuntimeError('JDK 21 is required; set JAVA_HOME to the JDK installation')
+    probe = subprocess.run([candidate, '-XshowSettings:properties', '-version'], env=env,
+                           capture_output=True, text=True, check=True, timeout=30)
+    for line in probe.stderr.splitlines():
+        if line.strip().startswith('java.home ='):
+            home = Path(line.split('=', 1)[1].strip())
+            actual = home / 'bin' / binary
+            if actual.is_file():
+                env['JAVA_HOME'] = str(home)
+                return str(actual)
+    raise RuntimeError('Cannot resolve the actual JVM executable; check JAVA_HOME')
+
+
 def environment(env_file):
     env = os.environ.copy()
     # Explicit configuration replaces application.properties and prevents background import/OAuth.
@@ -98,15 +116,24 @@ import java.nio.file.Path;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration
 public class NearbyBenchmarkFixture {
-    @Bean ApplicationRunner benchmarkFixture(JdbcTemplate jdbc) {
+    @Bean ApplicationRunner benchmarkFixture(JdbcTemplate jdbc, ConfigurableApplicationContext context) {
         return args -> {
             for (String sql : Files.readAllLines(Path.of(System.getenv("BENCH_SEED_SQL")))) {
                 if (!sql.isBlank()) jdbc.execute(sql);
             }
             Files.writeString(Path.of(System.getenv("BENCH_READY_FILE")), "ready");
+            Thread.ofPlatform().daemon().name("benchmark-shutdown").start(() -> {
+                try {
+                    while (!Files.exists(Path.of(System.getenv("BENCH_STOP_FILE")))) Thread.sleep(100);
+                    context.close();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            });
         };
     }
 }
@@ -114,7 +141,7 @@ public class NearbyBenchmarkFixture {
         # Audit the only common source overlay; branch implementations remain otherwise unchanged.
         output_json(source / 'benchmark-overlay.json', {
             'sha': sha, 'upstream_url': 'environment injection in KakaoMapService only',
-            'fixture': 'ApplicationRunner inserts identical data and signals readiness',
+            'fixture': 'ApplicationRunner inserts identical data, signals readiness and closes context on stop file',
             'service_before_sha256': hashlib.sha256(before.encode()).hexdigest(),
             'service_after_sha256': hashlib.sha256(java.read_bytes()).hexdigest()})
         print(f'[build] {branch} @ {sha[:12]}', flush=True)
@@ -174,8 +201,19 @@ booking.seed.enabled=false
 
 
 def database(action, schema, env, out, folder):
-    command(['java', '-cp', str(out / 'mysql-driver.jar'), str(out / 'harness/Database.java'), action, schema],
+    command([env['BENCH_JAVA'], '-cp', str(out / 'mysql-driver.jar'), str(out / 'harness/Database.java'), action, schema],
             REPO, folder / f'db-{action.lower()}.log', env)
+
+
+def stop_server(process, stop_file):
+    if process is None or process.poll() is not None:
+        return
+    stop_file.touch()
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        process.kill()  # Popen owns the actual JVM, never a launcher/proxy.
+        process.wait(timeout=10)
 
 
 def free_port():
@@ -203,6 +241,7 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
     local['BENCH_PORT'] = str(free_port())
     local['BENCH_SEED_SQL'] = str(out / 'seed.sql')
     local['BENCH_READY_FILE'] = str(folder / 'ready')
+    local['BENCH_STOP_FILE'] = str(folder / 'stop')
     config = folder / 'application.properties'
     config.write_text(app_config(schema), encoding='utf-8')
     created, process, client = False, None, None
@@ -212,7 +251,7 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
         database('CREATE', schema, local, out, folder)
         created = True
         with (folder / 'server.log').open('wb') as log:
-            process = subprocess.Popen(['java', '-Xms512m', '-Xmx512m', '-jar', str(build['jar']),
+            process = subprocess.Popen([local['BENCH_JAVA'], '-Xms512m', '-Xmx512m', '-jar', str(build['jar']),
                                         '--spring.config.location=' + config.as_uri()],
                                        cwd=folder, env=local, stdout=log, stderr=subprocess.STDOUT,
                                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
@@ -246,13 +285,7 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
     finally:
         if client:
             client.close()
-        if process and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        stop_server(process, Path(local['BENCH_STOP_FILE']))
         if created:
             database('DROP', schema, local, out, folder)
 
@@ -320,6 +353,7 @@ def main():
     args.scenarios = json.loads(args.fixtures.read_text(encoding='utf-8-sig')) if args.fixtures else default_fixtures()
     validate_fixtures(args.scenarios)
     env = environment(args.env_file)
+    env['BENCH_JAVA'] = java_executable(env)
     if args.mode == 'live' and not env.get('KAKAO_MAP_REST_API_KEY'):
         p.error('Live mode requires KAKAO_MAP_REST_API_KEY')
     out = REPO / 'benchmark-results' / (datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6])
@@ -329,7 +363,8 @@ def main():
                     route_ms=args.route_ms if args.mode == 'stub' else None,
                     search_ms=args.search_ms if args.mode == 'stub' else None,
                     os=platform.platform(), cpu=platform.processor(), logical_cpus=os.cpu_count(),
-                    python=sys.version, java=subprocess.run(['java', '-version'], capture_output=True, text=True).stderr,
+                    python=sys.version, java_executable=env['BENCH_JAVA'],
+                    java=subprocess.run([env['BENCH_JAVA'], '-version'], capture_output=True, text=True).stderr,
                     jvm=['-Xms512m', '-Xmx512m'], concurrency=1, started_utc=datetime.now(timezone.utc).isoformat(),
                     status='preparing', harness_sha256={f.name: hashlib.sha256(f.read_bytes()).hexdigest()
                         for f in HERE.iterdir() if f.is_file()})
