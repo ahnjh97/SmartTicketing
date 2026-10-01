@@ -2,7 +2,6 @@ package smartticketing.service;
 
 import smartticketing.dto.theater.NearbyTheaterResponse;
 import smartticketing.entity.Theater;
-import smartticketing.entity.enums.TheaterBrand;
 import smartticketing.repository.TheaterRepository;
 import smartticketing.performace.NearbyTheaterPerformance;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +18,9 @@ import java.util.*;
 @Service
 @Transactional
 public class KakaoMapService {
+
+    private static final int SEARCH_RADIUS_METERS = 10_000;
+    private static final int WALK_RADIUS_METERS = 2_000;
 
     private final TheaterRepository theaters;
     private final RestClient restClient;
@@ -43,7 +45,7 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
-        return findNearbyTheaters(null, latitude, longitude, radius);
+        return findNearbyTheaters(null, latitude, longitude, radius, "DISTANCE");
     }
 
     public List<NearbyTheaterResponse> findNearbyTheaters(
@@ -52,6 +54,16 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
+        return findNearbyTheaters(address, latitude, longitude, radius, "DISTANCE");
+    }
+
+    public List<NearbyTheaterResponse> findNearbyTheaters(
+            String address,
+            double latitude,
+            double longitude,
+            int radius,
+            String sort
+    ) {
         performance.start(
                 address != null && !address.isBlank()
                         ? address
@@ -59,7 +71,7 @@ public class KakaoMapService {
         );
 
         try {
-            return findNearbyTheatersInternal(latitude, longitude, radius);
+            return findNearbyTheatersInternal(latitude, longitude, sort);
         } finally {
             performance.finish();
         }
@@ -68,7 +80,7 @@ public class KakaoMapService {
     private List<NearbyTheaterResponse> findNearbyTheatersInternal(
             double latitude,
             double longitude,
-            int radius
+            String sort
     ) {
         if (restApiKey.isBlank()) {
             throw new ResponseStatusException(
@@ -77,10 +89,9 @@ public class KakaoMapService {
             );
         }
 
-        if (radius < 0 || radius > 20000) {
-            throw new IllegalArgumentException("검색 반경은 0~20000m까지 가능합니다.");
-        }
+        String normalizedSort = normalizeSort(sort);
 
+        // DB에서 좌표가 있는 활성 영화관을 가져온 뒤 직선거리로 10km 이내를 필터링한다.
         List<Theater> theaterList = performance.measureDbQuery(
                 theaters::findByActiveTrueAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByNameAsc
         );
@@ -95,34 +106,44 @@ public class KakaoMapService {
                                 theater.getLongitude()
                         )
                 ))
-                .filter(item -> item.distanceMeters() <= radius)
-                .sorted(Comparator.comparingInt(TheaterDistance::distanceMeters))
-                .limit(15)
+                .filter(item -> item.distanceMeters() <= SEARCH_RADIUS_METERS)
                 .toList();
 
-        performance.setTheaterCount(candidates.size());
+        // 도보 정렬은 직선거리 2km 이내 영화관만 대상으로 한다.
+        List<TheaterDistance> selectedCandidates = "WALK".equals(normalizedSort)
+                ? candidates.stream()
+                        .filter(item -> item.distanceMeters() <= WALK_RADIUS_METERS)
+                        .toList()
+                : candidates;
 
-        return candidates.stream()
+        performance.setTheaterCount(selectedCandidates.size());
+
+        return selectedCandidates.stream()
                 .map(item -> {
                     Theater theater = item.theater();
 
-                    RouteInfo transit = performance.measurePublicTransit(
-                            () -> findPublicTransit(
-                                    latitude,
-                                    longitude,
-                                    toDouble(theater.getLatitude()),
-                                    toDouble(theater.getLongitude())
-                            )
-                    );
+                    RouteInfo transit = RouteInfo.empty();
+                    RouteInfo walk = RouteInfo.empty();
 
-                    RouteInfo walk = performance.measureWalk(
-                            () -> findWalk(
-                                    latitude,
-                                    longitude,
-                                    toDouble(theater.getLatitude()),
-                                    toDouble(theater.getLongitude())
-                            )
-                    );
+                    if ("TRANSIT".equals(normalizedSort)) {
+                        transit = performance.measurePublicTransit(
+                                () -> findPublicTransit(
+                                        latitude,
+                                        longitude,
+                                        toDouble(theater.getLatitude()),
+                                        toDouble(theater.getLongitude())
+                                )
+                        );
+                    } else if ("WALK".equals(normalizedSort)) {
+                        walk = performance.measureWalk(
+                                () -> findWalk(
+                                        latitude,
+                                        longitude,
+                                        toDouble(theater.getLatitude()),
+                                        toDouble(theater.getLongitude())
+                                )
+                        );
+                    }
 
                     return new NearbyTheaterResponse(
                             theater.getId(),
@@ -140,11 +161,35 @@ public class KakaoMapService {
                             walk.minutes()
                     );
                 })
-                .sorted(Comparator.comparing(
-                        NearbyTheaterResponse::transitMinutes,
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                ))
+                .sorted(comparatorFor(normalizedSort))
                 .toList();
+    }
+
+    private String normalizeSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return "DISTANCE";
+        }
+
+        return switch (sort.trim().toUpperCase(Locale.ROOT)) {
+            case "DISTANCE", "TRANSIT", "WALK" -> sort.trim().toUpperCase(Locale.ROOT);
+            default -> throw new IllegalArgumentException(
+                    "정렬 기준은 DISTANCE, TRANSIT, WALK 중 하나여야 합니다."
+            );
+        };
+    }
+
+    private Comparator<NearbyTheaterResponse> comparatorFor(String sort) {
+        return switch (sort) {
+            case "TRANSIT" -> Comparator.comparing(
+                    NearbyTheaterResponse::transitMinutes,
+                    Comparator.nullsLast(Comparator.naturalOrder())
+            );
+            case "WALK" -> Comparator.comparing(
+                    NearbyTheaterResponse::walkMinutes,
+                    Comparator.nullsLast(Comparator.naturalOrder())
+            );
+            default -> Comparator.comparingInt(NearbyTheaterResponse::distance);
+        };
     }
 
     private RouteInfo findPublicTransit(
