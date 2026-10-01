@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from harness import Client, FixtureServer, default_fixtures, summarize, validate_fixtures, validate_response
 from live import default_origins, live_scenarios, read_catalog, require_live_settings
 from upstream import Ledger, LiveGateway
-from harness import catalog_fixtures, original_candidates
+from harness import catalog_fixtures, original_candidates, selected_theaters
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -269,7 +269,8 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
                                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             wait_ready(process, Path(local['BENCH_READY_FILE']), args.startup_timeout)
             client = Client(int(local['BENCH_PORT']), local['BENCH_JWT_SECRET'], args.timeout)
-            for phase, count in [('preflight', 1), ('warmup', args.warmup), ('measure', args.runs)]:
+            preflight = 0 if args.mode == 'live' and build['branch'] == 'HEAD' else 1
+            for phase, count in [('preflight', preflight), ('warmup', args.warmup), ('measure', args.runs)]:
                 for i in range(1, count + 1):
                     if stub:
                         stub.begin_sample(f'{scenario["name"]}:{rnd}:{phase}:{i}')
@@ -279,10 +280,12 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
                         status, body, scenario, args.mode, build['branch'] == BRANCHES[0])
                     after = stub.snapshot() if stub else {}
                     calls = [after.get(p, 0) - before.get(p, 0) for p in PATHS] if stub else ['', '', '', '']
-                    if stub and args.mode == 'stub':
-                        n = len(scenario['theaters'])
+                    if stub and (args.mode == 'stub' or build['branch'] == 'HEAD'):
+                        n = len(selected_theaters(scenario))
                         original_n = len(original_candidates(scenario))
                         expected = [3, original_n, original_n, 0] if build['branch'] == BRANCHES[0] else [0, n, 0, 0]
+                        if scenario.get('sort') == 'DISTANCE': expected = [0, 0, 0, 0]
+                        if scenario.get('sort') == 'WALK': expected = [0, 0, n, 0]
                         if calls != expected:
                             valid, reason = False, reason or 'upstream_call_mismatch'
                     row = dict(zip(FIELDS, [build['branch'], build['sha'], scenario['name'], rnd, phase, i,
@@ -294,7 +297,7 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
                     raw.flush()
                     if stub and stub.halted:
                         raise RuntimeError('Upstream gateway halted: ' + stub.halted)
-                    if phase != 'measure' and not valid:
+                    if (phase != 'measure' or args.mode == 'live') and not valid:
                         raise RuntimeError(f'{phase} failed: {row["reason"]}; raw.csv contains the failure')
                     if phase == 'measure' and (i == 1 or i % 25 == 0 or i == count):
                         print(f'  round={rnd} {build["branch"]} {scenario["name"]} {i}/{count}: {ms:.1f}ms valid={valid}', flush=True)
@@ -342,7 +345,10 @@ def report(out, complete):
         part = [r for r in rows if r['branch'] == branch]
         counts = {k: sum(int(r.get(k) or 0) for r in part) for k in ('search_calls', 'transit_calls', 'walk_calls', 'upstream_errors')}
         lines.append(f'- {branch}: {counts} (includes preflight and warmup)')
-    if eligible:
+    if eligible and meta.get('comparison') == 'current':
+        lines += ['', 'Current committed HEAD: DISTANCE uses DB only, TRANSIT routes every 10km candidate, WALK routes every 2km candidate.',
+                  'Each action is measured independently against the actual controller/service. This is not a browser end-to-end test or a historical speedup claim.']
+    elif eligible:
         lines += ['', '## Within-scenario improvements', '', 'Original -> sequential includes changed work (no walk/search/upsert).',
                   'Sequential -> parallel compares transit concurrency with common instrumentation. No cross-scenario percentile pooling.', '']
         aggregate = {(s['branch'], s['scenario']): s for s in summaries if s['round'] == 'all'}
@@ -369,10 +375,15 @@ def report(out, complete):
 
 
 def planned_calls(scenarios, branches, runs, warmup, rounds, live=True):
-    multiplier = (1 + warmup + runs) * rounds
     counts = dict(search=0, transit=0, walk=0)
     for scenario in scenarios:
         for branch in branches:
+            multiplier = ((0 if live and branch == 'HEAD' else 1) + warmup + runs) * rounds
+            if scenario.get('sort') == 'DISTANCE':
+                continue
+            if scenario.get('sort') == 'WALK':
+                counts['walk'] += len(selected_theaters(scenario)) * multiplier
+                continue
             if branch == BRANCHES[0]:
                 n = 45 if live else len(original_candidates(scenario))
                 counts['search'] += 3 * multiplier
@@ -407,7 +418,8 @@ def main():
         raise SystemExit('Python 3.12+ is required.')
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--mode', choices=['plan', 'stub', 'live'], default='plan')
-    p.add_argument('--comparison', choices=['parallel', 'all'], default='parallel')
+    p.add_argument('--comparison', choices=['current', 'parallel', 'all'], default='current')
+    p.add_argument('--sort', choices=['flow', 'DISTANCE', 'TRANSIT', 'WALK'])
     p.add_argument('--runs', type=int)
     p.add_argument('--warmup', type=int)
     p.add_argument('--rounds', type=int)
@@ -437,11 +449,14 @@ def main():
     env = environment(args.env_file if args.env_file.exists() else None)
     if args.mode == 'live' and not args.prepare_only and not env.get('KAKAO_MAP_REST_API_KEY'):
         p.error('Live mode requires KAKAO_MAP_REST_API_KEY; no fallback is used.')
-    branches = BRANCHES if args.comparison == 'all' else BRANCHES[1:]
+    if args.comparison != 'current' and args.sort not in (None, 'TRANSIT'):
+        p.error('Historical comparisons support TRANSIT only; use --comparison current for the current UI flow')
+    args.sort = args.sort or ('flow' if args.comparison == 'current' else 'TRANSIT')
+    branches = ['HEAD'] if args.comparison == 'current' else (BRANCHES if args.comparison == 'all' else BRANCHES[1:])
     out = REPO / 'benchmark-results' / (datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6])
     out.mkdir(parents=True)
     print(f'Results: {out}', flush=True)
-    metadata = dict(mode=args.mode, comparison=args.comparison, runs=args.runs, warmup=args.warmup, rounds=args.rounds,
+    metadata = dict(mode=args.mode, comparison=args.comparison, sort=args.sort, runs=args.runs, warmup=args.warmup, rounds=args.rounds,
                     route_ms=args.route_ms if args.mode == 'stub' else None, search_ms=args.search_ms if args.mode == 'stub' else None,
                     delay_profile=args.delay_profile if args.mode == 'stub' else None, seed=args.seed,
                     os=platform.platform(), cpu=platform.processor(), logical_cpus=os.cpu_count(), python=sys.version,
@@ -464,17 +479,20 @@ def main():
             metadata['catalog_source'] = 'explicit synthetic fixtures'
         else:
             catalog = snapshot_catalog(args, env, out)
-            origins = json.loads(args.origins.read_text(encoding='utf-8-sig')) if args.origins else default_origins()
+            origins = json.loads(args.origins.read_text(encoding='utf-8-sig')) if args.origins else default_origins()[:1 if args.comparison == 'current' else 3]
             args.scenarios = live_scenarios(origins, catalog)
             if args.mode == 'stub': catalog_fixtures(args.scenarios)
             metadata['catalog_source'] = 'Seoul database snapshot'
             metadata['catalog_sha256'] = hashlib.sha256((out / 'seoul-theaters.csv').read_bytes()).hexdigest()
+        if args.comparison == 'current':
+            sorts = ['DISTANCE', 'TRANSIT', 'WALK'] if args.sort == 'flow' else [args.sort]
+            args.scenarios = [dict(s, name=s['name'] + ':' + sort, sort=sort) for s in args.scenarios for sort in sorts]
         metadata['catalog_count'] = len(catalog)
         metadata['route_source'] = 'synthetic controlled response' if args.mode == 'stub' else 'live Kakao'
         estimates = planned_calls(args.scenarios, branches, args.runs, args.warmup, args.rounds, args.mode != 'stub')
-        plan = dict(mode=args.mode, branches=branches, origins={s['name']: len(s['theaters']) for s in args.scenarios},
+        plan = dict(mode=args.mode, branches=branches, origins={s['name']: len(selected_theaters(s)) for s in args.scenarios},
                     runs=args.runs, warmup=args.warmup, rounds=args.rounds, planned_upstream_calls=estimates,
-                    budgets=limits, note='Includes preflight/warmup; original live assumes up to 45 candidates before output limit. Benchmark ledger does not include other clients.')
+                    budgets=limits, note='Current live executes each selected UI action once by default (no duplicate preflight). Stub/historical runs include preflight. Original live assumes up to 45 candidates. Ledger excludes other clients.')
         if args.mode in ('live', 'plan') and env.get('KAKAO_MAP_REST_API_KEY'):
             ledger = Ledger(REPO / 'benchmark-results/quota.sqlite3', env['KAKAO_MAP_REST_API_KEY'], limits)
             plan['remaining_today'] = ledger.remaining()

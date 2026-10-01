@@ -4,7 +4,8 @@ param(
     [ValidateRange(0, 10000)][int]$WarmupRuns,
     [ValidateRange(1, 100)][int]$Rounds,
     [ValidateSet('plan', 'stub', 'live')][string]$Mode = 'plan',
-    [ValidateSet('parallel', 'all')][string]$Comparison = 'parallel',
+    [ValidateSet('current', 'parallel', 'all')][string]$Comparison = 'current',
+    [ValidateSet('flow', 'DISTANCE', 'TRANSIT', 'WALK')][string]$Sort,
     [string]$Python = '',
     [string]$EnvFile = '',
     [string]$Catalog = '',
@@ -39,6 +40,7 @@ if ($PSBoundParameters.ContainsKey('Runs')) { $arguments += @('--runs', $Runs) }
 if ($PSBoundParameters.ContainsKey('WarmupRuns')) { $arguments += @('--warmup', $WarmupRuns) }
 if ($PSBoundParameters.ContainsKey('Rounds')) { $arguments += @('--rounds', $Rounds) }
 if ($EnvFile) { $arguments += @('--env-file', $EnvFile) }
+if ($Sort) { $arguments += @('--sort', $Sort) }
 if ($Catalog) { $arguments += @('--catalog', $Catalog) }
 if ($Fixtures) { $arguments += @('--fixtures', $Fixtures) }
 if ($Origins) { $arguments += @('--origins', $Origins) }

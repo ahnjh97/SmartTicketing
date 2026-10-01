@@ -180,7 +180,7 @@ class Client:
 
     def request(self, scenario):
         query = urlencode(dict(latitude=scenario['latitude'], longitude=scenario['longitude'],
-                               address=scenario['name'], radius=10000, sort='TRANSIT'))
+                               address=scenario['name'], sort=scenario.get('sort', 'TRANSIT')))
         status, body, error = 0, b'', ''
         headers = {'Authorization': 'Bearer ' + token(self.secret)}
         start = time.perf_counter_ns()
@@ -199,7 +199,51 @@ class Client:
         self.connection.close()
 
 
+def selected_theaters(scenario):
+    return [t for t in scenario['theaters'] if distance(scenario, t) <= 2000] if scenario.get('sort') == 'WALK' else scenario['theaters']
+
+
+def validate_current_response(status, body, scenario, mode):
+    if status != 200:
+        return False, f'http_{status}', 0, ''
+    try:
+        rows = json.loads(body)
+        if not isinstance(rows, list):
+            return False, 'non_array', 0, ''
+        expected = {str(t['id']): t for t in selected_theaters(scenario)}
+        ids = [str(r['kakaoPlaceId']) for r in rows]
+        if len(ids) != len(set(ids)) or set(ids) != set(expected):
+            return False, 'candidate_mismatch', len(rows), ''
+        sort = scenario['sort']
+        order = []
+        for row in rows:
+            theater = expected[str(row['kakaoPlaceId'])]
+            if row['distance'] != distance(scenario, theater):
+                return False, 'distance_mismatch', len(rows), ''
+            for kind in ('transit', 'walk'):
+                minutes, meters = row.get(kind + 'Minutes'), row.get(kind + 'Distance')
+                if sort == kind.upper():
+                    if (not isinstance(minutes, (int, float)) or isinstance(minutes, bool)
+                            or not math.isfinite(minutes) or minutes <= 0
+                            or not isinstance(meters, (int, float)) or isinstance(meters, bool)
+                            or not math.isfinite(meters) or meters < 0):
+                        return False, 'missing_or_invalid_' + kind, len(rows), ''
+                    if mode == 'stub' and (minutes != theater['transitMinutes'] or meters != theater['transitDistance']):
+                        return False, 'route_mismatch', len(rows), ''
+                elif minutes is not None or meters is not None:
+                    return False, 'unexpected_' + kind, len(rows), ''
+            order.append(row['distance'] if sort == 'DISTANCE' else row[sort.lower() + 'Minutes'])
+        if order != sorted(order):
+            return False, 'incorrect_sort', len(rows), ''
+        canonical = sorted((str(r['kakaoPlaceId']), r['distance'], r.get('transitMinutes'), r.get('walkMinutes')) for r in rows)
+        return True, '', len(rows), hashlib.sha256(json.dumps(canonical).encode()).hexdigest()
+    except (ValueError, TypeError, KeyError):
+        return False, 'invalid_payload', 0, ''
+
+
 def validate_response(status, body, scenario, mode, original=False):
+    if 'sort' in scenario:
+        return validate_current_response(status, body, scenario, mode)
     if status != 200:
         return False, f'http_{status}', 0, ''
     try:
