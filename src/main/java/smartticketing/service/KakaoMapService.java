@@ -43,10 +43,32 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
-        performance.start(latitude, longitude);
+        return findNearbyTheaters(
+                null,
+                latitude,
+                longitude,
+                radius
+        );
+    }
+
+    public List<NearbyTheaterResponse> findNearbyTheaters(
+            String address,
+            double latitude,
+            double longitude,
+            int radius
+    ) {
+        performance.start(
+                address != null && !address.isBlank()
+                        ? address
+                        : "좌표 기반 조회 (lat=" + latitude + ", lon=" + longitude + ")"
+        );
 
         try {
-            return findNearbyTheatersInternal(latitude, longitude, radius);
+            return findNearbyTheatersInternal(
+                    latitude,
+                    longitude,
+                    radius
+            );
         } finally {
             performance.finish();
         }
