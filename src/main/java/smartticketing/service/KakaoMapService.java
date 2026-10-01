@@ -12,8 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PreDestroy;
+
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @Transactional
@@ -26,6 +31,7 @@ public class KakaoMapService {
     private final RestClient restClient;
     private final String restApiKey;
     private final NearbyTheaterPerformance performance;
+    private final ExecutorService transitExecutor = Executors.newFixedThreadPool(8);
 
     public KakaoMapService(
             TheaterRepository theaters,
@@ -38,6 +44,11 @@ public class KakaoMapService {
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
                 .build();
+    }
+
+    @PreDestroy
+    public void shutdownTransitExecutor() {
+        transitExecutor.shutdown();
     }
 
     public List<NearbyTheaterResponse> findNearbyTheaters(
@@ -118,23 +129,20 @@ public class KakaoMapService {
 
         performance.setTheaterCount(selectedCandidates.size());
 
+        if ("TRANSIT".equals(normalizedSort)) {
+            return findNearbyWithParallelTransit(
+                    selectedCandidates,
+                    latitude,
+                    longitude
+            );
+        }
+
         return selectedCandidates.stream()
                 .map(item -> {
                     Theater theater = item.theater();
-
-                    RouteInfo transit = RouteInfo.empty();
                     RouteInfo walk = RouteInfo.empty();
 
-                    if ("TRANSIT".equals(normalizedSort)) {
-                        transit = performance.measurePublicTransit(
-                                () -> findPublicTransit(
-                                        latitude,
-                                        longitude,
-                                        toDouble(theater.getLatitude()),
-                                        toDouble(theater.getLongitude())
-                                )
-                        );
-                    } else if ("WALK".equals(normalizedSort)) {
+                    if ("WALK".equals(normalizedSort)) {
                         walk = performance.measureWalk(
                                 () -> findWalk(
                                         latitude,
@@ -145,24 +153,86 @@ public class KakaoMapService {
                         );
                     }
 
-                    return new NearbyTheaterResponse(
-                            theater.getId(),
-                            theater.getName(),
-                            theater.getBrand(),
-                            theater.getAddress(),
-                            theater.getKakaoPlaceId(),
-                            toDouble(theater.getLatitude()),
-                            toDouble(theater.getLongitude()),
-                            item.distanceMeters(),
-                            null,
-                            transit.distance(),
-                            transit.minutes(),
-                            walk.distance(),
-                            walk.minutes()
-                    );
+                    return toResponse(item, RouteInfo.empty(), walk);
                 })
                 .sorted(comparatorFor(normalizedSort))
                 .toList();
+    }
+
+    private List<NearbyTheaterResponse> findNearbyWithParallelTransit(
+            List<TheaterDistance> candidates,
+            double latitude,
+            double longitude
+    ) {
+        List<java.util.concurrent.CompletableFuture<TransitResult>> futures =
+                candidates.stream()
+                        .map(item -> java.util.concurrent.CompletableFuture.supplyAsync(
+                                () -> {
+                                    long start = System.nanoTime();
+                                    Theater theater = item.theater();
+
+                                    RouteInfo route = findPublicTransit(
+                                            latitude,
+                                            longitude,
+                                            toDouble(theater.getLatitude()),
+                                            toDouble(theater.getLongitude())
+                                    );
+
+                                    return new TransitResult(
+                                            item,
+                                            route,
+                                            System.nanoTime() - start
+                                    );
+                                },
+                                transitExecutor
+                        ))
+                        .toList();
+
+        List<TransitResult> results = futures.stream()
+                .map(java.util.concurrent.CompletableFuture::join)
+                .toList();
+
+        long totalApiTimeNanos = results.stream()
+                .mapToLong(TransitResult::elapsedNanos)
+                .sum();
+
+        performance.recordPublicTransitBatch(
+                results.size(),
+                totalApiTimeNanos
+        );
+
+        return results.stream()
+                .map(result -> toResponse(
+                        result.item(),
+                        result.route(),
+                        RouteInfo.empty()
+                ))
+                .sorted(comparatorFor("TRANSIT"))
+                .toList();
+    }
+
+    private NearbyTheaterResponse toResponse(
+            TheaterDistance item,
+            RouteInfo transit,
+            RouteInfo walk
+    ) {
+        Theater theater = item.theater();
+
+        return new NearbyTheaterResponse(
+                theater.getId(),
+                theater.getName(),
+                theater.getBrand(),
+                theater.getAddress(),
+                theater.getKakaoPlaceId(),
+                toDouble(theater.getLatitude()),
+                toDouble(theater.getLongitude()),
+                item.distanceMeters(),
+                null,
+                transit.distance(),
+                transit.minutes(),
+                walk.distance(),
+                walk.minutes()
+        );
     }
 
     private String normalizeSort(String sort) {
@@ -355,6 +425,12 @@ public class KakaoMapService {
     private record TheaterDistance(
             Theater theater,
             int distanceMeters
+    ) {}
+
+    private record TransitResult(
+            TheaterDistance item,
+            RouteInfo route,
+            long elapsedNanos
     ) {}
 
     private record RouteInfo(
