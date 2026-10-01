@@ -29,6 +29,7 @@ public class MovieImportService {
     private final MovieRepository movieRepository;
     private final MovieMetadataWriter metadataWriter;
     private final String imageBaseUrl;
+    private final String backdropBaseUrl;
     private final List<Long> movieIds;
     private final Map<Long, String> ratingOverrides;
     private final Map<Long, Long> audienceSeeds;
@@ -38,6 +39,7 @@ public class MovieImportService {
             MovieRepository movieRepository,
             MovieMetadataWriter metadataWriter,
             @Value("${tmdb.image-base-url}") String imageBaseUrl,
+            @Value("${tmdb.backdrop-base-url:https://image.tmdb.org/t/p/w1280}") String backdropBaseUrl,
             @Value("${tmdb.movie-ids}") String movieIds,
             @Value("${tmdb.rating-overrides:}") String ratingOverrides,
             @Value("${tmdb.audience-seeds:}") String audienceSeeds) {
@@ -46,6 +48,7 @@ public class MovieImportService {
         this.movieRepository = movieRepository;
         this.metadataWriter = metadataWriter;
         this.imageBaseUrl = imageBaseUrl;
+        this.backdropBaseUrl = backdropBaseUrl;
 
         this.movieIds = Arrays.stream(movieIds.split(","))
                 .map(String::trim)
@@ -149,7 +152,8 @@ public class MovieImportService {
                 .uri(uriBuilder -> uriBuilder
                         .path("/movie/{id}")
                         .queryParam("language", "ko-KR")
-                        .queryParam("append_to_response", "release_dates,videos")
+                        .queryParam("append_to_response", "release_dates,videos,images")
+                        .queryParam("include_image_language", "ko,en,null")
                         .build(tmdbId))
                 .retrieve()
                 .body(TmdbMovieDetailResponse.class);
@@ -166,11 +170,39 @@ public class MovieImportService {
         movie.setRating(rating != null ? rating : ratingOverrides.get(response.id()));
         movie.setReleaseDate(parseDate(response.releaseDate()));
         movie.setPosterUrl(response.posterPath() == null ? null : imageBaseUrl + response.posterPath());
+        movie.setBackdropUrl(findBackdrop(response));
         movie.setTrailerUrl(findTrailer(response));
+        movie.setLogoUrl(findLogo(response));
         movie.setMetadataFetchedAt(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         movie.setActive(true);
         movie.setAudienceCount(audienceSeeds.getOrDefault(response.id(), 0L));
         return movie;
+    }
+
+    private String findBackdrop(TmdbMovieDetailResponse response) {
+        if (response.images() != null && response.images().backdrops() != null) {
+            return response.images().backdrops().stream().filter(Objects::nonNull)
+                    .filter(image -> image.filePath() != null && image.filePath().startsWith("/")
+                            && image.width() != null && image.height() != null
+                            && image.height() > 0 && image.width() > image.height())
+                    .sorted(Comparator.comparingLong((TmdbMovieDetailResponse.Backdrop image) ->
+                            (long) image.width() * image.height()).reversed()
+                            .thenComparing(TmdbMovieDetailResponse.Backdrop::filePath))
+                    .map(image -> backdropBaseUrl + image.filePath()).findFirst().orElse(null);
+        }
+        // TMDB's dedicated backdrop field only; never substitute poster_path.
+        return response.backdropPath() != null && response.backdropPath().startsWith("/")
+                ? backdropBaseUrl + response.backdropPath() : null;
+    }
+
+    private String findLogo(TmdbMovieDetailResponse response) {
+        if (response.images() == null || response.images().logos() == null) return null;
+        return response.images().logos().stream().filter(Objects::nonNull)
+                .filter(logo -> logo.filePath() != null && logo.filePath().startsWith("/") && !logo.filePath().isBlank())
+                .sorted(Comparator.comparingInt((TmdbMovieDetailResponse.Logo logo) ->
+                        "ko".equals(logo.language()) ? 0 : "en".equals(logo.language()) ? 1 : 2)
+                        .thenComparing(TmdbMovieDetailResponse.Logo::filePath))
+                .map(logo -> imageBaseUrl + logo.filePath()).findFirst().orElse(null);
     }
 
     private String findTrailer(TmdbMovieDetailResponse response) {

@@ -1,0 +1,44 @@
+.hero { position: relative; isolation: isolate; margin-top: calc(-1 * var(--common-header-height)); min-height: 640px; display: flex; align-items: center; background: var(--booking-surface); color: var(--booking-ink); }
+.artwork { position: absolute; inset: 0; z-index: -3; display: block; overflow: hidden; }
+.artwork img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center 30%; }
+.home .artwork img { object-position: center; }
+.detail .artwork { left: 32%; mask-image: linear-gradient(90deg, transparent, #000 22%); }
+.detail .artwork img { object-position: center; }
+.detail .shade { background: linear-gradient(90deg, var(--booking-surface) 26%, rgb(12 13 15 / 70%) 42%, transparent 70%), linear-gradient(0deg, var(--booking-surface), transparent 30%), linear-gradient(180deg, rgb(0 0 0 / 30%), transparent 25%); }
+.posterFallback .artwork { left: 48%; }
+.posterFallback .artwork img { object-fit: contain; object-position: center; }
+.shade { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(90deg, rgb(12 13 15 / 94%) 0%, rgb(12 13 15 / 65%) 30%, rgb(12 13 15 / 6%) 75%), linear-gradient(0deg, var(--booking-surface) 0%, transparent 32%), linear-gradient(180deg, rgb(0 0 0 / 35%), transparent 24%); }
+.inner { width: 100%; max-width: 1440px; margin: auto; padding: calc(var(--common-header-height) + 40px) 64px 88px; display: grid; grid-template-columns: minmax(0, 460px) 1fr; gap: 64px; pointer-events: none; }
+.copy { pointer-events: auto; }
+.back { display: block; width: fit-content; margin-bottom: 28px; color: #d4d4d6; font-size: 12px; text-decoration: none; }
+.copy .logoTitle { margin-bottom: 28px; }
+.titleLink { display: block; width: fit-content; max-width: 100%; text-decoration: none; color: inherit; }
+.hero.home .primary { gap: 12px; margin-top: 0; }
+.logo { display: block; width: min(100%, 400px); height: 180px; object-fit: contain; object-position: left center; }
+.copy h1 { font-size: clamp(36px, 4.6vw, 64px); line-height: 1.08; letter-spacing: -.035em; color: white; margin: 0 0 24px; overflow-wrap: anywhere; }
+.meta { font-size: 14px; font-weight: 600; color: #e0e0e2; }
+.synopsis { white-space: pre-line; font-size: 14px; line-height: 1.8; color: #ddd; margin-top: 24px; }
+.notice { color: #b0b2b8; font-size: 12px; line-height: 1.6; }
+.hero .primary { display: inline-flex; align-items: center; gap: 40px; margin-top: 24px; padding: 16px 24px; border-radius: 6px; color: var(--booking-on-accent); background: var(--booking-accent); text-decoration: none; font-weight: 700; }
+.primary:hover { background: var(--color-accent-hover); }
+.playArea { display: grid; place-items: center; pointer-events: none; }
+.play { pointer-events: auto; display: grid; place-items: center; gap: 12px; padding: 20px 24px; border: 1px solid rgb(255 255 255 / 20%); border-radius: 8px; color: white; background: rgb(255 255 255 / 14%); backdrop-filter: blur(8px); }
+.play span { font-size: 32px; }.play small { font-size: 12px; }
+.hero :is(a, button):focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.dialog { width: min(1000px, calc(100% - 32px)); max-width: none; padding: 16px; background: #0c0d0f; color: white; border: 1px solid #555; border-radius: 10px; }
+.dialog::backdrop { background: rgb(0 0 0 / 85%); }
+.dialog button { display: block; margin: 0 0 16px auto; padding: 10px 16px; border: 1px solid #555; border-radius: 6px; background: #252525; color: white; }
+.dialog iframe { display: block; width: 100%; aspect-ratio: 16/9; border: 0; }
+@media (max-width: 999px) { .inner { padding-inline: 32px; gap: 24px; grid-template-columns: minmax(0, 1fr) minmax(180px, 1fr); } }
+@media (max-width: 599px) {
+ .detail .artwork, .posterFallback .artwork { left: 0; height: 420px; }
+ .detail .artwork { mask-image: linear-gradient(0deg, transparent, #000 28%); }
+ .detail .shade { background: linear-gradient(0deg, var(--booking-surface) 0%, rgb(12 13 15 / 94%) 35%, transparent 80%); }
+ .hero { min-height: 620px; align-items: end; }
+ .artwork img { object-position: 62% top; }
+ .shade { background: linear-gradient(0deg, var(--booking-surface) 0%, rgb(12 13 15 / 92%) 25%, rgb(12 13 15 / 15%) 80%), linear-gradient(180deg, rgb(0 0 0 / 45%), transparent 25%); }
+ .inner { padding: 270px 16px 36px; grid-template-columns: 1fr; gap: 20px; }
+ .back { margin-bottom: 20px; }.copy h1 { font-size: 36px; }.playArea { place-items: start; }
+ .play { display: flex; padding: 12px 18px; }.play span { font-size: 20px; }
+}
+.hero .copy .play { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; margin-top: 8px; }

@@ -48,6 +48,19 @@ class BookingCatalogTests {
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode().value()).isEqualTo(404);
     }
 
+    @Test void landscapeFilterRunsBeforePaginationWithoutDeletingMovies() {
+        var missing = movie(888001, true);
+        var first = movie(888002, true); first.setBackdropUrl("https://example.test/wide.jpg");
+        var blank = movie(888003, true); blank.setBackdropUrl(" ");
+        var second = movie(888004, true); second.setBackdropUrl("https://example.test/wide2.jpg");
+        em.flush(); em.clear();
+        assertThat(service.movies(0, 1, true).totalElements()).isEqualTo(2);
+        assertThat(service.movies(0, 1, true).items()).extracting(i -> i.id()).containsExactly(first.getId());
+        assertThat(service.movies(1, 1, true).items()).extracting(i -> i.id()).containsExactly(second.getId());
+        assertThat(service.movies(0, 20).totalElements()).isEqualTo(4);
+        assertThat(service.movie(missing.getId())).isNotNull();
+    }
+
     @Test void literalTheaterSearchPreservesUnknownCoordinatesAndExcludesInactive() {
         var target = theater("CGV 100%_!", true); theater("CGV 일반", true); theater("CGV 폐점", false);
         em.flush(); em.clear();

@@ -16,6 +16,17 @@ body,
     min-height: 100%;
 }
 
+/* Keep the header aligned when navigation changes the page's scroll height. */
+html {
+    scrollbar-gutter: stable;
+}
+
+@supports not (scrollbar-gutter: stable) {
+    html {
+        overflow-y: scroll;
+    }
+}
+
 body {
     margin: 0;
 

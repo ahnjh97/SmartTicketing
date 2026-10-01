@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { PAGE_PATHS, redirectPage } from "../navigation.js";
 import useAuth from "../hooks/useAuth.js";
 import LoadingPage from "./LoadingPage.jsx";
+import { bookingReturn } from '../booking/state.js';
 
 export default function OAuthCallbackPage() {
     const {
@@ -22,7 +23,7 @@ export default function OAuthCallbackPage() {
 
     return (
         <Navigate
-            to={PAGE_PATHS[target]}
+            to={target === 'profile' ? bookingReturn() || PAGE_PATHS.profile : PAGE_PATHS[target]}
             replace
         />
     );
