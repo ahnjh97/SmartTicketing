@@ -102,6 +102,8 @@ public class UserService {
         }
 
         var uniqueTheaterIds = new LinkedHashSet<Long>();
+        var uniquePriorities = new HashSet<Integer>();
+
         for (UserNearbyTheaterSaveRequest request : requests) {
             if (request == null
                     || request.theaterId() == null
@@ -114,6 +116,14 @@ public class UserService {
             if (!uniqueTheaterIds.add(request.theaterId())) {
                 throw new IllegalArgumentException("중복된 영화관이 포함되어 있습니다.");
             }
+
+            if (!uniquePriorities.add(request.priority())) {
+                throw new IllegalArgumentException("중복된 영화관 우선순위가 포함되어 있습니다.");
+            }
+
+            if (request.priority() < 1) {
+                throw new IllegalArgumentException("영화관 우선순위는 1 이상이어야 합니다.");
+            }
         }
 
         var found = theaters.findAllById(uniqueTheaterIds);
@@ -122,6 +132,7 @@ public class UserService {
         }
 
         nearbyTheaters.deleteAllByUserId(id);
+        nearbyTheaters.flush();
 
         for (UserNearbyTheaterSaveRequest request : requests) {
             UserNearbyTheater cache = new UserNearbyTheater();
