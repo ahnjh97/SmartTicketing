@@ -12,9 +12,9 @@ const ROWS =
 const SEATS_PER_ROW = 12;
 
 const SEAT_POSITION_LABELS = {
-    SIDE_FRONT: "사이드 · 1번",
-    SIDE_MIDDLE: "사이드 · 2번",
-    SIDE_REAR: "사이드 · 3번",
+    SIDE_FRONT: "양옆 · 1번",
+    SIDE_MIDDLE: "양옆 · 2번",
+    SIDE_REAR: "양옆 · 3번",
     MIDDLE_FRONT: "중앙 · 4번",
     MIDDLE_MIDDLE: "중앙 · 5번",
     MIDDLE_REAR: "중앙 · 6번",
