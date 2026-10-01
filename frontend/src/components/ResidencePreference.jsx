@@ -200,6 +200,15 @@ export default function ResidencePreference({
     const [mapSearchLoading, setMapSearchLoading] =
         useState(false);
 
+    const [placeSearchKeyword, setPlaceSearchKeyword] =
+        useState("");
+
+    const [placeSearchResults, setPlaceSearchResults] =
+        useState([]);
+
+    const [placeSearchLoading, setPlaceSearchLoading] =
+        useState(false);
+
     const [theaterLoading, setTheaterLoading] =
         useState(false);
 
@@ -703,6 +712,104 @@ export default function ResidencePreference({
                 "선택한 위치의 주소를 확인하지 못했습니다."
             );
         }
+    }
+
+    function searchPlaces() {
+        const keyword = placeSearchKeyword.trim();
+
+        if (!keyword) {
+            setPlaceSearchResults([]);
+            setError("검색할 장소나 주소를 입력해주세요.");
+            return;
+        }
+
+        if (!kakaoReadyRef.current) {
+            setError("카카오맵이 아직 준비되지 않았습니다.");
+            return;
+        }
+
+        const kakao = window.kakao;
+        const places = new kakao.maps.services.Places();
+
+        setError("");
+        setMessage("");
+        setPlaceSearchLoading(true);
+
+        places.keywordSearch(
+            keyword,
+            (data, status) => {
+                setPlaceSearchLoading(false);
+
+                if (
+                    status ===
+                    kakao.maps.services.Status.ZERO_RESULT
+                ) {
+                    setPlaceSearchResults([]);
+                    setError("검색 결과가 없습니다.");
+                    return;
+                }
+
+                if (
+                    status !==
+                    kakao.maps.services.Status.OK
+                ) {
+                    setPlaceSearchResults([]);
+                    setError("장소 검색에 실패했습니다.");
+                    return;
+                }
+
+                setPlaceSearchResults(data.slice(0, 5));
+                setIsMapSelectionMode(true);
+                clearMapSearchVisuals();
+                showSelectionPin(true);
+            }
+        );
+    }
+
+    function selectPlaceSearchResult(place) {
+        const map = mapInstanceRef.current;
+
+        if (!map) {
+            setError("카카오맵을 초기화하지 못했습니다.");
+            return;
+        }
+
+        const latitude = Number(place.y);
+        const longitude = Number(place.x);
+
+        if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            setError("검색한 장소의 위치 정보를 확인하지 못했습니다.");
+            return;
+        }
+
+        const position =
+            new window.kakao.maps.LatLng(
+                latitude,
+                longitude
+            );
+
+        map.setCenter(position);
+        map.setLevel(5);
+
+        setLocation({
+            latitude,
+            longitude,
+        });
+        setLocationSource("MAP");
+        setAddress(
+            place.road_address_name ||
+            place.address_name ||
+            ""
+        );
+        setPlaceSearchResults([]);
+        setError("");
+        setMessage("");
+        setIsMapSelectionMode(true);
+        clearMapSearchVisuals();
+        showSelectionPin(true);
     }
 
     function finishMapSelection() {
@@ -1370,6 +1477,69 @@ export default function ResidencePreference({
                             ? "위치 선택 중"
                             : "다른 위치 선택하기"}
                     </button>
+                </div>
+
+                <div className="map-place-search">
+                    <div className="map-place-search-row">
+                        <input
+                            type="text"
+                            value={placeSearchKeyword}
+                            onChange={(event) =>
+                                setPlaceSearchKeyword(
+                                    event.target.value
+                                )
+                            }
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    searchPlaces();
+                                }
+                            }}
+                            placeholder="주소 또는 장소를 검색하세요"
+                            aria-label="주소 또는 장소 검색"
+                        />
+                        <button
+                            type="button"
+                            className="map-place-search-button"
+                            onClick={searchPlaces}
+                            disabled={
+                                placeSearchLoading ||
+                                currentLocationLoading
+                            }
+                        >
+                            {placeSearchLoading
+                                ? "검색 중..."
+                                : "검색"}
+                        </button>
+                    </div>
+
+                    {placeSearchResults.length > 0 && (
+                        <div className="map-place-search-results">
+                            {placeSearchResults.map((place) => (
+                                <button
+                                    type="button"
+                                    key={place.id}
+                                    className="map-place-search-result"
+                                    onClick={() =>
+                                        selectPlaceSearchResult(place)
+                                    }
+                                >
+                                    <strong>
+                                        {place.place_name}
+                                    </strong>
+                                    <span>
+                                        {place.road_address_name ||
+                                            place.address_name}
+                                    </span>
+                                    {place.category_name && (
+                                        <small>
+                                            {place.category_name}
+                                        </small>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="map-selection-wrapper">
