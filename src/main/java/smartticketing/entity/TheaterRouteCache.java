@@ -29,10 +29,10 @@ public class TheaterRouteCache {
     @Column(name = "grid_key", nullable = false, length = 50)
     private String gridKey;
 
-    @Column(name = "origin_latitude", nullable = false, precision = 10, scale = 7)
+    @Column(name = "origin_latitude", nullable = false)
     private double originLatitude;
 
-    @Column(name = "origin_longitude", nullable = false, precision = 10, scale = 7)
+    @Column(name = "origin_longitude", nullable = false)
     private double originLongitude;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
