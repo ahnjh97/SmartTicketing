@@ -173,10 +173,8 @@ export default function ResidencePreference({
     const [selectedTheaters, setSelectedTheaters] =
         useState(
             (user.preferredTheaters ?? [])
-                .map(
-                    (item) =>
-                        item.theaterId
-                )
+                .map((item) => Number(item.theaterId))
+                .filter((theaterId) => Number.isFinite(theaterId))
         );
 
     const [selectedSeats, setSelectedSeats] =
@@ -954,66 +952,12 @@ export default function ResidencePreference({
     }
 
     function getSelectedTheatersInPriorityOrder() {
-        const selected =
-            theaters
-                .filter(
-                    (
-                        theater
-                    ) =>
-                        selectedTheaters.includes(
-                            theater.theaterId
-                        )
-                )
-                .sort(
-                    (
-                        a,
-                        b
-                    ) => {
-                        if (
-                            a.transitMinutes !=
-                            null &&
-                            b.transitMinutes !=
-                            null
-                        ) {
-                            return (
-                                a.transitMinutes -
-                                b.transitMinutes
-                            );
-                        }
-
-                        if (
-                            a.transitMinutes !=
-                            null
-                        ) {
-                            return -1;
-                        }
-
-                        if (
-                            b.transitMinutes !=
-                            null
-                        ) {
-                            return 1;
-                        }
-
-                        return (
-                            Number(
-                                a.distance ??
-                                0
-                            ) -
-                            Number(
-                                b.distance ??
-                                0
-                            )
-                        );
-                    }
-                );
-
-        return selected.map(
-            (
-                theater
-            ) =>
-                theater.theaterId
-        );
+        // 사용자가 클릭한 순서를 그대로 우선순위로 사용한다.
+        // 주변 영화관 목록의 거리/대중교통 정렬은 표시 순서일 뿐
+        // 선호 영화관 우선순위를 변경하지 않는다.
+        return selectedTheaters
+            .map((theaterId) => Number(theaterId))
+            .filter((theaterId) => Number.isFinite(theaterId));
     }
 
     async function save() {
@@ -1253,7 +1197,7 @@ export default function ResidencePreference({
                         ) => {
                             const selected =
                                 selectedTheaters.includes(
-                                    theater.theaterId
+                                    Number(theater.theaterId)
                                 );
 
                             return (
@@ -1269,7 +1213,7 @@ export default function ResidencePreference({
                                     }
                                     onClick={() =>
                                         toggleTheater(
-                                            theater.theaterId
+                                            Number(theater.theaterId)
                                         )
                                     }
                                 >
