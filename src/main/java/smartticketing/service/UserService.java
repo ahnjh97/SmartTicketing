@@ -304,6 +304,7 @@ public class UserService {
         preferredTheaters.deleteAllByUserId(
                 u.getId()
         );
+        preferredTheaters.flush();
 
         int priority = 1;
 
@@ -353,6 +354,7 @@ public class UserService {
         preferredSeats.deleteAllByUserId(
                 u.getId()
         );
+        preferredSeats.flush();
 
         for (
                 int i = 0;
