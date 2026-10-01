@@ -94,18 +94,25 @@ function initializeMap(
     const kakao =
         window.kakao;
 
-    mapInstanceRef.current =
-        new kakao.maps.Map(
-            mapRef.current,
-            {
-                center:
-                    new kakao.maps.LatLng(
-                        37.5665,
-                        126.978
-                    ),
-                level: 7,
-            }
-        );
+    const map = new kakao.maps.Map(
+        mapRef.current,
+        {
+            center:
+                new kakao.maps.LatLng(
+                    37.5665,
+                    126.978
+                ),
+            level: 7,
+        }
+    );
+
+    mapInstanceRef.current = map;
+
+    // 위치 선택 화면에서는 줌 컨트롤만 깔끔하게 유지합니다.
+    map.addControl(
+        new kakao.maps.ZoomControl(),
+        kakao.maps.ControlPosition.RIGHT
+    );
 }
 
 function toNullableNumber(
