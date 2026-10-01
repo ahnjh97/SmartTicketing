@@ -346,9 +346,11 @@ public class KakaoMapService {
 
         theater.setActive(true);
 
+        final Theater theaterToSave = theater;
+
         theater =
                 performance.measureDbSave(
-                        () -> theaters.save(theater)
+                        () -> theaters.save(theaterToSave)
                 );
 
         RouteInfo transit =
