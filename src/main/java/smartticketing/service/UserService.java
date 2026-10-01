@@ -18,19 +18,22 @@ public class UserService {
     private final UserPreferredTheaterRepository preferredTheaters;
     private final UserPreferredSeatRepository preferredSeats;
     private final TheaterRepository theaters;
+    private final UserNearbyTheaterRepository nearbyTheaters;
 
     public UserService(
             UsersRepository u,
             UserSocialAccountRepository s,
             UserPreferredTheaterRepository t,
             UserPreferredSeatRepository ps,
-            TheaterRepository tr
+            TheaterRepository tr,
+            UserNearbyTheaterRepository nt
     ) {
         users = u;
         social = s;
         preferredTheaters = t;
         preferredSeats = ps;
         theaters = tr;
+        nearbyTheaters = nt;
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +71,70 @@ public class UserService {
                 ts,
                 ss
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserNearbyTheaterResponse> getNearbyTheaters(Long id) {
+        findActive(id);
+
+        return nearbyTheaters.findByUserIdOrderByPriorityAsc(id)
+                .stream()
+                .map(n -> new UserNearbyTheaterResponse(
+                        n.getTheater().getId(),
+                        n.getTheater().getName(),
+                        n.getTheater().getBrand(),
+                        n.getTheater().getAddress(),
+                        n.getDistanceMeters(),
+                        n.getTravelTimeMinutes(),
+                        n.getPriority()
+                ))
+                .toList();
+    }
+
+    public void replaceNearbyTheaters(
+            Long id,
+            List<UserNearbyTheaterSaveRequest> requests
+    ) {
+        Users u = findActive(id);
+
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("주변 영화관 데이터가 없습니다.");
+        }
+
+        var uniqueTheaterIds = new LinkedHashSet<Long>();
+        for (UserNearbyTheaterSaveRequest request : requests) {
+            if (request == null
+                    || request.theaterId() == null
+                    || request.distanceMeters() == null
+                    || request.travelTimeMinutes() == null
+                    || request.priority() == null) {
+                throw new IllegalArgumentException("주변 영화관 데이터가 올바르지 않습니다.");
+            }
+
+            if (!uniqueTheaterIds.add(request.theaterId())) {
+                throw new IllegalArgumentException("중복된 영화관이 포함되어 있습니다.");
+            }
+        }
+
+        var found = theaters.findAllById(uniqueTheaterIds);
+        if (found.size() != uniqueTheaterIds.size()) {
+            throw new IllegalArgumentException("존재하지 않는 영화관이 포함되어 있습니다.");
+        }
+
+        nearbyTheaters.deleteAllByUserId(id);
+
+        for (UserNearbyTheaterSaveRequest request : requests) {
+            UserNearbyTheater cache = new UserNearbyTheater();
+            cache.setUser(u);
+            cache.setTheater(
+                    theaters.getReferenceById(request.theaterId())
+            );
+            cache.setDistanceMeters(request.distanceMeters());
+            cache.setTravelTimeMinutes(request.travelTimeMinutes());
+            cache.setPriority(request.priority());
+
+            nearbyTheaters.save(cache);
+        }
     }
 
     public UserResponse update(
