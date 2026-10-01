@@ -167,16 +167,17 @@ export default function ResidencePreference({
     const [location, setLocation] =
         useState(null);
 
+    const [locationSource, setLocationSource] =
+        useState(null);
+
     const [theaters, setTheaters] =
         useState([]);
 
     const [selectedTheaters, setSelectedTheaters] =
         useState(
             (user.preferredTheaters ?? [])
-                .map(
-                    (item) =>
-                        item.theaterId
-                )
+                .map((item) => Number(item.theaterId))
+                .filter((theaterId) => Number.isFinite(theaterId))
         );
 
     const [selectedSeats, setSelectedSeats] =
@@ -458,58 +459,11 @@ export default function ResidencePreference({
             6
         );
 
-        if (
-            currentMarkerRef.current
-        ) {
-            currentMarkerRef.current.setMap(
-                null
-            );
-        }
-
-        currentMarkerRef.current =
-            new kakao.maps.Marker({
-                map:
-                mapInstanceRef.current,
-
-                position,
-
-                title:
-                    "현재 위치",
-            });
-
-        if (
-            currentCircleRef.current
-        ) {
-            currentCircleRef.current.setMap(
-                null
-            );
-        }
-
-        currentCircleRef.current =
-            new kakao.maps.Circle({
-                map:
-                mapInstanceRef.current,
-
-                center:
-                position,
-
-                radius: 10000,
-
-                strokeWeight: 2,
-
-                strokeColor:
-                    "#222222",
-
-                strokeOpacity: 0.7,
-
-                strokeStyle:
-                    "solid",
-
-                fillColor:
-                    "#555555",
-
-                fillOpacity: 0.08,
-            });
+        moveLocationMarker(
+            latitude,
+            longitude,
+            "현재 위치"
+        );
 
         const geocoder =
             new kakao.maps.services.Geocoder();
@@ -578,13 +532,188 @@ export default function ResidencePreference({
 
         await loadNearbyTheaters(
             latitude,
-            longitude
+            longitude,
+            resolvedAddress
         );
+    }
+
+    function moveLocationMarker(
+        latitude,
+        longitude,
+        title
+    ) {
+        const kakao =
+            window.kakao;
+
+        const position =
+            new kakao.maps.LatLng(
+                latitude,
+                longitude
+            );
+
+        setLocation({
+            latitude,
+            longitude,
+        });
+
+        setLocationSource(
+            title === "현재 위치"
+                ? "CURRENT"
+                : "MAP"
+        );
+
+        if (!mapInstanceRef.current) {
+            initializeMap(
+                mapRef,
+                mapInstanceRef
+            );
+        }
+
+        if (!mapInstanceRef.current) {
+            return;
+        }
+
+        if (currentMarkerRef.current) {
+            currentMarkerRef.current.setMap(
+                null
+            );
+        }
+
+        currentMarkerRef.current =
+            new kakao.maps.Marker({
+                map:
+                    mapInstanceRef.current,
+                position,
+                title,
+                draggable: true,
+            });
+
+        kakao.maps.event.addListener(
+            currentMarkerRef.current,
+            "dragend",
+            () => {
+                const markerPosition =
+                    currentMarkerRef.current.getPosition();
+
+                moveLocationMarker(
+                    markerPosition.getLat(),
+                    markerPosition.getLng(),
+                    "지도 선택 위치"
+                );
+            }
+        );
+
+        if (currentCircleRef.current) {
+            currentCircleRef.current.setMap(
+                null
+            );
+        }
+
+        currentCircleRef.current =
+            new kakao.maps.Circle({
+                map:
+                    mapInstanceRef.current,
+                center: position,
+                radius: 10000,
+                strokeWeight: 2,
+                strokeColor: "#222222",
+                strokeOpacity: 0.7,
+                strokeStyle: "solid",
+                fillColor: "#555555",
+                fillOpacity: 0.08,
+            });
+
+        mapInstanceRef.current.setCenter(
+            position
+        );
+    }
+
+    async function searchSelectedLocation() {
+        if (!location) {
+            setError(
+                "지도에서 위치를 선택해주세요."
+            );
+            return;
+        }
+
+        setError("");
+        setMessage("");
+        setLocationLoading(true);
+
+        try {
+            const kakao =
+                window.kakao;
+
+            const geocoder =
+                new kakao.maps.services.Geocoder();
+
+            const addressResult =
+                await new Promise(
+                    (resolve, reject) => {
+                        geocoder.coord2Address(
+                            location.longitude,
+                            location.latitude,
+                            (result, status) => {
+                                if (
+                                    status !==
+                                    kakao.maps.services.Status.OK
+                                ) {
+                                    reject(
+                                        new Error(
+                                            "선택한 위치의 주소를 가져오지 못했습니다."
+                                        )
+                                    );
+                                    return;
+                                }
+
+                                resolve(result);
+                            }
+                        );
+                    }
+                );
+
+            const first =
+                addressResult?.[0];
+
+            const resolvedAddress =
+                first?.road_address?.address_name ??
+                first?.address?.address_name;
+
+            if (!resolvedAddress) {
+                throw new Error(
+                    "선택한 위치에서 주소를 확인하지 못했습니다."
+                );
+            }
+
+            setAddress(
+                resolvedAddress
+            );
+
+            await loadNearbyTheaters(
+                location.latitude,
+                location.longitude,
+                resolvedAddress
+            );
+
+            setMessage(
+                "선택한 위치 기준으로 주변 영화관을 조회했습니다."
+            );
+        } catch (e) {
+            setError(
+                e.message ??
+                "선택한 위치 조회에 실패했습니다."
+            );
+        } finally {
+            setLocationLoading(
+                false
+            );
+        }
     }
 
     async function loadNearbyTheaters(
         latitude,
-        longitude
+        longitude,
+        resolvedAddress
     ) {
         setTheaterLoading(
             true
@@ -595,6 +724,7 @@ export default function ResidencePreference({
         try {
             const data =
                 await theaterApi.nearby({
+                    address: resolvedAddress,
                     latitude,
                     longitude,
                     radius: 10000,
@@ -954,66 +1084,12 @@ export default function ResidencePreference({
     }
 
     function getSelectedTheatersInPriorityOrder() {
-        const selected =
-            theaters
-                .filter(
-                    (
-                        theater
-                    ) =>
-                        selectedTheaters.includes(
-                            theater.theaterId
-                        )
-                )
-                .sort(
-                    (
-                        a,
-                        b
-                    ) => {
-                        if (
-                            a.transitMinutes !=
-                            null &&
-                            b.transitMinutes !=
-                            null
-                        ) {
-                            return (
-                                a.transitMinutes -
-                                b.transitMinutes
-                            );
-                        }
-
-                        if (
-                            a.transitMinutes !=
-                            null
-                        ) {
-                            return -1;
-                        }
-
-                        if (
-                            b.transitMinutes !=
-                            null
-                        ) {
-                            return 1;
-                        }
-
-                        return (
-                            Number(
-                                a.distance ??
-                                0
-                            ) -
-                            Number(
-                                b.distance ??
-                                0
-                            )
-                        );
-                    }
-                );
-
-        return selected.map(
-            (
-                theater
-            ) =>
-                theater.theaterId
-        );
+        // 사용자가 클릭한 순서를 그대로 우선순위로 사용한다.
+        // 주변 영화관 목록의 거리/대중교통 정렬은 표시 순서일 뿐
+        // 선호 영화관 우선순위를 변경하지 않는다.
+        return selectedTheaters
+            .map((theaterId) => Number(theaterId))
+            .filter((theaterId) => Number.isFinite(theaterId));
     }
 
     async function save() {
@@ -1190,6 +1266,31 @@ export default function ResidencePreference({
                     className="kakao-map"
                 />
 
+                <p className="help">
+                    지도에서 원하는 위치를 클릭하거나
+                    마커를 드래그한 뒤 아래 버튼으로
+                    해당 위치의 주변 영화관을 조회할 수 있습니다.
+                </p>
+
+                <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={
+                        searchSelectedLocation
+                    }
+                    disabled={
+                        !location ||
+                        locationLoading ||
+                        theaterLoading
+                    }
+                >
+                    {
+                        locationLoading
+                            ? "위치 확인 중..."
+                            : "이 위치에서 영화관 조회"
+                    }
+                </button>
+
                 {location && (
                     <div className="location-info">
                         현재 위치를
@@ -1253,7 +1354,7 @@ export default function ResidencePreference({
                         ) => {
                             const selected =
                                 selectedTheaters.includes(
-                                    theater.theaterId
+                                    Number(theater.theaterId)
                                 );
 
                             return (
@@ -1269,7 +1370,7 @@ export default function ResidencePreference({
                                     }
                                     onClick={() =>
                                         toggleTheater(
-                                            theater.theaterId
+                                            Number(theater.theaterId)
                                         )
                                     }
                                 >

@@ -2,6 +2,7 @@ package smartticketing.config;
 
 import smartticketing.auth.CustomOAuth2UserService;
 import smartticketing.auth.OAuth2SuccessHandler;
+import smartticketing.performace.NearbyTheaterPerformance;
 import smartticketing.repository.TheaterRepository;
 import smartticketing.service.KakaoMapService;
 import org.junit.jupiter.api.Test;
@@ -86,7 +87,7 @@ class OptionalIntegrationsTests {
     @Test
     void missingMapKeyReturnsUnavailableWithoutDatabaseAccess() {
         var theaters = mock(TheaterRepository.class);
-        var service = new KakaoMapService(theaters, "");
+        var service = new KakaoMapService(theaters, "",new NearbyTheaterPerformance());
         assertThatThrownBy(() -> service.findNearbyTheaters(37.5, 127.0, 10000))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));

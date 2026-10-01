@@ -24,11 +24,13 @@ public class TheaterController {
     public ResponseEntity<List<NearbyTheaterResponse>> nearby(
             @RequestParam double latitude,
             @RequestParam double longitude,
+            @RequestParam(required = false) String address,
             @RequestParam(defaultValue = "10000")
             int radius
     ) {
         return ResponseEntity.ok(
                 kakaoMapService.findNearbyTheaters(
+                        address,
                         latitude,
                         longitude,
                         radius
