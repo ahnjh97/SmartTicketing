@@ -47,4 +47,7 @@ public class Movie {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Column(name = "audience_count", nullable = false)
+    private long audienceCount = 0;
 }
