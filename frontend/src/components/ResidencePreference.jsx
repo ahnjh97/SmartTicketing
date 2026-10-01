@@ -1408,20 +1408,12 @@ export default function ResidencePreference({
                         : "이 위치에서 영화관 조회"}
                 </button>
 
-                {location && (
-                    <div className="location-info">
+                {address && (
+                    <div className="selected-address">
                         <span>
                             {locationSource === "MAP"
                                 ? "선택한 위치"
                                 : "현재 사용자 위치"}
-                        </span>
-                    </div>
-                )}
-
-                {address && (
-                    <div className="selected-address">
-                        <span>
-                            자동으로 확인된 거주지
                         </span>
 
                         <strong>
