@@ -1148,18 +1148,20 @@ export default function ResidencePreference({
 
                 window.kakao.maps.event.addListener(
                     marker,
-                    "click",
+                    "mouseover",
                     () => {
-                        theaterOverlaysRef.current.forEach((item) => {
-                            if (item !== infoWindow) {
-                                item.setMap(null);
-                            }
-                        });
-
                         infoWindow.open(
                             mapInstanceRef.current,
                             marker
                         );
+                    }
+                );
+
+                window.kakao.maps.event.addListener(
+                    marker,
+                    "mouseout",
+                    () => {
+                        infoWindow.close();
                     }
                 );
 
