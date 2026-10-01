@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface TheaterRepository extends JpaRepository<Theater, Long> {
 
+    List<Theater> findByActiveTrueOrderByNameAsc();
+
     List<Theater> findByActiveTrueAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByNameAsc();
 
     Optional<Theater> findByKakaoPlaceId(String kakaoPlaceId);
