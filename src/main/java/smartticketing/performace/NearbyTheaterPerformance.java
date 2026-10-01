@@ -83,7 +83,6 @@ public class NearbyTheaterPerformance {
 
             resultRepository.save(
                     new ApiOriginalPerformanceResult(
-                            STEP,
                             current.address,
                             current.theaterCount,
                             current.theaterSearchCallCount,
