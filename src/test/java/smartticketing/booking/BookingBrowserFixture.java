@@ -38,7 +38,7 @@ public class BookingBrowserFixture {
                 var seatPreference = new UserPreferredSeat(); seatPreference.setUser(user); seatPreference.setPriority(1); seatPreference.setSeatPosition(SeatPosition.MIDDLE_MIDDLE); em.persist(seatPreference);
                 em.getTransaction().commit();
             }
-            List<String> properties = new ArrayList<>(List.of("--server.port=8081", "--spring.profiles.active=test", "--tmdb.auto-import=false",
+            List<String> properties = new ArrayList<>(List.of("--server.port=8081", "--spring.profiles.active=test", "--tmdb.auto-import=false", "--kakao.catalog.auto-import=false",
                     "--booking.seed.enabled=false", "--booking.mock-payment.allow-failure=true", "--spring.jpa.show-sql=false", "--spring.jpa.properties.hibernate.format_sql=false",
                     "--spring.datasource.url="+db.jdbcUrl(), "--spring.datasource.username="+System.getenv("BOOKING_TEST_MYSQL_USER"),
                     "--spring.datasource.password="+System.getenv("BOOKING_TEST_MYSQL_PASSWORD"), "--JWT_SECRET=browser-test-only-not-a-production-key-2026-123456", "--TMDB_ACCESS_TOKEN=test", "--ADMIN_KEY=test"));

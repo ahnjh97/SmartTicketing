@@ -25,13 +25,14 @@ public class AdminTheaterController {
 
     @PostMapping("/collect-seoul")
     public ResponseEntity<?> collectSeoulTheaters(
-            @RequestHeader(value = "X-Admin-Key", required = false) String requestKey
+            @RequestHeader(value = "X-Admin-Key", required = false) String requestKey,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
         if (adminKey.isBlank() || requestKey == null || !adminKey.equals(requestKey)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "관리자 키가 올바르지 않습니다."));
         }
 
-        return ResponseEntity.ok(collectionService.collectSeoulTheaters());
+        return ResponseEntity.ok(collectionService.collectSeoulTheaters(refresh));
     }
 }

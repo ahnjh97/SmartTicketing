@@ -179,4 +179,36 @@ class MovieImportTests {
                 .andRespond(withSuccess("{\"id\":11,\"title\":\"신규\"}", MediaType.APPLICATION_JSON));
         assertThat(service.getOrImportMovie(11L)).isSameAs(winner);
     }
+
+    @Test void quotaFailureStopsRemainingOutboundCalls() {
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS));
+        assertThat(service.importConfiguredMovies().failedIds()).containsExactly(11L, 12L);
+        verifyNoInteractions(writer);
+    }
+
+    @Test void duplicateConfiguredIdsAreFetchedOnce() {
+        service = new MovieImportService(clientForDuplicateTest(), movies, writer,
+                "https://images.test", "https://backdrops.test", "11,11", "", "");
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
+                .andRespond(withSuccess("{\"id\":11,\"title\":\"영화\"}", MediaType.APPLICATION_JSON));
+        assertThat(service.importConfiguredMovies().savedCount()).isEqualTo(1);
+    }
+
+    @Test void quotaFailureDoesNotLabelAlreadyPreparedMoviesAsFailed() {
+        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
+        when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.UNAUTHORIZED));
+        var result = service.importConfiguredMovies();
+        assertThat(result.failedIds()).containsExactly(11L);
+        assertThat(result.skippedCount()).isEqualTo(1);
+    }
+
+    private RestClient clientForDuplicateTest() {
+        var builder = RestClient.builder().baseUrl("https://tmdb.test/3");
+        server = MockRestServiceServer.bindTo(builder).build();
+        return builder.build();
+    }
 }
