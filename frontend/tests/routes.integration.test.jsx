@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "../src/App.jsx";
 import { userApi } from "../src/api/users.js";
@@ -43,7 +43,9 @@ async function at(path) {
 
 beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
+        if (url.startsWith("/api/movies?") || url.startsWith("/api/theaters?")) return new Response(JSON.stringify({ items: [], page: 0, size: 20, totalElements: 0 }));
         if (url === "/api/auth/login") return new Response(JSON.stringify({ accessToken: "login-token" }));
         if (url.startsWith("/api/auth/check-login-id?")) return new Response(JSON.stringify({ available: true }));
         if (url === "/api/auth/signup") return new Response(JSON.stringify(completedUser));
@@ -58,7 +60,7 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-test("header navigation changes paths and browser history without adding page bodies", async () => {
+test("header navigation changes paths and browser history with public booking pages", async () => {
     mount("/login");
     await screen.findByLabelText("아이디");
     const movies = screen.getByRole("link", { name: "영화" });
@@ -76,17 +78,17 @@ test("header navigation changes paths and browser history without adding page bo
     await at("/movies");
     expect(movies.getAttribute("aria-current")).toBe("page");
     expect(theaters.getAttribute("aria-current")).toBe(null);
-    expect(screen.getByRole("main").textContent).toBe("");
+    expect(screen.getByRole("heading", { name: "영화별 예매" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "극장" }));
     await at("/theaters");
     expect(movies.getAttribute("aria-current")).toBe(null);
     expect(theaters.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("main").textContent).toBe("");
+    expect(screen.getByRole("heading", { name: "극장별 예매" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "SmartTicketing" }));
     await at("/");
     expect(movies.getAttribute("aria-current")).toBe("page");
     expect(theaters.getAttribute("aria-current")).toBe(null);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: "영화 목록에서 예매 시작하기 →" })).toBe(null);
 });
 
 test("guest direct access to a member page reaches login", async () => {
@@ -94,6 +96,31 @@ test("guest direct access to a member page reaches login", async () => {
     await screen.findByLabelText("아이디");
     await at("/login");
     expect(fetch).not.toHaveBeenCalled();
+});
+
+test('all public pages reuse the home header without route-specific appearance', async () => {
+    for (const path of ['/', '/movies', '/theaters', '/login', '/signup']) {
+        mount(path);
+        await at(path);
+        const header = screen.getByRole('banner');
+        expect(screen.getAllByRole('banner')).toHaveLength(1);
+        expect(header.className).toBe('common-header');
+        expect(within(header).getAllByRole('link').map(link => link.textContent)).toEqual(['SmartTicketing', '영화', '극장', '로그인', '회원가입']);
+        cleanup();
+    }
+});
+
+test('member header keeps tickets immediately before logout on home and booking pages', async () => {
+    localStorage.setItem('accessToken', 'header-test-token');
+    for (const path of ['/', '/movies', '/theaters', '/profile', '/tickets']) {
+        mount(path);
+        await within(screen.getByRole('banner')).findByRole('button', { name: '로그아웃' });
+        const header = screen.getByRole('banner');
+        expect(header.className).toBe('common-header');
+        const account = within(header).getByRole('navigation', { name: '회원 메뉴' });
+        expect([...account.children].map(item => item.textContent)).toEqual(['내 티켓', '로그아웃', '마이페이지']);
+        cleanup();
+    }
 });
 
 test("social signup retains its direct route and loads provider information", async () => {

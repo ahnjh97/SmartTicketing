@@ -12,7 +12,10 @@ public class BookingCatalogController {
 
     @GetMapping("/movies")
     public Page<MovieItem> movies(@RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) { return catalog.movies(page, size); }
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "false") boolean landscapeOnly) {
+        return landscapeOnly ? catalog.movies(page, size, true) : catalog.movies(page, size);
+    }
 
     @GetMapping("/movies/{id}")
     public MovieDetail movie(@PathVariable Long id) { return catalog.movie(id); }

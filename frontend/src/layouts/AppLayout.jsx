@@ -2,12 +2,14 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import CommonHeader from "../components/CommonHeader.jsx";
 import useAuth from "../hooks/useAuth.js";
 import { PAGE_PATHS } from "../navigation.js";
+import styles from "./AppLayout.module.css";
 
 export default function AppLayout() {
     const { user, loading, preferenceSetupRequired, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
-    const empty = [PAGE_PATHS.home, PAGE_PATHS.movies, PAGE_PATHS.theaters, PAGE_PATHS.tickets].includes(location.pathname);
+    const booking = [PAGE_PATHS.home, PAGE_PATHS.movies, PAGE_PATHS.theaters].includes(location.pathname);
+    const empty = location.pathname === PAGE_PATHS.tickets;
 
     async function handleLogout() {
         try {
@@ -20,7 +22,7 @@ export default function AppLayout() {
     }
 
     return (
-        <div className="app-layout">
+        <div className={`app-layout${booking ? ' ' + styles.booking : ''}`}>
             <CommonHeader
                 user={user}
                 disabled={loading}

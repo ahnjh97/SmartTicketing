@@ -1,0 +1,11 @@
+.catalog { position: relative; max-width: 1440px; margin: 0 auto; padding: 24px 32px 64px; }
+.catalog h2 { font-size: 22px; margin: 0 0 24px; }.catalog h2 span { margin-left: 12px; }
+.rail { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 100px) / 6); gap: 20px; overflow-x: auto; padding: 4px 2px 20px; scroll-snap-type: x proximity; }
+.movie { display: flex; flex-direction: column; gap: 10px; min-width: 0; color: white; text-decoration: none; scroll-snap-align: start; }
+.movie img, .placeholder { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 6px; background: var(--booking-muted-surface); }
+.placeholder { display: grid; place-items: center; color: var(--booking-muted); font-size: 12px; }
+.movie strong { font-size: 15px; overflow-wrap: anywhere; }.movie small { color: var(--booking-muted); font-size: 12px; }
+.movie:hover strong { color: var(--booking-accent); }
+.rail { scroll-padding-inline: 2px; }
+@media (max-width: 999px) { .rail { grid-auto-columns: calc((100% - 40px) / 3); } }
+@media (max-width: 599px) { .catalog { padding: 0 16px 40px; margin: 0 auto; }.rail { grid-auto-columns: 42%; gap: 14px; }.catalog h2 { font-size: 20px; } }

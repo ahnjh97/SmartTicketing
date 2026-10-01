@@ -5,6 +5,7 @@ import useAuth from "../hooks/useAuth.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
 import { authApi } from "../api/auth.js";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
+import { bookingReturn } from '../booking/state.js';
 
 export default function LoginPage() {
     const location = useLocation();
@@ -28,7 +29,7 @@ export default function LoginPage() {
             });
 
             navigate(
-                PAGE_PATHS.profile,
+                bookingReturn() || PAGE_PATHS.profile,
                 { replace: true }
             );
         });

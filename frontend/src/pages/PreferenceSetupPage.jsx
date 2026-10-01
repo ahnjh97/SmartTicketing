@@ -2,13 +2,14 @@ import { useNavigate } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
 import useAuth from "../hooks/useAuth.js";
 import ResidencePreference from "../components/ResidencePreference.jsx";
+import { bookingReturn } from '../booking/state.js';
 
 export default function PreferenceSetupPage() {
     const { user, updateUser } = useAuth();
     const navigate = useNavigate();
     function handleSaved(data) {
         updateUser(data);
-        navigate(PAGE_PATHS.profile, { replace: true, state: { message: "회원정보가 저장되었습니다." } });
+        navigate(bookingReturn() || PAGE_PATHS.profile, { replace: true, state: { message: "회원정보가 저장되었습니다." } });
     }
     return (
         <div className="page">

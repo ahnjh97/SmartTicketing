@@ -1,0 +1,77 @@
+:where(.surface) button { font: inherit; border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-surface); color: var(--booking-ink); padding: 12px 16px; }
+.surface input { font: inherit; border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-surface); color: var(--booking-ink); padding: 12px 16px; }
+:where(.surface) button:hover { border-color: var(--booking-muted); }
+:where(.surface) button:disabled { opacity: .45; cursor: not-allowed; }
+:where(.surface) button[aria-pressed="true"] { border-color: var(--booking-ink); }
+:where(.surface) button:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.surface input:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.surface a:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.surface summary:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.surface a { color: var(--booking-ink); }
+.surface p { line-height: 1.65; color: var(--booking-muted); }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.surface .movie { padding: 0; border: 0; background: transparent; text-align: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.movieImage { position: relative; width: 100%; border: 1px solid transparent; border-radius: var(--booking-radius); overflow: hidden; }
+.movie[aria-pressed="true"] .movieImage { border-color: var(--booking-ink); }
+.movieImage img { display: block; width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--booking-muted-surface); }
+.poster { display: block; width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--booking-muted-surface); }
+.poster { display: grid; place-items: center; color: var(--booking-muted); }
+.selectedBadge { position: absolute; top: 10px; left: 10px; padding: 5px 10px; border-radius: 6px; background: var(--booking-ink); color: var(--booking-surface); font-size: 11px; }
+.movie strong { font-weight: 500; }
+.movie strong { overflow-wrap: anywhere; }
+.movie small { overflow-wrap: anywhere; }
+.movie small { color: var(--booking-muted); font-size: 12px; }
+.panel { border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-soft); padding: 20px; margin: 24px 0; }
+.dates { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; max-width: 830px; margin: 32px auto; }
+.dates button { display: flex; flex-direction: column; align-items: center; padding: 10px; background: var(--booking-soft); border: 1px solid var(--booking-border); }
+.dates button[aria-pressed="true"] { background: var(--booking-ink); color: var(--booking-surface); box-shadow: none; }
+.dates span { font-size: 12px; color: var(--booking-muted); }
+.dates small { font-size: 12px; color: var(--booking-muted); }
+.dates strong { font-size: 26px; line-height: 1.3; }
+.showtimes { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 14px; margin: 16px 0; }
+.surface .showtime { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 12px; background: var(--booking-surface); border: 1px solid var(--booking-border); border-radius: var(--booking-radius); }
+.showtime strong { font-size: 18px; white-space: nowrap; }
+.showtime small { font-size: 11px; color: var(--booking-muted); }
+.showtime > span { font-size: 11px; color: var(--booking-muted); }
+.surface .showtime[aria-pressed="true"] { background: var(--booking-accent); color: var(--booking-on-accent); border-color: var(--booking-accent); }
+.showtime[aria-pressed="true"] :is(small, span) { color: var(--booking-on-accent); }
+.actions { display: flex; justify-content: center; align-items: center; gap: var(--booking-space-medium); margin: 16px 0 0; }
+.actions button { min-width: 150px; min-height: 54px; border-radius: var(--booking-radius-large); border: 0; background: var(--booking-muted-surface); }
+.surface .primary { background: var(--booking-accent); color: var(--booking-on-accent); border-color: var(--booking-accent); }
+@media (max-width: 599px) { .dates { gap: 5px; }
+ }
+@media (max-width: 599px) { .dates button { padding: 8px 2px; }
+ }
+@media (max-width: 599px) { .dates span { font-size: 10px; }
+ }
+@media (max-width: 599px) { .dates small { font-size: 10px; }
+ }
+@media (max-width: 599px) { .dates strong { font-size: 20px; }
+ }
+@media (max-width: 599px) { .panel { padding: 14px; }
+ }
+@media (max-width: 599px) { .actions button { min-width: 0; padding: 12px 20px; }
+ }
+.surface { color: var(--booking-ink); }
+.feedback { padding: var(--booking-space-medium); border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-soft); }
+.feedback button { margin-left: var(--booking-space-small); }
+.surface :is(h1, h2, h3) { color: var(--booking-ink); }
+:where(.surface) button { transition: background-color 140ms ease, border-color 140ms ease; }
+@media (prefers-reduced-motion: reduce) { :where(.surface) button { transition: none; } }
+
+.dates button[aria-pressed="true"] :is(span, small) { color: var(--booking-surface); }
+.surface .primary:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.dates button:not([aria-pressed="true"]), .surface button.showtime:not([aria-pressed="true"]) {
+ background: var(--glass-background); border-color: var(--glass-border);
+ -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+ box-shadow: var(--glass-shadow);
+}
+.dates button:not([aria-pressed="true"]):hover, .surface button.showtime:not([aria-pressed="true"]):hover { background: var(--glass-hover); }
+.movie[aria-pressed="true"] .movieImage { border-color: var(--booking-accent); box-shadow: 0 0 0 2px var(--booking-accent); }
+.selectedBadge { background: var(--booking-accent); color: var(--booking-on-accent); font-weight: 700; }
+.movie strong { font-weight: 700; font-size: 15px; }
+.dates { margin: 36px auto 28px; }
+.dates button { min-height: 90px; border-color: transparent; }
+.panel { padding: 24px; }
+.actions button { font-weight: 700; }
+@media (max-width: 599px) { .panel { padding: 16px; } .dates button { min-height: 76px; } }

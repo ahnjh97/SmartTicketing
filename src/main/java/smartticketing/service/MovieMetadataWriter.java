@@ -23,6 +23,8 @@ public class MovieMetadataWriter {
         if (blank(target.getRating())) target.setRating(incoming.getRating());
         if (target.getReleaseDate() == null) target.setReleaseDate(incoming.getReleaseDate());
         if (blank(target.getPosterUrl())) target.setPosterUrl(incoming.getPosterUrl());
+        if (blank(target.getBackdropUrl())) target.setBackdropUrl(incoming.getBackdropUrl());
+        if (blank(target.getLogoUrl())) target.setLogoUrl(incoming.getLogoUrl());
         if (blank(target.getTrailerUrl())) target.setTrailerUrl(incoming.getTrailerUrl());
         target.setMetadataFetchedAt(incoming.getMetadataFetchedAt());
         return movies.saveAndFlush(target);

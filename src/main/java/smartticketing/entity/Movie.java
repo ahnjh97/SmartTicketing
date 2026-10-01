@@ -38,6 +38,12 @@ public class Movie {
     @Column(name = "poster_url", length = 500)
     private String posterUrl;
 
+    @Column(name = "backdrop_url", length = 500)
+    private String backdropUrl;
+
+    @Column(name = "logo_url", length = 500)
+    private String logoUrl;
+
     @Column(name = "trailer_url", length = 500)
     private String trailerUrl;
 

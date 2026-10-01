@@ -3,6 +3,8 @@ import AuthProvider from "./auth/AuthProvider.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
 import EmptyPage from "./pages/EmptyPage.jsx";
+import HomePage from "./pages/HomePage.jsx";
+import BookingPage from "./pages/BookingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import FindAccountPage from "./pages/FindAccountPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
@@ -25,9 +27,9 @@ export default function App() {
                     <Route path={PAGE_PATHS.callback} element={<OAuthCallbackPage />} />
 
                     <Route element={<RouteGuard />}>
-                        <Route path={PAGE_PATHS.home} element={<EmptyPage />} />
-                        <Route path={PAGE_PATHS.movies} element={<EmptyPage />} />
-                        <Route path={PAGE_PATHS.theaters} element={<EmptyPage />} />
+                        <Route path={PAGE_PATHS.home} element={<HomePage />} />
+                        <Route path={PAGE_PATHS.movies} element={<BookingPage key="movies" mode="movie" />} />
+                        <Route path={PAGE_PATHS.theaters} element={<BookingPage key="theaters" mode="theater" />} />
                         <Route path={PAGE_PATHS.tickets} element={<EmptyPage />} />
                         <Route path={PAGE_PATHS.profile} element={<ProfilePage />} />
                         <Route path={PAGE_PATHS.preferences} element={<PreferencesPage />} />
