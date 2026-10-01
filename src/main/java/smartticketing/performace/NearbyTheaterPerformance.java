@@ -97,7 +97,7 @@ public class NearbyTheaterPerformance {
             );
 
             resultRepository.save(new DbParallelPerformanceResult(
-                    STEP, current.address, current.theaterCount,
+                    current.address, current.theaterCount,
                     current.theaterSearchCallCount, current.publicTransitCallCount,
                     current.walkCallCount, current.apiCallCount,
                     apiResponseTimeMs, dbQueryTimeMs, dbSaveTimeMs,
