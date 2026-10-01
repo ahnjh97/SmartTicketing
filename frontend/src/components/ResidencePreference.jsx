@@ -1221,9 +1221,6 @@ export default function ResidencePreference({
                     infoWindow
                 );
 
-                theaterOverlaysRef.current.push(
-                    overlay
-                );
             }
         );
     }
