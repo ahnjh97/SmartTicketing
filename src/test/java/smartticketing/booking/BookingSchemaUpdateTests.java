@@ -22,6 +22,7 @@ class BookingSchemaUpdateTests {
                 assertThat(movie.getRunningTime()).isEqualTo(125);
                 assertThat(movie.isActive()).isFalse();
                 assertThat(movie.getMetadataFetchedAt()).isNull();
+                assertThat(movie.getImageMetadataFetchedAt()).isNull();
                 assertThat(movie.getBackdropUrl()).isNull();
                 assertThat(movie.getLogoUrl()).isNull();
                 assertThat(em.createNativeQuery("select price_per_person from showtimes").getResultList()).isEmpty();
