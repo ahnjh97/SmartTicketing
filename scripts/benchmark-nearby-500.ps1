@@ -9,8 +9,20 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repo = Split-Path -Parent $PSScriptRoot
+
+# Capture absolute paths before checkout.
+$scriptPath = $MyInvocation.MyCommand.Path
+$scriptDir = Split-Path -Parent $scriptPath
+$repo = Split-Path -Parent $scriptDir
 $originalBranch = (git -C $repo branch --show-current).Trim()
+
+# Keep a temporary copy outside the repository so branch checkout
+# cannot overwrite/delete the running benchmark script.
+$runnerDir = Join-Path ([System.IO.Path]::GetTempPath()) "smartticketing-benchmark"
+$runnerPath = Join-Path $runnerDir "benchmark-nearby-500.ps1"
+New-Item -ItemType Directory -Force -Path $runnerDir | Out-Null
+Copy-Item -LiteralPath $scriptPath -Destination $runnerPath -Force
+
 $branches = @(
     @{ Name = "perf/api-original"; Label = "API Original" },
     @{ Name = "perf/db-sequential"; Label = "DB Sequential" },
@@ -144,4 +156,5 @@ try {
 }
 finally {
     try { git -C $repo checkout $originalBranch | Out-Null } catch {}
+    Remove-Item -LiteralPath $runnerPath -Force -ErrorAction SilentlyContinue
 }
