@@ -85,10 +85,10 @@ class OptionalIntegrationsTests {
     }
 
     @Test
-    void missingMapKeyReturnsUnavailableWithoutDatabaseAccess() {
+    void missingMapKeyForWalkingReturnsUnavailableWithoutDatabaseAccess() {
         var theaters = mock(TheaterRepository.class);
-        var service = new KakaoMapService(theaters, "",new NearbyTheaterPerformance());
-        assertThatThrownBy(() -> service.findNearbyTheaters(37.5, 127.0, 10000))
+        var service = new KakaoMapService(theaters, "", mock(NearbyTheaterPerformance.class));
+        assertThatThrownBy(() -> service.findNearbyTheaters(null, 37.5, 127.0, 10000, "WALK"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
         verifyNoInteractions(theaters);

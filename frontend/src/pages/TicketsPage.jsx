@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
+import { Link } from 'react-router-dom';
+import glass from '../components/GlassButton.module.css';
 
 function formatDate(value) {
     return value ? new Date(value).toLocaleString("ko-KR") : "-";
@@ -47,6 +49,7 @@ export default function TicketsPage() {
                                 <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
                                 <p>QR: {ticket.qrCode}</p>
                                 <p>상태: {ticket.status}</p>
+                                {ticket.groupId && <Link className={glass.button} to={`/theaters?entry=THEATER_NORMAL&group=${ticket.groupId}&reservation=${ticket.reservationId}`}>예약 상세·전체 취소</Link>}
                             </article>
                         ))}
                     </div>

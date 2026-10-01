@@ -64,6 +64,7 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
     EntityManager open() { return factory.createEntityManager(); }
 
     SessionFactory factory() { return factory; }
+    String jdbcUrl() { return "jdbc:mysql://127.0.0.1:3306/" + name; }
 
     /** DB 내용은 보존하고 앱의 ORM 연결/캐시만 재시작한다. */
     void restartPersistence() {
