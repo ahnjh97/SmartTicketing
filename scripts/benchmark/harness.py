@@ -17,8 +17,8 @@ def default_fixtures():
     scenarios = []
     for index, (name, lat, lon, count) in enumerate([
         ("seoul-3", 37.5665, 126.9780, 3),
-        ("bundang-9", 37.3943, 127.1107, 9),
-        ("suwon-15", 37.2636, 127.0286, 15),
+        ("seoul-dobong-9", 37.6688, 127.0471, 9),
+        ("seoul-gangseo-15", 37.5509, 126.8495, 15),
     ]):
         theaters = []
         for i in range(count):
@@ -173,7 +173,14 @@ def validate_response(status, body, scenario, mode, original=False):
             return False, 'empty_or_non_array', 0, ''
         ids = [str(r['kakaoPlaceId']) for r in rows]
         expected = {str(t['id']): t for t in scenario['theaters']}
-        if len(set(ids)) != len(ids) or set(ids) != set(expected):
+        if len(set(ids)) != len(ids):
+            return False, 'duplicate_candidates', len(rows), ''
+        # Original discovers places via API and caps output at 15. Record its actual
+        # candidate set; the report suppresses comparisons against different workloads.
+        if mode == 'live' and original:
+            if len(rows) > 15:
+                return False, 'original_limit_exceeded', len(rows), ''
+        elif set(ids) != set(expected):
             return False, 'candidate_mismatch', len(rows), ''
         minutes = [r['transitMinutes'] for r in rows]
         if any(not isinstance(m, (int, float)) or isinstance(m, bool) or not math.isfinite(m) or m <= 0 for m in minutes):
