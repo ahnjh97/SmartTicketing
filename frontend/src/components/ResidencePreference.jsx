@@ -161,6 +161,9 @@ export default function ResidencePreference({
     const kakaoReadyRef =
         useRef(false);
 
+    const isMapSelectionModeRef =
+        useRef(false);
+
     const [birthDate, setBirthDate] =
         useState(
             user.birthDate ?? ""
@@ -491,6 +494,7 @@ export default function ResidencePreference({
 
         clearMapSearchVisuals();
         setIsMapSelectionMode(false);
+        isMapSelectionModeRef.current = false;
         showSelectionPin(false);
 
         currentMarkerRef.current =
@@ -630,6 +634,7 @@ export default function ResidencePreference({
         setError("");
         setMessage("");
         setIsMapSelectionMode(true);
+        isMapSelectionModeRef.current = true;
         clearMapSearchVisuals();
         showSelectionPin(true);
 
@@ -662,7 +667,7 @@ export default function ResidencePreference({
     async function updateSelectedMapCenter() {
         const map = mapInstanceRef.current;
 
-        if (!map || !isMapSelectionMode) {
+        if (!map || !isMapSelectionModeRef.current) {
             return;
         }
 
@@ -767,6 +772,7 @@ export default function ResidencePreference({
 
                 setPlaceSearchResults(data.slice(0, 5));
                 setIsMapSelectionMode(true);
+                isMapSelectionModeRef.current = true;
                 clearMapSearchVisuals();
                 showSelectionPin(true);
             }
@@ -929,6 +935,7 @@ export default function ResidencePreference({
             );
 
             setIsMapSelectionMode(false);
+            isMapSelectionModeRef.current = false;
             showSelectionPin(false);
 
             setMessage(
