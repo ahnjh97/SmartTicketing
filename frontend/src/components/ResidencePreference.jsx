@@ -186,6 +186,9 @@ export default function ResidencePreference({
     const [theaters, setTheaters] =
         useState([]);
 
+    const [theaterSort, setTheaterSort] =
+        useState("DISTANCE");
+
     const [selectedTheaters, setSelectedTheaters] =
         useState(
             (user.preferredTheaters ?? [])
@@ -956,32 +959,23 @@ export default function ResidencePreference({
     async function loadNearbyTheaters(
         latitude,
         longitude,
-        resolvedAddress
+        resolvedAddress,
+        sort = "DISTANCE"
     ) {
         setSelectedTheaters([]);
         setTheaterLoading(true);
         clearMapSearchVisuals();
         setError("");
+        setTheaterSort(sort);
 
         try {
-            const sameAddress =
-                Boolean(user.address?.trim()) &&
-                user.address.trim() === resolvedAddress.trim();
-
-            let data;
-            let fromCache = false;
-
-            if (sameAddress) {
-                data = await userApi.nearbyTheaters();
-                fromCache = true;
-            } else {
-                data = await theaterApi.nearby({
-                    address: resolvedAddress,
-                    latitude,
-                    longitude,
-                    radius: 10000,
-                });
-            }
+            const data = await theaterApi.nearby({
+                address: resolvedAddress,
+                latitude,
+                longitude,
+                radius: 10000,
+                sort,
+            });
 
             if (!Array.isArray(data)) {
                 throw new Error(
@@ -989,89 +983,17 @@ export default function ResidencePreference({
                 );
             }
 
-            const normalized = data.map((theater) => {
-                const transitMinutes = toNullableNumber(
-                    fromCache
-                        ? theater.travelTimeMinutes
-                        : theater.transitMinutes
-                );
-
-                const transitDistance = toNullableNumber(
-                    fromCache
-                        ? theater.distanceMeters
-                        : theater.transitDistance
-                );
-
-                const walkMinutes = fromCache
-                    ? null
-                    : toNullableNumber(theater.walkMinutes);
-
-                const walkDistance = fromCache
-                    ? null
-                    : toNullableNumber(theater.walkDistance);
-
-                return {
-                    ...theater,
-                    transitMinutes,
-                    transitDistance,
-                    walkMinutes,
-                    walkDistance,
-                };
-            });
-
-            if (!fromCache) {
-                normalized.sort((a, b) => {
-                    if (
-                        a.transitMinutes != null &&
-                        b.transitMinutes != null
-                    ) {
-                        return a.transitMinutes - b.transitMinutes;
-                    }
-
-                    if (a.transitMinutes != null) return -1;
-                    if (b.transitMinutes != null) return 1;
-
-                    return (
-                        Number(a.distance ?? 0) -
-                        Number(b.distance ?? 0)
-                    );
-                });
-
-                await userApi.saveNearbyTheaters(
-                    normalized
-                        .filter(
-                            (theater) =>
-                                Number.isFinite(
-                                    Number(theater.theaterId)
-                                ) &&
-                                theater.transitMinutes != null &&
-                                theater.transitDistance != null
-                        )
-                        .map((theater, index) => ({
-                            theaterId: Number(theater.theaterId),
-                            distanceMeters: Number(
-                                theater.transitDistance
-                            ),
-                            travelTimeMinutes: Number(
-                                theater.transitMinutes
-                            ),
-                            priority: index + 1,
-                        }))
-                );
-            } else {
-                normalized.sort(
-                    (a, b) =>
-                        Number(a.priority ?? 0) -
-                        Number(b.priority ?? 0)
-                );
-            }
+            const normalized = data.map((theater) => ({
+                ...theater,
+                distance: toNullableNumber(theater.distance),
+                transitMinutes: toNullableNumber(theater.transitMinutes),
+                transitDistance: toNullableNumber(theater.transitDistance),
+                walkMinutes: toNullableNumber(theater.walkMinutes),
+                walkDistance: toNullableNumber(theater.walkDistance),
+            }));
 
             setTheaters(normalized);
-            renderTheaterMarkers(
-                fromCache
-                    ? []
-                    : normalized
-            );
+            renderTheaterMarkers(normalized);
         } catch (e) {
             setError(
                 e.message ??
@@ -1081,6 +1003,23 @@ export default function ResidencePreference({
             renderTheaterMarkers([]);
         } finally {
             setTheaterLoading(false);
+        }
+    }
+
+    async function changeTheaterSort(sort) {
+        if (!location) {
+            return;
+        }
+
+        await loadNearbyTheaters(
+            location.latitude,
+            location.longitude,
+            address,
+            sort
+        );
+
+        if (sort === "WALK") {
+            setMessage("");
         }
     }
 
@@ -1094,134 +1033,73 @@ export default function ResidencePreference({
             return;
         }
 
-        theaterMarkersRef.current.forEach(
-            (
-                marker
-            ) =>
-                marker.setMap(
-                    null
-                )
+        theaterMarkersRef.current.forEach((marker) =>
+            marker.setMap(null)
+        );
+        theaterOverlaysRef.current.forEach((overlay) =>
+            overlay.setMap(null)
         );
 
-        theaterOverlaysRef.current.forEach(
-            (
-                overlay
-            ) =>
-                overlay.setMap(
-                    null
-                )
-        );
+        theaterMarkersRef.current = [];
+        theaterOverlaysRef.current = [];
 
-        theaterMarkersRef.current =
-            [];
-
-        theaterOverlaysRef.current =
-            [];
-
-        theaterList.forEach(
-            (
-                theater,
-                index
-            ) => {
-                if (
-                    theater.latitude ==
-                    null ||
-                    theater.longitude ==
-                    null
-                ) {
-                    return;
-                }
-
-                const position =
-                    new window.kakao.maps.LatLng(
-                        Number(
-                            theater.latitude
-                        ),
-                        Number(
-                            theater.longitude
-                        )
-                    );
-
-                const marker =
-                    new window.kakao.maps.Marker(
-                        {
-                            map:
-                            mapInstanceRef.current,
-
-                            position,
-                        }
-                    );
-
-                const overlay =
-                    new window.kakao.maps.CustomOverlay({
-                        position,
-                        content: `
-                            <div class="map-theater-info">
-                                <strong>${theater.name}</strong>
-                            </div>
-                        `,
-                        yAnchor: 1.8,
-                        zIndex: 20,
-                    });
-
-                window.kakao.maps.event.addListener(
-                    marker,
-                    "mouseover",
-                    () => {
-                        overlay.setMap(
-                            mapInstanceRef.current
-                        );
-                    }
-                );
-
-                window.kakao.maps.event.addListener(
-                    marker,
-                    "mouseout",
-                    () => {
-                        overlay.setMap(null);
-                    }
-                );
-
-                const transitMinutes =
-                    theater.transitMinutes;
-
-                const walkMinutes =
-                    theater.walkMinutes;
-
-                const transitText =
-                    transitMinutes !=
-                    null
-                        ? `대중교통 ${transitMinutes}분`
-                        : "";
-
-                const walkText =
-                    walkMinutes !=
-                    null
-                        ? `도보 ${walkMinutes}분`
-                        : "";
-
-                const routeText =
-                    [
-                        transitText,
-                        walkText,
-                    ]
-                        .filter(
-                            Boolean
-                        )
-                        .join(
-                            " · "
-                        );
-
-                theaterMarkersRef.current.push(
-                    marker
-                );
-
-                theaterOverlaysRef.current.push(
-                    overlay
-                );
-
+        theaterList.forEach((theater) => {
+            if (
+                theater.latitude == null ||
+                theater.longitude == null
+            ) {
+                return;
             }
-        );
+
+            const position =
+                new window.kakao.maps.LatLng(
+                    Number(theater.latitude),
+                    Number(theater.longitude)
+                );
+
+            const marker =
+                new window.kakao.maps.Marker({
+                    map: mapInstanceRef.current,
+                    position,
+                });
+
+            const distanceText =
+                theater.distance != null
+                    ? theater.distance >= 1000
+                        ? `${(theater.distance / 1000).toFixed(1)}km`
+                        : `${theater.distance}m`
+                    : "";
+
+            const overlay =
+                new window.kakao.maps.CustomOverlay({
+                    position,
+                    content: `
+                        <div class="map-theater-info">
+                            <strong>${theater.name}</strong>
+                            ${distanceText
+                                ? `<span>${distanceText}</span>`
+                                : ""}
+                        </div>
+                    `,
+                    yAnchor: 1.8,
+                    zIndex: 20,
+                });
+
+            window.kakao.maps.event.addListener(
+                marker,
+                "mouseover",
+                () => overlay.setMap(mapInstanceRef.current)
+            );
+
+            window.kakao.maps.event.addListener(
+                marker,
+                "mouseout",
+                () => overlay.setMap(null)
+            );
+
+            theaterMarkersRef.current.push(marker);
+            theaterOverlaysRef.current.push(overlay);
+        });
     }
 
     function toggleTheater(
@@ -1642,11 +1520,30 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    현재 위치 기준 10km
-                    이내의 영화관을
-                    대중교통 소요시간순으로
-                    표시합니다.
+                    현재 위치 기준 10km 이내의 영화관을 조회합니다.
                 </p>
+
+                <div className="theater-sort-tabs">
+                    {[
+                        ["DISTANCE", "가까운순(직선거리)"],
+                        ["TRANSIT", "대중교통 거리순"],
+                        ["WALK", "도보 거리순"],
+                    ].map(([sort, label]) => (
+                        <button
+                            key={sort}
+                            type="button"
+                            className={
+                                theaterSort === sort
+                                    ? "theater-sort-tab active"
+                                    : "theater-sort-tab"
+                            }
+                            onClick={() => changeTheaterSort(sort)}
+                            disabled={theaterLoading || !location}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
 
                 {theaterLoading && (
                     <p className="help">
@@ -1658,7 +1555,9 @@ export default function ResidencePreference({
                     theaters.length === 0 &&
                     location && (
                         <p className="help">
-                            주변 영화관이 없습니다.
+                            {theaterSort === "WALK"
+                                ? "거리상 너무 멉니다."
+                                : "주변 영화관이 없습니다."}
                         </p>
                     )}
 
@@ -1715,63 +1614,50 @@ export default function ResidencePreference({
                                     </div>
 
                                     <div className="theater-time">
+                                        {theaterSort === "DISTANCE" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.distance != null
+                                                        ? theater.distance >= 1000
+                                                            ? `${(theater.distance / 1000).toFixed(1)}km`
+                                                            : `${theater.distance}m`
+                                                        : "-"}
+                                                </strong>
+                                                <small>직선거리</small>
+                                            </div>
+                                        )}
 
-                                        <div>
-                                            <strong>
-                                                {
-                                                    theater.transitMinutes !=
-                                                    null
+                                        {theaterSort === "TRANSIT" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.transitMinutes != null
                                                         ? `${theater.transitMinutes}분`
-                                                        : "-"
-                                                }
-                                            </strong>
-
-                                            <small>
-                                                대중교통
-                                            </small>
-
-                                            {theater.transitDistance !=
-                                                null && (
+                                                        : "-"}
+                                                </strong>
+                                                <small>대중교통</small>
+                                                {theater.transitDistance != null && (
                                                     <small>
-                                                        {(
-                                                            theater.transitDistance /
-                                                            1000
-                                                        ).toFixed(
-                                                            1
-                                                        )}
-                                                        km
+                                                        {(theater.transitDistance / 1000).toFixed(1)}km
                                                     </small>
                                                 )}
-                                        </div>
+                                            </div>
+                                        )}
 
-                                        <div>
-                                            <strong>
-                                                {
-                                                    theater.walkMinutes !=
-                                                    null
+                                        {theaterSort === "WALK" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.walkMinutes != null
                                                         ? `${theater.walkMinutes}분`
-                                                        : "-"
-                                                }
-                                            </strong>
-
-                                            <small>
-                                                도보
-                                            </small>
-
-                                            {theater.walkDistance !=
-                                                null && (
+                                                        : "-"}
+                                                </strong>
+                                                <small>도보</small>
+                                                {theater.walkDistance != null && (
                                                     <small>
-                                                        {(
-                                                            theater.walkDistance /
-                                                            1000
-                                                        ).toFixed(
-                                                            1
-                                                        )}
-                                                        km
+                                                        {(theater.walkDistance / 1000).toFixed(1)}km
                                                     </small>
                                                 )}
-                                        </div>
-
+                                            </div>
+                                        )}
                                     </div>
                                 </button>
                             );

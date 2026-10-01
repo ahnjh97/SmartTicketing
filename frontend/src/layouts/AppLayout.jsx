@@ -9,7 +9,6 @@ export default function AppLayout() {
     const location = useLocation();
     const navigate = useNavigate();
     const booking = [PAGE_PATHS.home, PAGE_PATHS.movies, PAGE_PATHS.theaters].includes(location.pathname);
-    const empty = location.pathname === PAGE_PATHS.tickets;
 
     async function handleLogout() {
         try {
@@ -29,7 +28,7 @@ export default function AppLayout() {
                 setupRequired={preferenceSetupRequired}
                 onLogout={handleLogout}
             />
-            <main className={empty && !loading ? "app-shell-empty" : undefined}>
+            <main>
                 <Outlet />
             </main>
         </div>
