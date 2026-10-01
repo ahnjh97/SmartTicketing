@@ -51,6 +51,10 @@ public class Movie {
     @Column(name = "metadata_fetched_at")
     private LocalDateTime metadataFetchedAt;
 
+    // 이미지가 없는 응답도 확인 완료로 기록한다. 기존 행의 null은 최초 보충 대상이다.
+    @Column(name = "image_metadata_fetched_at")
+    private LocalDateTime imageMetadataFetchedAt;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 

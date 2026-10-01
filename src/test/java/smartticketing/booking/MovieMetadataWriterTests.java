@@ -29,6 +29,7 @@ class MovieMetadataWriterTests {
         fetched.setBackdropUrl("https://images.test/wide.jpg");
         fetched.setLogoUrl("https://images.test/logo.png");
         fetched.setMetadataFetchedAt(LocalDateTime.now());
+        fetched.setImageMetadataFetchedAt(fetched.getMetadataFetchedAt());
         var saved = writer.saveMissing(fetched); Long id = saved.getId(); em.clear();
         var result = em.find(Movie.class, id);
         assertThat(result.getTitle()).isEqualTo("수정한 제목"); assertThat(result.getDescription()).isEqualTo("수정한 설명");
@@ -37,6 +38,7 @@ class MovieMetadataWriterTests {
         assertThat(result.getTrailerUrl()).isEqualTo(fetched.getTrailerUrl()); assertThat(result.getMetadataFetchedAt()).isNotNull();
         assertThat(result.getBackdropUrl()).isEqualTo(fetched.getBackdropUrl());
         assertThat(result.getLogoUrl()).isEqualTo(fetched.getLogoUrl());
+        assertThat(result.getImageMetadataFetchedAt()).isNotNull();
     }
 
     @Test void repeatedMetadataWriteDoesNotDuplicateMovieOrClearGoodFields() {

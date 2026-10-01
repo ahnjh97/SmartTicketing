@@ -27,6 +27,9 @@ public class MovieMetadataWriter {
         if (blank(target.getLogoUrl())) target.setLogoUrl(incoming.getLogoUrl());
         if (blank(target.getTrailerUrl())) target.setTrailerUrl(incoming.getTrailerUrl());
         target.setMetadataFetchedAt(incoming.getMetadataFetchedAt());
+        if (incoming.getImageMetadataFetchedAt() != null) {
+            target.setImageMetadataFetchedAt(incoming.getImageMetadataFetchedAt());
+        }
         return movies.saveAndFlush(target);
     }
 
