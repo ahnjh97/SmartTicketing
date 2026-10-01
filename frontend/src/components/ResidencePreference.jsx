@@ -951,142 +951,129 @@ export default function ResidencePreference({
         longitude,
         resolvedAddress
     ) {
-        // 위치 조회가 새로 실행되면 이전 위치에서 고른 극장 선택을 비웁니다.
-        // 새 위치 기준으로 다시 선호 극장을 선택할 수 있게 합니다.
         setSelectedTheaters([]);
-
-        setTheaterLoading(
-            true
-        );
-
-        // 새 위치 조회 전 기존 마커를 제거하고 새 결과만 표시합니다.
+        setTheaterLoading(true);
         clearMapSearchVisuals();
         setError("");
 
         try {
-            const data =
-                await theaterApi.nearby({
+            const sameAddress =
+                Boolean(user.address?.trim()) &&
+                user.address.trim() === resolvedAddress.trim();
+
+            let data;
+            let fromCache = false;
+
+            if (sameAddress) {
+                data = await userApi.nearbyTheaters();
+                fromCache = true;
+            } else {
+                data = await theaterApi.nearby({
                     address: resolvedAddress,
                     latitude,
                     longitude,
                     radius: 10000,
                 });
+            }
 
-            if (
-                !Array.isArray(
-                    data
-                )
-            ) {
+            if (!Array.isArray(data)) {
                 throw new Error(
                     "주변 영화관 데이터 형식이 올바르지 않습니다."
                 );
             }
 
-            const normalized =
-                data.map(
-                    (
-                        theater
-                    ) => {
-                        const transitMinutes =
-                            toNullableNumber(
-                                theater.transitMinutes
-                            );
-
-                        const transitDistance =
-                            toNullableNumber(
-                                theater.transitDistance
-                            );
-
-                        const walkMinutes =
-                            toNullableNumber(
-                                theater.walkMinutes
-                            );
-
-                        const walkDistance =
-                            toNullableNumber(
-                                theater.walkDistance
-                            );
-
-                        return {
-                            ...theater,
-
-                            transitMinutes,
-
-                            transitDistance,
-
-                            walkMinutes,
-
-                            walkDistance,
-                        };
-                    }
+            const normalized = data.map((theater) => {
+                const transitMinutes = toNullableNumber(
+                    fromCache
+                        ? theater.travelTimeMinutes
+                        : theater.transitMinutes
                 );
 
-            normalized.sort(
-                (
-                    a,
-                    b
-                ) => {
+                const transitDistance = toNullableNumber(
+                    fromCache
+                        ? theater.distanceMeters
+                        : theater.transitDistance
+                );
+
+                const walkMinutes = fromCache
+                    ? null
+                    : toNullableNumber(theater.walkMinutes);
+
+                const walkDistance = fromCache
+                    ? null
+                    : toNullableNumber(theater.walkDistance);
+
+                return {
+                    ...theater,
+                    transitMinutes,
+                    transitDistance,
+                    walkMinutes,
+                    walkDistance,
+                };
+            });
+
+            if (!fromCache) {
+                normalized.sort((a, b) => {
                     if (
-                        a.transitMinutes !=
-                        null &&
-                        b.transitMinutes !=
-                        null
+                        a.transitMinutes != null &&
+                        b.transitMinutes != null
                     ) {
-                        return (
-                            a.transitMinutes -
-                            b.transitMinutes
-                        );
+                        return a.transitMinutes - b.transitMinutes;
                     }
 
-                    if (
-                        a.transitMinutes !=
-                        null
-                    ) {
-                        return -1;
-                    }
-
-                    if (
-                        b.transitMinutes !=
-                        null
-                    ) {
-                        return 1;
-                    }
+                    if (a.transitMinutes != null) return -1;
+                    if (b.transitMinutes != null) return 1;
 
                     return (
-                        Number(
-                            a.distance ??
-                            0
-                        ) -
-                        Number(
-                            b.distance ??
-                            0
-                        )
+                        Number(a.distance ?? 0) -
+                        Number(b.distance ?? 0)
                     );
-                }
-            );
+                });
 
-            setTheaters(
-                normalized
-            );
+                await userApi.saveNearbyTheaters(
+                    normalized
+                        .filter(
+                            (theater) =>
+                                Number.isFinite(
+                                    Number(theater.theaterId)
+                                ) &&
+                                theater.transitMinutes != null &&
+                                theater.transitDistance != null
+                        )
+                        .map((theater, index) => ({
+                            theaterId: Number(theater.theaterId),
+                            distanceMeters: Number(
+                                theater.transitDistance
+                            ),
+                            travelTimeMinutes: Number(
+                                theater.transitMinutes
+                            ),
+                            priority: index + 1,
+                        }))
+                );
+            } else {
+                normalized.sort(
+                    (a, b) =>
+                        Number(a.priority ?? 0) -
+                        Number(b.priority ?? 0)
+                );
+            }
 
+            setTheaters(normalized);
             renderTheaterMarkers(
-                normalized
+                fromCache
+                    ? []
+                    : normalized
             );
         } catch (e) {
             setError(
                 e.message ??
                 "주변 영화관 조회에 실패했습니다."
             );
-
             setTheaters([]);
-
-            renderTheaterMarkers(
-                []
-            );
+            renderTheaterMarkers([]);
         } finally {
-            setTheaterLoading(
-                false
-            );
+            setTheaterLoading(false);
         }
     }
 
