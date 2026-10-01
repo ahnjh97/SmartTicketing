@@ -4,6 +4,7 @@ import com.SmartTicketing.SmartTicketing.dto.theater.NearbyTheaterResponse;
 import com.SmartTicketing.SmartTicketing.entity.Theater;
 import com.SmartTicketing.SmartTicketing.entity.enums.TheaterBrand;
 import com.SmartTicketing.SmartTicketing.repository.TheaterRepository;
+import com.SmartTicketing.SmartTicketing.performance.NearbyTheaterPerformance;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
@@ -21,13 +22,16 @@ public class KakaoMapService {
     private final TheaterRepository theaters;
     private final RestClient restClient;
     private final String restApiKey;
+    private final NearbyTheaterPerformance performance;
 
     public KakaoMapService(
             TheaterRepository theaters,
-            @Value("${kakao.map.rest-api-key:}") String restApiKey
+            @Value("${kakao.map.rest-api-key:}") String restApiKey,
+            NearbyTheaterPerformance performance
     ) {
         this.theaters = theaters;
         this.restApiKey = restApiKey;
+        this.performance = performance;
 
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
@@ -35,6 +39,42 @@ public class KakaoMapService {
     }
 
     public List<NearbyTheaterResponse> findNearbyTheaters(
+            double latitude,
+            double longitude,
+            int radius
+    ) {
+        return findNearbyTheaters(
+                null,
+                latitude,
+                longitude,
+                radius
+        );
+    }
+
+    public List<NearbyTheaterResponse> findNearbyTheaters(
+            String address,
+            double latitude,
+            double longitude,
+            int radius
+    ) {
+        performance.start(
+                address != null && !address.isBlank()
+                        ? address
+                        : "좌표 기반 조회 (lat=" + latitude + ", lon=" + longitude + ")"
+        );
+
+        try {
+            return findNearbyTheatersInternal(
+                    latitude,
+                    longitude,
+                    radius
+            );
+        } finally {
+            performance.finish();
+        }
+    }
+
+    private List<NearbyTheaterResponse> findNearbyTheatersInternal(
             double latitude,
             double longitude,
             int radius
@@ -72,12 +112,14 @@ public class KakaoMapService {
                 brandQueries.entrySet()
         ) {
             List<NearbyPlace> results =
-                    search(
-                            entry.getKey(),
-                            entry.getValue(),
-                            latitude,
-                            longitude,
-                            radius
+                    performance.measureTheaterSearch(
+                            () -> search(
+                                    entry.getKey(),
+                                    entry.getValue(),
+                                    latitude,
+                                    longitude,
+                                    radius
+                            )
                     );
 
             for (NearbyPlace place : results) {
@@ -87,6 +129,8 @@ public class KakaoMapService {
                 );
             }
         }
+
+        performance.setTheaterCount(places.size());
 
         return places.values()
                 .stream()
@@ -303,24 +347,28 @@ public class KakaoMapService {
         theater.setActive(true);
 
         theater =
-                theaters.save(
-                        theater
+                performance.measureDbSave(
+                        () -> theaters.save(theater)
                 );
 
         RouteInfo transit =
-                findPublicTransit(
-                        latitude,
-                        longitude,
-                        place.latitude(),
-                        place.longitude()
+                performance.measurePublicTransit(
+                        () -> findPublicTransit(
+                                latitude,
+                                longitude,
+                                place.latitude(),
+                                place.longitude()
+                        )
                 );
 
         RouteInfo walk =
-                findWalk(
-                        latitude,
-                        longitude,
-                        place.latitude(),
-                        place.longitude()
+                performance.measureWalk(
+                        () -> findWalk(
+                                latitude,
+                                longitude,
+                                place.latitude(),
+                                place.longitude()
+                        )
                 );
 
         return new NearbyTheaterResponse(
