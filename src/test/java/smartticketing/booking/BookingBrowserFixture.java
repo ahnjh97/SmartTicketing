@@ -13,7 +13,9 @@ import java.util.*;
 public class BookingBrowserFixture {
     public static void main(String[] args) throws Exception {
         if (!"true".equals(System.getenv("BOOKING_BROWSER_TEST"))) throw new IllegalStateException("Browser test opt-in required");
-        Path stop = Path.of(".gradle/stage6-browser.stop");
+        String run = System.getenv().getOrDefault("BOOKING_BROWSER_RUN", "stage6");
+        if (!run.matches("stage[0-9]+")) throw new IllegalArgumentException("Invalid browser run name");
+        Path stop = Path.of(".gradle/" + run + "-browser.stop");
         if (Files.exists(stop)) throw new IllegalStateException("Remove the previous browser stop marker before launch");
         try (var db = new TemporaryMysqlDatabase()) {
             try (var em = db.open()) {
@@ -24,16 +26,21 @@ public class BookingBrowserFixture {
                 for (int i=1;i<=3;i++) {
                     var theater = new Theater(); theater.setName("[격리 검증] 시네마 "+i); theater.setAddress("서울 테스트 주소"); theater.setKakaoPlaceId("browser-"+i); theater.setBrand(TheaterBrand.CGV); em.persist(theater);
                     var preference = new UserPreferredTheater(); preference.setUser(user); preference.setTheater(theater); preference.setPriority(i); em.persist(preference);
-                    if (i!=1) continue;
+                    if (i!=1 && !run.equals("stage7")) continue;
                     var screen = new Screen(); screen.setName("PREMIUM 1관"); screen.setTheater(theater); em.persist(screen);
                     var show = new Showtime(); show.setMovie(movie); show.setScreen(screen); show.setStartTime(now.plusHours(2)); show.setEndTime(now.plusHours(4));
                     show.setPricePerPerson(10000); show.setTotalSeats(72); show.setAvailableSeats(70); show.setCreatedAt(now); show.setUpdatedAt(now); em.persist(show);
                     for(int row=0;row<6;row++) for(int number=1;number<=12;number++) {
                         var seat = new Seat(); seat.setScreen(screen); seat.setSeatRow(String.valueOf((char)('A'+row))); seat.setSeatNumber(number); seat.setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
                         int segment = number<=3?0:number<=9?1:2; seat.setAdjacencySegment("block-"+segment); seat.setPositionInSegment(number-(segment==0?0:segment==1?3:9)); em.persist(seat);
-                        var inventory = new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat); if(row==2&&number<=2) inventory.setStatus(SeatStatus.BLOCKED); em.persist(inventory);
+                        var inventory = new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat);
+                        if(row==2&&number<=2 || i==2 || i==3 && number%2==0) inventory.setStatus(SeatStatus.BLOCKED); em.persist(inventory);
                     }
                     System.out.println("BROWSER_PATH=/theaters?theater="+theater.getId()+"&movie="+movie.getId()+"&showtime="+show.getId()+"&date="+show.getStartTime().toLocalDate()+"&entry=THEATER_NORMAL");
+                    if (run.equals("stage7") && i==1) {
+                        var from = show.getStartTime().minusMinutes(30).withMinute(0).withSecond(0).withNano(0);
+                        System.out.println("BROWSER_SMART_MOVIE_PATH=/movies?movie="+movie.getId()+"&date="+from.toLocalDate()+"&from="+from.toLocalTime()+"&until="+from.plusHours(3).toLocalTime()+"&party=2&entry=MOVIE_SMART");
+                    }
                 }
                 var seatPreference = new UserPreferredSeat(); seatPreference.setUser(user); seatPreference.setPriority(1); seatPreference.setSeatPosition(SeatPosition.MIDDLE_MIDDLE); em.persist(seatPreference);
                 em.getTransaction().commit();

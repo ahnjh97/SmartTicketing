@@ -27,8 +27,8 @@ export function ShowtimeCard({ show, selected, label, onClick }) {
         <span>{show.availableSeats} / {show.totalSeats}석 · {label}</span>
     </Tag>;
 }
-export function BookingButtons({ normal, disabled, smartDisabled, onEnter }) {
-    return <div className={ui.actions}>{normal && <GlassButton disabled={disabled} onClick={() => onEnter('THEATER_NORMAL')}>일반예매</GlassButton>}
+export function BookingButtons({ normal, disabled, normalDisabled, smartDisabled, onEnter }) {
+    return <div className={ui.actions}>{normal && <GlassButton disabled={disabled || normalDisabled} onClick={() => onEnter('THEATER_NORMAL')}>일반예매</GlassButton>}
         <button className={ui.primary} disabled={disabled || smartDisabled} onClick={() => onEnter(normal ? 'THEATER_SMART' : 'MOVIE_SMART')}>스마트예매</button></div>;
 }
 export function Pagination({ data, page, onChange }) {

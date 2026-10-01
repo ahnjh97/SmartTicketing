@@ -57,7 +57,9 @@ public class BookingHoldService {
                 () -> acquire(userId, groupId, source, candidate.showtimeId(), ids));
     }
 
-    private ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids) {
+    // Package scope: smart orchestration supplies its own request-level idempotency transaction.
+    @Transactional(noRollbackFor = BookingRejection.class)
+    ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids) {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
@@ -90,10 +92,10 @@ public class BookingHoldService {
             if (!seat.isActive() || !seat.getScreen().getId().equals(show.getScreen().getId()))
                 reject(409, "이용할 수 없는 좌석입니다.");
             if (row.getStatus() != SeatStatus.AVAILABLE || row.getReservation() != null || row.getHoldExpiredAt() != null)
-                reject(409, "요청 좌석을 모두 확보할 수 없습니다.");
+                throw new BookingRejection(409, "SEAT_CONFLICT", "요청 좌석을 모두 확보할 수 없습니다.");
         }
         // 수동 선택에는 연속석 조건을 강제하지 않는다. 자동 후보는 알려진 연결정보만 검증한다.
-        if (source != Source.MANUAL) validateAutomaticLayout(selected, inventory);
+        if (source != Source.MANUAL) validateAutomaticLayout(selected, inventory, source == Source.SMART);
 
         // 모든 검증이 끝난 뒤에만 도메인 쓰기를 시작한다.
         var expires = now.plusMinutes(5);
@@ -148,6 +150,7 @@ public class BookingHoldService {
         catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
     }
 
+    @Transactional(noRollbackFor = BookingRejection.class)
     BookingRequestGroup lockOwnedGroup(Long userId, Long groupId) {
         var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
         if (group == null || !group.getUser().getId().equals(userId)) reject(404, "관람 요청을 찾을 수 없습니다.");
@@ -234,7 +237,7 @@ public class BookingHoldService {
         }
     }
 
-    private static void validateAutomaticLayout(List<ShowtimeSeat> selected, List<ShowtimeSeat> inventory) {
+    private static void validateAutomaticLayout(List<ShowtimeSeat> selected, List<ShowtimeSeat> inventory, boolean singleRun) {
         Map<String, SortedSet<Integer>> runs = new HashMap<>();
         for (var row : selected) {
             var s = row.getSeat();
@@ -259,13 +262,13 @@ public class BookingHoldService {
             sizes.add(size);
         }
         sizes.sort(Integer::compareTo);
-        boolean valid = sizes.size() == 1 || switch (selected.size()) {
+        boolean valid = sizes.size() == 1 || !singleRun && switch (selected.size()) {
             case 4 -> sizes.equals(List.of(2, 2));
             case 5 -> sizes.equals(List.of(2, 3));
             case 6 -> sizes.equals(List.of(2, 4)) || sizes.equals(List.of(3, 3)) || sizes.equals(List.of(2, 2, 2));
             default -> false;
         };
-        if (!valid) reject(409, "허용된 연속석 또는 분할 착석 조건을 충족하지 않습니다.");
+        if (!valid) reject(409, "전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉을 수 없습니다.");
     }
 
     private static List<Long> normalizeSeats(List<Long> seats) {

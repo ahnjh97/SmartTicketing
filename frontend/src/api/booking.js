@@ -11,6 +11,7 @@ export const bookingApi = {
     hold: (id, seatIds, key) => request(`/api/booking-groups/${id}/manual-hold`, {
         method: 'POST', body: { seatIds }, idempotencyKey: key,
     }),
+    smartHold: (id, key) => request(`/api/booking-groups/${id}/smart-hold`, { method: 'POST', idempotencyKey: key }),
     reservation: (id, signal) => request(`/api/reservations/${id}`, { signal }),
     payment: (id, signal) => request(`/api/reservations/${id}/payment`, { signal }),
     pay: (id, key, simulateFailure = false) => request(`/api/reservations/${id}/mock-payments`, {

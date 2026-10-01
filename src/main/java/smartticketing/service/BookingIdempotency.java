@@ -62,7 +62,9 @@ public class BookingIdempotency {
         try {
             result = new BookingResult(successStatus, json.writeValueAsString(action.get()));
         } catch (BookingRejection rejected) {
-            result = error(rejected.status, rejected.getMessage(), now);
+            result = rejected.code == null ? error(rejected.status, rejected.getMessage(), now)
+                    : new BookingResult(rejected.status, json.writeValueAsString(java.util.Map.of(
+                            "timestamp", now, "status", rejected.status, "message", rejected.getMessage(), "code", rejected.code)));
         }
         operation.setStatus(result.status() < 400 ? BookingOperationStatus.COMPLETED : BookingOperationStatus.FAILED);
         operation.setResponseStatus(result.status()); operation.setResponseBody(result.body());

@@ -5,10 +5,11 @@ export const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? "")
     .replace(/\/+$/, "");
 
 export class ApiError extends Error {
-    constructor(message, status) {
+    constructor(message, status, code) {
         super(message);
         this.name = "ApiError";
         this.status = status;
+        this.code = code;
     }
 }
 
@@ -66,7 +67,7 @@ export async function request(path, {
         const fallback = response.status === 401
             ? "로그인이 만료되었습니다. 다시 로그인해주세요."
             : `요청에 실패했습니다. (${response.status})`;
-        throw new ApiError(data?.message || data?.detail || fallback, response.status);
+        throw new ApiError(data?.message || data?.detail || fallback, response.status, data?.code);
     }
     return data;
 }

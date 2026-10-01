@@ -250,7 +250,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 0);
     }
 
-    @Test void automaticCandidatesValidateSplitLayoutWithoutGuessingUnknownConnections() {
+    @Test void smartCandidatesRejectUnknownConnectionsAndSplitLayout() {
         var f = fixture(4, 4);
         tx(em -> {
             em.find(BookingRequestGroup.class, f.group).setEntryPoint(BookingEntryPoint.THEATER_SMART);
@@ -269,8 +269,8 @@ class BookingHoldTests {
             rows.get(3).getSeat().setAdjacencySegment("right"); rows.get(3).getSeat().setPositionInSegment(2);
             return null;
         });
-        assertThat(tx(em -> service(em, CLOCK).hold(f.user, f.group, key(), BookingHoldService.Source.SMART, candidate)).status()).isEqualTo(201);
-        assertInventory(f, 1, 1, 0);
+        assertThat(tx(em -> service(em, CLOCK).hold(f.user, f.group, key(), BookingHoldService.Source.SMART, candidate)).status()).isEqualTo(409);
+        assertInventory(f, 0, 0, 4);
     }
 
     @Test void groupReadRecoversExpiryAndRatingChangeRequiresNewDeclaration() {

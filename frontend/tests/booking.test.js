@@ -31,13 +31,14 @@ test('confirmed party limit and midnight time range', () => {
     assert.equal(validRange('', ''), true);
     for (const pair of [['22:00', '22:00'], ['12:00', ''], ['24:00', '02:00']]) assert.equal(validRange(...pair), false);
 });
-test('inventory, layout and split feasibility remain distinct', () => {
+test('inventory and layout require a single contiguous block for every party size', () => {
     const s = { layoutComplete: true, availableSeats: 63, maxContiguousSeats: 1 };
     assert.equal(availability(s, 2), '연속좌석 부족');
     assert.equal(availability(s, 4), '연속좌석 부족');
-    assert.equal(availability({ ...s, maxContiguousSeats: 2 }, 4), '분할 좌석 확인 필요');
+    assert.equal(availability({ ...s, maxContiguousSeats: 2 }, 4), '연속좌석 부족');
     assert.equal(availability({ ...s, maxContiguousSeats: 2 }, 5), '연속좌석 부족');
-    assert.equal(availability({ ...s, maxContiguousSeats: 2 }, 6), '분할 좌석 확인 필요');
+    assert.equal(availability({ ...s, maxContiguousSeats: 2 }, 6), '연속좌석 부족');
+    assert.equal(availability({ ...s, maxContiguousSeats: 6 }, 6), '조회상 선택 가능');
     assert.equal(availability({ ...s, availableSeats: 0 }, 2), '매진');
     assert.equal(availability({ ...s, layoutComplete: false }, 2), '배치 미확인');
 });

@@ -21,6 +21,7 @@ import smartticketing.auth.*;
 import smartticketing.config.SecurityConfig;
 import smartticketing.controller.BookingHoldController;
 import smartticketing.controller.BookingPaymentController;
+import smartticketing.controller.BookingSmartController;
 import smartticketing.controller.TicketController;
 import smartticketing.repository.*;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
@@ -51,7 +52,8 @@ class BookingHoldHttpTests {
         return new WebApplicationContextRunner()
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
                         BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class,
-                        BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class)
+                        BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class,
+                        BookingSmartController.class, BookingSmartService.class)
                 .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true")
                 .withBean(TicketRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(TicketRepository.class))
                 .withBean(ReservationRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationRepository.class))
@@ -188,6 +190,47 @@ class BookingHoldHttpTests {
         }
     }
 
+    @Test void smartHttpReplaysAndUsesCommonPaymentWhileFailureNeverRegistersWaiting() throws Exception {
+        try (var db = new TemporaryMysqlDatabase(); var validation = Validation.buildDefaultValidatorFactory()) {
+            var ids = seed(db);
+            runner(db, clock, validation.getValidator()).run(context -> {
+                var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+                var auth = jwt().jwt(j -> j.subject(Long.toString(ids[0])));
+                String request = """
+                        {"entryPoint":"THEATER_SMART","movieId":%d,"viewingDate":"2026-10-01","partySize":2,
+                        "selectedShowtimeId":%d,"audience":{"adultCount":2,"youthCount":0,"companionsEligible":true,"guardianAccompanying":false}}
+                        """.formatted(ids[1], ids[2]);
+                var created=mvc.perform(post("/api/booking-groups").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content(request)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                long group=json.readTree(created).get("id").asLong(); String path="/api/booking-groups/"+group+"/smart-hold";
+                mvc.perform(post(path)).andExpect(status().isUnauthorized());
+                mvc.perform(post(path).with(auth)).andExpect(status().isBadRequest());
+                mvc.perform(post(path).with(auth).header("Idempotency-Key",UUID.randomUUID()).contentType("application/json")
+                        .content("{\"seatIds\":[1,2]}")).andExpect(status().isBadRequest());
+                mvc.perform(post(path).with(jwt().jwt(j->j.subject(Long.toString(ids[5])))).header("Idempotency-Key",UUID.randomUUID()))
+                        .andExpect(status().isNotFound());
+                String key=UUID.randomUUID().toString();
+                String held=mvc.perform(post(path).with(auth).header("Idempotency-Key",key)).andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.reservationType").value("SMART")).andExpect(jsonPath("$.totalAmount").value(20000))
+                        .andReturn().getResponse().getContentAsString();
+                mvc.perform(post(path).with(auth).header("Idempotency-Key",key).contentType("application/json").content("{}"))
+                        .andExpect(status().isCreated()).andExpect(content().json(held));
+                mvc.perform(post(path).with(auth).header("Idempotency-Key",UUID.randomUUID())).andExpect(status().isConflict())
+                        .andExpect(jsonPath("$.code").value("GROUP_UNAVAILABLE"));
+                String second=mvc.perform(post("/api/booking-groups").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content(request)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                long secondId=json.readTree(second).get("id").asLong();
+                mvc.perform(post("/api/booking-groups/"+secondId+"/smart-hold").with(auth).header("Idempotency-Key",UUID.randomUUID()))
+                        .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SOLD_OUT"));
+                long reservation=json.readTree(held).get("id").asLong();
+                mvc.perform(post("/api/reservations/"+reservation+"/mock-payments").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content("{\"paymentMethod\":\"MOCK\"}"))
+                        .andExpect(status().isCreated()).andExpect(jsonPath("$.ticket.status").value("VALID"));
+                try (var em=db.open()) { assertThat(em.createQuery("select count(w) from WaitingQueue w",Long.class).getSingleResult()).isZero(); }
+            });
+        }
+    }
+
     private long[] seed(TemporaryMysqlDatabase db) {
         try (var em = db.open()) {
             em.getTransaction().begin(); var now = LocalDateTime.now(clock);
@@ -201,6 +244,7 @@ class BookingHoldHttpTests {
             long[] ids = {u.getId(), m.getId(), sh.getId(), 0, 0, other.getId()};
             for (int n=1; n<=2; n++) {
                 var s = new Seat(); s.setScreen(c); s.setSeatRow("A"); s.setSeatNumber(n); s.setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
+                s.setAdjacencySegment("center"); s.setPositionInSegment(n);
                 em.persist(s); var ss = new ShowtimeSeat(); ss.setShowtime(sh); ss.setSeat(s); em.persist(ss); ids[n+2] = s.getId();
             }
             em.getTransaction().commit(); return ids;
