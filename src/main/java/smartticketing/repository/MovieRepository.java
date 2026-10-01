@@ -1,5 +1,7 @@
 package smartticketing.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
 import smartticketing.entity.Movie;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -16,4 +18,8 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from Movie m where m.tmdbMovieId = :tmdbId")
     Optional<Movie> findForMetadataUpdate(Long tmdbId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Movie m SET m.audienceCount = m.audienceCount + :delta WHERE m.id = :movieId")
+    int updateAudienceCount(@Param("movieId") Long movieId, @Param("delta") int delta);
 }

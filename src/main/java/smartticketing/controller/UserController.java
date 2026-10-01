@@ -30,6 +30,25 @@ public class UserController {
         return ResponseEntity.ok(service.options());
     }
 
+    @GetMapping("/me/nearby-theaters")
+    public ResponseEntity<?> nearbyTheaters(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(
+                service.getNearbyTheaters(current.id(jwt))
+        );
+    }
+
+    @PutMapping("/me/nearby-theaters")
+    public ResponseEntity<Void> saveNearbyTheaters(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody java.util.List<UserNearbyTheaterSaveRequest> requests
+    ) {
+        service.replaceNearbyTheaters(
+                current.id(jwt),
+                requests
+        );
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/me")
     public ResponseEntity<UserResponse> update(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody UserUpdateRequest r) {
         return ResponseEntity.ok(service.update(current.id(jwt), r));

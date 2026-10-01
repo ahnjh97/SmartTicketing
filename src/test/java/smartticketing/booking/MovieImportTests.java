@@ -26,7 +26,7 @@ class MovieImportTests {
         movies = mock(MovieRepository.class); writer = mock(MovieMetadataWriter.class);
         var builder = RestClient.builder().baseUrl("https://tmdb.test/3");
         server = MockRestServiceServer.bindTo(builder).build();
-        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "https://backdrops.test", "11,12", "11:ALL");
+        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "https://backdrops.test", "11,12", "11:ALL", "11:10000");
         when(writer.saveMissing(any())).thenAnswer(call -> call.getArgument(0));
     }
     @AfterEach void verifyServer() { server.verify(); }
@@ -56,6 +56,7 @@ class MovieImportTests {
         assertThat(smartticketing.dto.booking.CatalogResponse.MovieItem.from(movie).backdropUrl()).isEqualTo(movie.getBackdropUrl());
         assertThat(smartticketing.dto.booking.CatalogResponse.MovieDetail.from(movie).backdropUrl()).isEqualTo(movie.getBackdropUrl());
         assertThat(movie.getRating()).isEqualTo("ALL");
+        assertThat(movie.getAudienceCount()).isEqualTo(10000L);
         assertThat(movie.getMetadataFetchedAt()).isNotNull();
         assertThat(MovieMedia.from(movie).type()).isEqualTo("TRAILER");
     }
