@@ -576,13 +576,15 @@ export default function ResidencePreference({
 
         await loadNearbyTheaters(
             latitude,
-            longitude
+            longitude,
+            resolvedAddress
         );
     }
 
     async function loadNearbyTheaters(
         latitude,
-        longitude
+        longitude,
+        resolvedAddress
     ) {
         setTheaterLoading(
             true
@@ -593,6 +595,7 @@ export default function ResidencePreference({
         try {
             const data =
                 await theaterApi.nearby({
+                    address: resolvedAddress,
                     latitude,
                     longitude,
                     radius: 10000,
