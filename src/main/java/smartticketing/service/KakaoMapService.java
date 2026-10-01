@@ -82,14 +82,14 @@ public class KakaoMapService {
             double longitude,
             String sort
     ) {
-        if (restApiKey.isBlank()) {
+        String normalizedSort = normalizeSort(sort);
+
+        if (!"DISTANCE".equals(normalizedSort) && restApiKey.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "카카오 지도 연동이 설정되지 않았습니다."
             );
         }
-
-        String normalizedSort = normalizeSort(sort);
 
         // DB에서 좌표가 있는 활성 영화관을 가져온 뒤 직선거리로 10km 이내를 필터링한다.
         List<Theater> theaterList = performance.measureDbQuery(
