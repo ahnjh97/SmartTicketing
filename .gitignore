@@ -39,3 +39,7 @@ out/
 .env
 .env.*
 !.env.example
+
+# Benchmark snapshots, raw data and local Python caches
+/benchmark-results/
+**/__pycache__/
