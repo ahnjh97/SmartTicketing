@@ -31,6 +31,7 @@ public class MovieImportService {
     private final String imageBaseUrl;
     private final List<Long> movieIds;
     private final Map<Long, String> ratingOverrides;
+    private final Map<Long, Long> audienceSeeds;
 
     public MovieImportService(
             @Qualifier("tmdbRestClient") RestClient tmdbRestClient,
@@ -38,7 +39,8 @@ public class MovieImportService {
             MovieMetadataWriter metadataWriter,
             @Value("${tmdb.image-base-url}") String imageBaseUrl,
             @Value("${tmdb.movie-ids}") String movieIds,
-            @Value("${tmdb.rating-overrides:}") String ratingOverrides) {
+            @Value("${tmdb.rating-overrides:}") String ratingOverrides,
+            @Value("${tmdb.audience-seeds:}") String audienceSeeds) {
 
         this.tmdbRestClient = tmdbRestClient;
         this.movieRepository = movieRepository;
@@ -56,6 +58,12 @@ public class MovieImportService {
                 .filter(entry -> entry.contains(":"))
                 .map(entry -> entry.split(":"))
                 .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> pair[1].trim()));
+
+        this.audienceSeeds = Arrays.stream(audienceSeeds.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> Long.valueOf(pair[1].trim())));
     }
 
     public MovieImportResult importConfiguredMovies() {
@@ -84,9 +92,37 @@ public class MovieImportService {
             }
         }
 
+        int filledCount = applyConfiguredDefaults();
+
         log.info("영화 가져오기 완료 - 저장 {}건, 건너뜀 {}건, 실패 {}건",
                 savedCount, skippedCount, failedIds.size());
         return new MovieImportResult(savedCount, skippedCount, failedIds, updatedCount);
+    }
+
+    private int applyConfiguredDefaults() {
+        int filledCount = 0;
+        for (Long tmdbId : movieIds) {
+            var found = movieRepository.findByTmdbMovieId(tmdbId);
+            if (found.isEmpty()) continue;
+
+            Movie movie = found.get();
+            boolean changed = false;
+
+            if (movie.getAudienceCount() == 0 && audienceSeeds.containsKey(tmdbId)) {
+                movie.setAudienceCount(audienceSeeds.get(tmdbId));
+                changed = true;
+            }
+            if (movie.getRating() == null && ratingOverrides.containsKey(tmdbId)) {
+                movie.setRating(ratingOverrides.get(tmdbId));
+                changed = true;
+            }
+
+            if (changed) {
+                movieRepository.save(movie);
+                filledCount++;
+            }
+        }
+        return filledCount;
     }
 
     /** 3단계 조회 서비스에서 사용. DB에 있는 영화는 외부 API 없이 즉시 반환한다. */
@@ -133,6 +169,7 @@ public class MovieImportService {
         movie.setTrailerUrl(findTrailer(response));
         movie.setMetadataFetchedAt(LocalDateTime.now(ZoneId.of("Asia/Seoul")));
         movie.setActive(true);
+        movie.setAudienceCount(audienceSeeds.getOrDefault(response.id(), 0L));
         return movie;
     }
 

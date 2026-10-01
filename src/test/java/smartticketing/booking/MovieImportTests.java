@@ -26,7 +26,7 @@ class MovieImportTests {
         movies = mock(MovieRepository.class); writer = mock(MovieMetadataWriter.class);
         var builder = RestClient.builder().baseUrl("https://tmdb.test/3");
         server = MockRestServiceServer.bindTo(builder).build();
-        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "11,12", "11:ALL");
+        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "11,12", "11:ALL", "11:10000");
         when(writer.saveMissing(any())).thenAnswer(call -> call.getArgument(0));
     }
     @AfterEach void verifyServer() { server.verify(); }
