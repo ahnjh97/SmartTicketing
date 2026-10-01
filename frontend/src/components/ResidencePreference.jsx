@@ -1137,6 +1137,32 @@ export default function ResidencePreference({
                         }
                     );
 
+                const infoWindow =
+                    new window.kakao.maps.InfoWindow({
+                        content: `
+                            <div class="map-theater-info">
+                                <strong>${theater.name}</strong>
+                            </div>
+                        `,
+                    });
+
+                window.kakao.maps.event.addListener(
+                    marker,
+                    "click",
+                    () => {
+                        theaterOverlaysRef.current.forEach((item) => {
+                            if (item !== infoWindow) {
+                                item.setMap(null);
+                            }
+                        });
+
+                        infoWindow.open(
+                            mapInstanceRef.current,
+                            marker
+                        );
+                    }
+                );
+
                 const transitMinutes =
                     theater.transitMinutes;
 
@@ -1166,29 +1192,6 @@ export default function ResidencePreference({
                         .join(
                             " · "
                         );
-
-                const overlay =
-                    new window.kakao.maps.CustomOverlay(
-                        {
-                            map:
-                            mapInstanceRef.current,
-
-                            position,
-
-                            content: `
-                                <div class="map-theater-label">
-                                    ${index + 1}위
-                                    ${
-                                routeText
-                                    ? ` · ${routeText}`
-                                    : ""
-                            }
-                                </div>
-                            `,
-
-                            yAnchor: 1.8,
-                        }
-                    );
 
                 theaterMarkersRef.current.push(
                     marker
