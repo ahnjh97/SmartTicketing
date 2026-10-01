@@ -1198,6 +1198,10 @@ export default function ResidencePreference({
                 );
 
                 theaterOverlaysRef.current.push(
+                    infoWindow
+                );
+
+                theaterOverlaysRef.current.push(
                     overlay
                 );
             }
