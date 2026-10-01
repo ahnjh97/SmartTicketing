@@ -1,6 +1,7 @@
 package smartticketing.booking;
 
 import smartticketing.dto.booking.CreateBookingGroupRequest;
+import smartticketing.dto.booking.AudienceRequest;
 import smartticketing.entity.enums.BookingEntryPoint;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -31,34 +32,38 @@ class BookingContractValidationTests {
     @Test
     void movieSmartNeedsRangeWithoutAnAlreadySelectedShowtime() {
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, FROM, TO, null))).isEmpty();
+                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, FROM, TO, null, new AudienceRequest(2, 0, true, false)))).isEmpty();
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, FROM, TO, 9L))).isNotEmpty();
+                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, FROM, TO, 9L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, null, TO, null))).isNotEmpty();
+                BookingEntryPoint.MOVIE_SMART, 1L, DATE, 2, null, TO, null, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
     }
 
     @Test
     void bothTheaterFlowsRequireAParticularShowtimeAndNoRange() {
         for (var source : new BookingEntryPoint[]{BookingEntryPoint.THEATER_SMART, BookingEntryPoint.THEATER_NORMAL}) {
             assertThat(validator.validate(new CreateBookingGroupRequest(
-                    source, 1L, DATE, 2, null, null, 9L))).isEmpty();
+                    source, 1L, DATE, 2, null, null, 9L, new AudienceRequest(2, 0, true, false)))).isEmpty();
             assertThat(validator.validate(new CreateBookingGroupRequest(
-                    source, 1L, DATE, 2, null, null, null))).isNotEmpty();
+                    source, 1L, DATE, 2, null, null, null, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
             assertThat(validator.validate(new CreateBookingGroupRequest(
-                    source, 1L, DATE, 2, FROM, TO, 9L))).isNotEmpty();
+                    source, 1L, DATE, 2, FROM, TO, 9L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
         }
     }
 
     @Test
     void groupCannotBeCreatedBeforePartySizeOrWithInvalidIdentifiers() {
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, null, null, null, 9L))).isNotEmpty();
+                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, 7, null, null, 9L, new AudienceRequest(6, 1, true, false)))).isNotEmpty();
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, 0, null, null, 9L))).isNotEmpty();
+                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, 2, null, null, 9L, null))).isNotEmpty();
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                BookingEntryPoint.THEATER_NORMAL, -1L, DATE, 2, null, null, 0L))).isNotEmpty();
+                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, null, null, null, 9L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
         assertThat(validator.validate(new CreateBookingGroupRequest(
-                null, 1L, null, 2, null, null, 9L))).isNotEmpty();
+                BookingEntryPoint.THEATER_NORMAL, 1L, DATE, 0, null, null, 9L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
+        assertThat(validator.validate(new CreateBookingGroupRequest(
+                BookingEntryPoint.THEATER_NORMAL, -1L, DATE, 2, null, null, 0L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
+        assertThat(validator.validate(new CreateBookingGroupRequest(
+                null, 1L, null, 2, null, null, 9L, new AudienceRequest(2, 0, true, false)))).isNotEmpty();
     }
 }

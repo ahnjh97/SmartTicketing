@@ -63,6 +63,18 @@ public class BookingRequestGroup {
     @Column(name = "party_size", nullable = false, updatable = false)
     private Integer partySize;
 
+    // 이전 그룹은 null을 유지한다. 새로운 그룹 API가 검증된 관객 선언을 저장한다.
+    @Column(name = "adult_count", updatable = false)
+    private Integer adultCount;
+    @Column(name = "youth_count", updatable = false)
+    private Integer youthCount;
+    @Column(name = "companions_eligible", updatable = false)
+    private Boolean companionsEligible;
+    @Column(name = "guardian_accompanying", updatable = false)
+    private Boolean guardianAccompanying;
+    @Column(name = "rating_snapshot", length = 20, updatable = false)
+    private String ratingSnapshot;
+
     // 순서를 포함해 복사한다. 회원 선호정보의 이후 수정과 독립적인 값이다.
     @ElementCollection
     @CollectionTable(name = "booking_group_seat_preferences", joinColumns = @JoinColumn(name = "group_id"))

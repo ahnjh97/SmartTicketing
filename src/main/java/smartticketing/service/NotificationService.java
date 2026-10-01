@@ -54,7 +54,7 @@ public class NotificationService {
     }
 
     public Notification queueTurn(Long id) {
-        return create(id, NotificationType.QUEUE_TURN, "대기 순서가 되어 좌석 선점 기회가 시작되었습니다.");
+        return create(id, NotificationType.QUEUE_TURN, "대기 순서가 되어 5분간 예매 기회가 시작되었습니다. 제한 시간 내 예매를 완료해주세요.");
     }
 
     public Notification completed(Long id) {

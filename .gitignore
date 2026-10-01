@@ -39,3 +39,7 @@ out/
 .env
 .env.*
 !.env.example
+
+# Reproducible performance runs (snapshots, logs and raw measurements)
+/benchmark-results/
+**/__pycache__/

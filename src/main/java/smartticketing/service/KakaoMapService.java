@@ -2,7 +2,6 @@ package smartticketing.service;
 
 import smartticketing.dto.theater.NearbyTheaterResponse;
 import smartticketing.entity.Theater;
-import smartticketing.entity.enums.TheaterBrand;
 import smartticketing.repository.TheaterRepository;
 import smartticketing.performace.NearbyTheaterPerformance;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,16 +12,26 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PreDestroy;
+
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @Transactional
 public class KakaoMapService {
 
+    private static final int SEARCH_RADIUS_METERS = 10_000;
+    private static final int WALK_RADIUS_METERS = 2_000;
+
     private final TheaterRepository theaters;
     private final RestClient restClient;
     private final String restApiKey;
     private final NearbyTheaterPerformance performance;
+    private final ExecutorService transitExecutor = Executors.newFixedThreadPool(8);
 
     public KakaoMapService(
             TheaterRepository theaters,
@@ -32,10 +41,14 @@ public class KakaoMapService {
         this.theaters = theaters;
         this.restApiKey = restApiKey;
         this.performance = performance;
-
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
                 .build();
+    }
+
+    @PreDestroy
+    public void shutdownTransitExecutor() {
+        transitExecutor.shutdown();
     }
 
     public List<NearbyTheaterResponse> findNearbyTheaters(
@@ -43,12 +56,7 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
-        return findNearbyTheaters(
-                null,
-                latitude,
-                longitude,
-                radius
-        );
+        return findNearbyTheaters(null, latitude, longitude, radius, "DISTANCE");
     }
 
     public List<NearbyTheaterResponse> findNearbyTheaters(
@@ -57,6 +65,16 @@ public class KakaoMapService {
             double longitude,
             int radius
     ) {
+        return findNearbyTheaters(address, latitude, longitude, radius, "DISTANCE");
+    }
+
+    public List<NearbyTheaterResponse> findNearbyTheaters(
+            String address,
+            double latitude,
+            double longitude,
+            int radius,
+            String sort
+    ) {
         performance.start(
                 address != null && !address.isBlank()
                         ? address
@@ -64,11 +82,7 @@ public class KakaoMapService {
         );
 
         try {
-            return findNearbyTheatersInternal(
-                    latitude,
-                    longitude,
-                    radius
-            );
+            return findNearbyTheatersInternal(latitude, longitude, sort);
         } finally {
             performance.finish();
         }
@@ -77,310 +91,132 @@ public class KakaoMapService {
     private List<NearbyTheaterResponse> findNearbyTheatersInternal(
             double latitude,
             double longitude,
-            int radius
+            String sort
     ) {
-        if (restApiKey.isBlank()) {
+        String normalizedSort = normalizeSort(sort);
+
+        if (!"DISTANCE".equals(normalizedSort) && restApiKey.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "카카오 지도 연동이 설정되지 않았습니다."
             );
         }
 
-        if (radius < 0 || radius > 20000) {
-            throw new IllegalArgumentException(
-                    "검색 반경은 0~20000m까지 가능합니다."
+        // DB에서 좌표가 있는 활성 영화관을 가져온 뒤 직선거리로 10km 이내를 필터링한다.
+        List<Theater> theaterList = performance.measureDbQuery(
+                theaters::findByActiveTrueAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByNameAsc
+        );
+
+        List<TheaterDistance> candidates = theaterList.stream()
+                .map(theater -> new TheaterDistance(
+                        theater,
+                        calculateDistanceMeters(
+                                latitude,
+                                longitude,
+                                theater.getLatitude(),
+                                theater.getLongitude()
+                        )
+                ))
+                .filter(item -> item.distanceMeters() <= SEARCH_RADIUS_METERS)
+                .toList();
+
+        // 도보 정렬은 직선거리 2km 이내 영화관만 대상으로 한다.
+        List<TheaterDistance> selectedCandidates = "WALK".equals(normalizedSort)
+                ? candidates.stream()
+                        .filter(item -> item.distanceMeters() <= WALK_RADIUS_METERS)
+                        .toList()
+                : candidates;
+
+        performance.setTheaterCount(selectedCandidates.size());
+
+        if ("TRANSIT".equals(normalizedSort)) {
+            return findNearbyWithParallelTransit(
+                    selectedCandidates,
+                    latitude,
+                    longitude
             );
         }
 
-        Map<String, TheaterBrand> brandQueries =
-                Map.of(
-                        "CGV",
-                        TheaterBrand.CGV,
+        return selectedCandidates.stream()
+                .map(item -> {
+                    Theater theater = item.theater();
+                    RouteInfo walk = RouteInfo.empty();
 
-                        "롯데시네마",
-                        TheaterBrand.LOTTE_CINEMA,
-
-                        "메가박스",
-                        TheaterBrand.MEGABOX
-                );
-
-        Map<String, NearbyPlace> places =
-                new LinkedHashMap<>();
-
-        for (
-                Map.Entry<String, TheaterBrand> entry :
-                brandQueries.entrySet()
-        ) {
-            List<NearbyPlace> results =
-                    performance.measureTheaterSearch(
-                            () -> search(
-                                    entry.getKey(),
-                                    entry.getValue(),
-                                    latitude,
-                                    longitude,
-                                    radius
-                            )
-                    );
-
-            for (NearbyPlace place : results) {
-                places.putIfAbsent(
-                        place.kakaoPlaceId(),
-                        place
-                );
-            }
-        }
-
-        performance.setTheaterCount(places.size());
-
-        return places.values()
-                .stream()
-                .sorted(
-                        Comparator.comparingInt(
-                                NearbyPlace::distance
-                        )
-                )
-                .map(
-                        place ->
-                                upsert(
-                                        place,
+                    if ("WALK".equals(normalizedSort)) {
+                        walk = performance.measureWalk(
+                                () -> findWalk(
                                         latitude,
-                                        longitude
+                                        longitude,
+                                        toDouble(theater.getLatitude()),
+                                        toDouble(theater.getLongitude())
                                 )
-                )
-                .sorted(
-                        Comparator.comparing(
-                                NearbyTheaterResponse::transitMinutes,
-                                Comparator.nullsLast(
-                                        Comparator.naturalOrder()
-                                )
-                        )
-                )
-                .limit(15)
+                        );
+                    }
+
+                    return toResponse(item, RouteInfo.empty(), walk);
+                })
+                .sorted(comparatorFor(normalizedSort))
                 .toList();
     }
 
-    private List<NearbyPlace> search(
-            String query,
-            TheaterBrand brand,
-            double latitude,
-            double longitude,
-            int radius
-    ) {
-        Map<String, Object> response =
-                restClient.get()
-                        .uri(
-                                uriBuilder ->
-                                        uriBuilder
-                                                .path(
-                                                        "/v2/local/search/keyword.json"
-                                                )
-                                                .queryParam(
-                                                        "query",
-                                                        query
-                                                )
-                                                .queryParam(
-                                                        "category_group_code",
-                                                        "CT1"
-                                                )
-                                                .queryParam(
-                                                        "x",
-                                                        longitude
-                                                )
-                                                .queryParam(
-                                                        "y",
-                                                        latitude
-                                                )
-                                                .queryParam(
-                                                        "radius",
-                                                        radius
-                                                )
-                                                .queryParam(
-                                                        "sort",
-                                                        "distance"
-                                                )
-                                                .queryParam(
-                                                        "size",
-                                                        15
-                                                )
-                                                .build()
-                        )
-                        .header(
-                                "Authorization",
-                                "KakaoAK " + restApiKey
-                        )
-                        .retrieve()
-                        .body(
-                                new ParameterizedTypeReference<>() {
-                                }
-                        );
-
-        if (response == null) {
-            return List.of();
-        }
-
-        Object documents =
-                response.get("documents");
-
-        if (!(documents instanceof List<?> list)) {
-            return List.of();
-        }
-
-        List<NearbyPlace> result =
-                new ArrayList<>();
-
-        for (Object item : list) {
-
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-
-            String placeName =
-                    string(
-                            map.get(
-                                    "place_name"
-                            )
-                    );
-
-            if (placeName == null) {
-                continue;
-            }
-
-            if (!matchesBrand(
-                    placeName,
-                    brand
-            )) {
-                continue;
-            }
-
-            String placeId =
-                    string(
-                            map.get("id")
-                    );
-
-            if (placeId == null) {
-                continue;
-            }
-
-            double x =
-                    doubleValue(
-                            map.get("x")
-                    );
-
-            double y =
-                    doubleValue(
-                            map.get("y")
-                    );
-
-            int distance =
-                    (int)
-                            doubleValue(
-                                    map.get(
-                                            "distance"
-                                    )
-                            );
-
-            String roadAddress =
-                    string(
-                            map.get(
-                                    "road_address_name"
-                            )
-                    );
-
-            String address =
-                    roadAddress != null
-                            ? roadAddress
-                            : string(
-                            map.get(
-                                    "address_name"
-                            )
-                    );
-
-            result.add(
-                    new NearbyPlace(
-                            placeId,
-                            placeName,
-                            brand,
-                            address,
-                            y,
-                            x,
-                            distance,
-                            string(
-                                    map.get(
-                                            "place_url"
-                                    )
-                            )
-                    )
-            );
-        }
-
-        return result;
-    }
-
-    private NearbyTheaterResponse upsert(
-            NearbyPlace place,
+    private List<NearbyTheaterResponse> findNearbyWithParallelTransit(
+            List<TheaterDistance> candidates,
             double latitude,
             double longitude
     ) {
-        Theater theater =
-                theaters.findByKakaoPlaceId(
-                        place.kakaoPlaceId()
-                ).orElseGet(
-                        Theater::new
-                );
+        List<java.util.concurrent.CompletableFuture<TransitResult>> futures =
+                candidates.stream()
+                        .map(item -> java.util.concurrent.CompletableFuture.supplyAsync(
+                                () -> {
+                                    long start = System.nanoTime();
+                                    Theater theater = item.theater();
 
-        theater.setBrand(
-                place.brand()
+                                    RouteInfo route = findPublicTransit(
+                                            latitude,
+                                            longitude,
+                                            toDouble(theater.getLatitude()),
+                                            toDouble(theater.getLongitude())
+                                    );
+
+                                    return new TransitResult(
+                                            item,
+                                            route,
+                                            System.nanoTime() - start
+                                    );
+                                },
+                                transitExecutor
+                        ))
+                        .toList();
+
+        List<TransitResult> results = futures.stream()
+                .map(java.util.concurrent.CompletableFuture::join)
+                .toList();
+
+        long totalApiTimeNanos = results.stream()
+                .mapToLong(TransitResult::elapsedNanos)
+                .sum();
+
+        performance.recordPublicTransitBatch(
+                results.size(),
+                totalApiTimeNanos
         );
 
-        theater.setName(
-                place.name()
-        );
+        return results.stream()
+                .map(result -> toResponse(
+                        result.item(),
+                        result.route(),
+                        RouteInfo.empty()
+                ))
+                .sorted(comparatorFor("TRANSIT"))
+                .toList();
+    }
 
-        theater.setAddress(
-                place.address()
-        );
-
-        theater.setKakaoPlaceId(
-                place.kakaoPlaceId()
-        );
-
-        // 카카오에서 받은 영화관 좌표를 극장 기준 데이터에 저장한다.
-        // 이후 스마트 예매에서 거리 계산, 위치 기반 추천 등에 재사용한다.
-        theater.setLatitude(
-                java.math.BigDecimal.valueOf(place.latitude())
-        );
-        theater.setLongitude(
-                java.math.BigDecimal.valueOf(place.longitude())
-        );
-
-        theater.setActive(true);
-
-        final Theater theaterToSave = theater;
-
-        theater =
-                performance.measureDbSave(
-                        () -> theaters.save(theaterToSave)
-                );
-
-        RouteInfo transit =
-                performance.measurePublicTransit(
-                        () -> findPublicTransit(
-                                latitude,
-                                longitude,
-                                place.latitude(),
-                                place.longitude()
-                        )
-                );
-
-        RouteInfo walk =
-                performance.measureWalk(
-                        () -> findWalk(
-                                latitude,
-                                longitude,
-                                place.latitude(),
-                                place.longitude()
-                        )
-                );
+    private NearbyTheaterResponse toResponse(
+            TheaterDistance item,
+            RouteInfo transit,
+            RouteInfo walk
+    ) {
+        Theater theater = item.theater();
 
         return new NearbyTheaterResponse(
                 theater.getId(),
@@ -388,15 +224,42 @@ public class KakaoMapService {
                 theater.getBrand(),
                 theater.getAddress(),
                 theater.getKakaoPlaceId(),
-                place.latitude(),
-                place.longitude(),
-                place.distance(),
-                place.placeUrl(),
+                toDouble(theater.getLatitude()),
+                toDouble(theater.getLongitude()),
+                item.distanceMeters(),
+                null,
                 transit.distance(),
                 transit.minutes(),
                 walk.distance(),
                 walk.minutes()
         );
+    }
+
+    private String normalizeSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return "DISTANCE";
+        }
+
+        return switch (sort.trim().toUpperCase(Locale.ROOT)) {
+            case "DISTANCE", "TRANSIT", "WALK" -> sort.trim().toUpperCase(Locale.ROOT);
+            default -> throw new IllegalArgumentException(
+                    "정렬 기준은 DISTANCE, TRANSIT, WALK 중 하나여야 합니다."
+            );
+        };
+    }
+
+    private Comparator<NearbyTheaterResponse> comparatorFor(String sort) {
+        return switch (sort) {
+            case "TRANSIT" -> Comparator.comparing(
+                    NearbyTheaterResponse::transitMinutes,
+                    Comparator.nullsLast(Comparator.naturalOrder())
+            );
+            case "WALK" -> Comparator.comparing(
+                    NearbyTheaterResponse::walkMinutes,
+                    Comparator.nullsLast(Comparator.naturalOrder())
+            );
+            default -> Comparator.comparingInt(NearbyTheaterResponse::distance);
+        };
     }
 
     private RouteInfo findPublicTransit(
@@ -406,138 +269,63 @@ public class KakaoMapService {
             double endLongitude
     ) {
         try {
-            Map<String, Object> response =
-                    restClient.get()
-                            .uri(
-                                    uriBuilder ->
-                                            uriBuilder
-                                                    .path(
-                                                            "/v2/routing/publictraffic"
-                                                    )
-                                                    .queryParam(
-                                                            "start_x",
-                                                            startLongitude
-                                                    )
-                                                    .queryParam(
-                                                            "start_y",
-                                                            startLatitude
-                                                    )
-                                                    .queryParam(
-                                                            "end_x",
-                                                            endLongitude
-                                                    )
-                                                    .queryParam(
-                                                            "end_y",
-                                                            endLatitude
-                                                    )
-                                                    .queryParam(
-                                                            "input_coord",
-                                                            "WGS84"
-                                                    )
-                                                    .queryParam(
-                                                            "output_coord",
-                                                            "WGS84"
-                                                    )
-                                                    .build()
-                            )
-                            .header(
-                                    "Authorization",
-                                    "KakaoAK " + restApiKey
-                            )
-                            .retrieve()
-                            .body(
-                                    new ParameterizedTypeReference<>() {
-                                    }
-                            );
+            Map<String, Object> response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v2/routing/publictraffic")
+                            .queryParam("start_x", startLongitude)
+                            .queryParam("start_y", startLatitude)
+                            .queryParam("end_x", endLongitude)
+                            .queryParam("end_y", endLatitude)
+                            .queryParam("input_coord", "WGS84")
+                            .queryParam("output_coord", "WGS84")
+                            .build())
+                    .header("Authorization", "KakaoAK " + restApiKey)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
 
-            if (
-                    response == null ||
-                            !"OK".equals(
-                                    String.valueOf(
-                                            response.get("status")
-                                    )
-                            )) {
+            if (response == null || !"OK".equals(String.valueOf(response.get("status")))) {
                 return RouteInfo.empty();
             }
 
-            Object routes =
-                    response.get("routes");
-
+            Object routes = response.get("routes");
             if (!(routes instanceof List<?> list)) {
                 return RouteInfo.empty();
             }
 
-            int bestDistance =
-                    Integer.MAX_VALUE;
-
-            int bestSeconds =
-                    Integer.MAX_VALUE;
+            int bestDistance = Integer.MAX_VALUE;
+            int bestSeconds = Integer.MAX_VALUE;
 
             for (Object route : list) {
-
                 if (!(route instanceof Map<?, ?> routeMap)) {
                     continue;
                 }
 
-                Object properties =
-                        routeMap.get(
-                                "properties"
-                        );
-
+                Object properties = routeMap.get("properties");
                 if (!(properties instanceof Map<?, ?> propertiesMap)) {
                     continue;
                 }
 
-                Integer distance =
-                        integerValue(
-                                propertiesMap.get(
-                                        "totalDistance"
-                                )
-                        );
+                Integer distance = integerValue(propertiesMap.get("totalDistance"));
+                Integer seconds = integerValue(propertiesMap.get("totalTime"));
 
-                Integer seconds =
-                        integerValue(
-                                propertiesMap.get(
-                                        "totalTime"
-                                )
-                        );
-
-                if (
-                        distance == null ||
-                                seconds == null ||
-                                distance < 0 ||
-                                seconds <= 0
-                ) {
+                if (distance == null || seconds == null || distance < 0 || seconds <= 0) {
                     continue;
                 }
 
-                if (
-                        seconds <
-                                bestSeconds
-                ) {
-                    bestSeconds =
-                            seconds;
-
-                    bestDistance =
-                            distance;
+                if (seconds < bestSeconds) {
+                    bestSeconds = seconds;
+                    bestDistance = distance;
                 }
             }
 
-            if (
-                    bestSeconds ==
-                            Integer.MAX_VALUE
-            ) {
+            if (bestSeconds == Integer.MAX_VALUE) {
                 return RouteInfo.empty();
             }
 
             return new RouteInfo(
                     bestDistance,
-                    (int)
-                            Math.ceil(
-                                    bestSeconds / 60.0
-                            )
+                    (int) Math.ceil(bestSeconds / 60.0)
             );
-
         } catch (Exception ignored) {
             return RouteInfo.empty();
         }
@@ -550,202 +338,107 @@ public class KakaoMapService {
             double endLongitude
     ) {
         try {
-            Map<String, Object> response =
-                    restClient.get()
-                            .uri(
-                                    uriBuilder ->
-                                            uriBuilder
-                                                    .path(
-                                                            "/v2/routing/walk"
-                                                    )
-                                                    .queryParam(
-                                                            "start_x",
-                                                            startLongitude
-                                                    )
-                                                    .queryParam(
-                                                            "start_y",
-                                                            startLatitude
-                                                    )
-                                                    .queryParam(
-                                                            "end_x",
-                                                            endLongitude
-                                                    )
-                                                    .queryParam(
-                                                            "end_y",
-                                                            endLatitude
-                                                    )
-                                                    .queryParam(
-                                                            "input_coord",
-                                                            "WGS84"
-                                                    )
-                                                    .queryParam(
-                                                            "output_coord",
-                                                            "WGS84"
-                                                    )
-                                                    .queryParam(
-                                                            "route_mode",
-                                                            "BROAD_FIRST"
-                                                    )
-                                                    .build()
-                            )
-                            .header(
-                                    "Authorization",
-                                    "KakaoAK " + restApiKey
-                            )
-                            .retrieve()
-                            .body(
-                                    new ParameterizedTypeReference<>() {
-                                    }
-                            );
+            Map<String, Object> response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v2/routing/walk")
+                            .queryParam("start_x", startLongitude)
+                            .queryParam("start_y", startLatitude)
+                            .queryParam("end_x", endLongitude)
+                            .queryParam("end_y", endLatitude)
+                            .queryParam("input_coord", "WGS84")
+                            .queryParam("output_coord", "WGS84")
+                            .queryParam("route_mode", "BROAD_FIRST")
+                            .build())
+                    .header("Authorization", "KakaoAK " + restApiKey)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
 
-            if (
-                    response == null ||
-                            !"OK".equals(
-                                    String.valueOf(
-                                            response.get("status")
-                                    )
-                            )) {
+            if (response == null || !"OK".equals(String.valueOf(response.get("status")))) {
                 return RouteInfo.empty();
             }
 
-            Object route =
-                    response.get("route");
-
+            Object route = response.get("route");
             if (!(route instanceof Map<?, ?> routeMap)) {
                 return RouteInfo.empty();
             }
 
-            Object properties =
-                    routeMap.get(
-                            "properties"
-                    );
-
+            Object properties = routeMap.get("properties");
             if (!(properties instanceof Map<?, ?> propertiesMap)) {
                 return RouteInfo.empty();
             }
 
-            Integer distance =
-                    integerValue(
-                            propertiesMap.get(
-                                    "totalDistance"
-                            )
-                    );
+            Integer distance = integerValue(propertiesMap.get("totalDistance"));
+            Integer seconds = integerValue(propertiesMap.get("totalTime"));
 
-            Integer seconds =
-                    integerValue(
-                            propertiesMap.get(
-                                    "totalTime"
-                            )
-                    );
-
-            if (
-                    distance == null ||
-                            seconds == null ||
-                            distance < 0 ||
-                            seconds <= 0
-            ) {
+            if (distance == null || seconds == null || distance < 0 || seconds <= 0) {
                 return RouteInfo.empty();
             }
 
             return new RouteInfo(
                     distance,
-                    (int)
-                            Math.ceil(
-                                    seconds / 60.0
-                            )
+                    (int) Math.ceil(seconds / 60.0)
             );
-
         } catch (Exception ignored) {
             return RouteInfo.empty();
         }
     }
 
-    private Integer integerValue(
-            Object value
+    private int calculateDistanceMeters(
+            double startLatitude,
+            double startLongitude,
+            BigDecimal endLatitude,
+            BigDecimal endLongitude
     ) {
+        double lat1 = Math.toRadians(startLatitude);
+        double lon1 = Math.toRadians(startLongitude);
+        double lat2 = Math.toRadians(toDouble(endLatitude));
+        double lon2 = Math.toRadians(toDouble(endLongitude));
+
+        double dLat = lat2 - lat1;
+        double dLon = lon2 - lon1;
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(lat1) * Math.cos(lat2)
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+        return (int) Math.round(
+                6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        );
+    }
+
+    private double toDouble(BigDecimal value) {
+        return value.doubleValue();
+    }
+
+    private Integer integerValue(Object value) {
         if (value == null) {
             return null;
         }
 
         try {
-            return Integer.parseInt(
-                    String.valueOf(
-                            value
-                    )
-            );
+            return Integer.parseInt(String.valueOf(value));
         } catch (NumberFormatException ignored) {
             return null;
         }
     }
 
-    private boolean matchesBrand(
-            String placeName,
-            TheaterBrand brand
-    ) {
-        return switch (brand) {
+    private record TheaterDistance(
+            Theater theater,
+            int distanceMeters
+    ) {}
 
-            case CGV ->
-                    placeName
-                            .toUpperCase()
-                            .contains("CGV");
-
-            case LOTTE_CINEMA ->
-                    placeName.contains(
-                            "롯데시네마"
-                    );
-
-            case MEGABOX ->
-                    placeName.contains(
-                            "메가박스"
-                    );
-        };
-    }
-
-    private String string(
-            Object value
-    ) {
-        return value == null
-                ? null
-                : String.valueOf(
-                value
-        );
-    }
-
-    private double doubleValue(
-            Object value
-    ) {
-        if (value == null) {
-            return 0;
-        }
-
-        return Double.parseDouble(
-                String.valueOf(
-                        value
-                )
-        );
-    }
+    private record TransitResult(
+            TheaterDistance item,
+            RouteInfo route,
+            long elapsedNanos
+    ) {}
 
     private record RouteInfo(
             Integer distance,
             Integer minutes
     ) {
         private static RouteInfo empty() {
-            return new RouteInfo(
-                    null,
-                    null
-            );
+            return new RouteInfo(null, null);
         }
-    }
-
-    private record NearbyPlace(
-            String kakaoPlaceId,
-            String name,
-            TheaterBrand brand,
-            String address,
-            double latitude,
-            double longitude,
-            int distance,
-            String placeUrl
-    ) {
     }
 }
