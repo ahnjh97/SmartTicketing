@@ -1,5 +1,5 @@
 param(
-    [int]$Runs = 500,
+    [int]$Runs = 100,
     [int]$WarmupRuns = 5,
     [int]$Port = 8080,
     [string]$Sort = "TRANSIT",
@@ -19,7 +19,7 @@ $originalBranch = (git -C $repo branch --show-current).Trim()
 # Keep a temporary copy outside the repository so branch checkout
 # cannot overwrite/delete the running benchmark script.
 $runnerDir = Join-Path ([System.IO.Path]::GetTempPath()) "smartticketing-benchmark"
-$runnerPath = Join-Path $runnerDir "benchmark-nearby-500.ps1"
+$runnerPath = Join-Path $runnerDir "benchmark-nearby-100.ps1"
 New-Item -ItemType Directory -Force -Path $runnerDir | Out-Null
 Copy-Item -LiteralPath $scriptPath -Destination $runnerPath -Force
 
@@ -32,8 +32,8 @@ $branches = @(
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $outDir = Join-Path $repo "benchmark-results"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-$summaryPath = Join-Path $outDir "benchmark-500-summary-$timestamp.csv"
-$rawPath = Join-Path $outDir "benchmark-500-raw-$timestamp.csv"
+$summaryPath = Join-Path $outDir "benchmark-100-summary-$timestamp.csv"
+$rawPath = Join-Path $outDir "benchmark-100-raw-$timestamp.csv"
 $allRaw = [System.Collections.Generic.List[object]]::new()
 $summary = [System.Collections.Generic.List[object]]::new()
 
@@ -71,8 +71,9 @@ try {
         $jar = Get-ChildItem "$repo\build\libs\*.jar" | Where-Object { $_.Name -notmatch "plain" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($null -eq $jar) { throw "Executable jar not found." }
 
-        $logPath = Join-Path $outDir "server-$($b.Name.Replace('/','-'))-$timestamp.log"
-        $server = Start-Process -FilePath "java.exe" -ArgumentList @("-jar", $jar.FullName, "--server.port=$Port") -WorkingDirectory $repo -RedirectStandardOutput $logPath -RedirectStandardError $logPath -PassThru
+        $serverOutLog = Join-Path $outDir "server-$($b.Name.Replace('/','-'))-$timestamp-stdout.log"
+        $serverErrLog = Join-Path $outDir "server-$($b.Name.Replace('/','-'))-$timestamp-stderr.log"
+        $server = Start-Process -FilePath "java.exe" -ArgumentList @("-jar", $jar.FullName, "--server.port=$Port") -WorkingDirectory $repo -RedirectStandardOutput $serverOutLog -RedirectStandardError $serverErrLog -PassThru
 
         try {
             Wait-Server "http://localhost:$Port"
