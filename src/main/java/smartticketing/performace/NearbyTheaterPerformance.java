@@ -3,8 +3,8 @@ package smartticketing.performace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import smartticketing.entity.NearbyTheaterPerformanceResult;
-import smartticketing.repository.NearbyTheaterPerformanceResultRepository;
+import smartticketing.entity.DbSequentialPerformanceResult;
+import smartticketing.repository.DbSequentialPerformanceResultRepository;
 
 import java.util.function.Supplier;
 
@@ -17,10 +17,10 @@ public class NearbyTheaterPerformance {
     private static final String STEP = "STEP2_DB_SEQUENTIAL";
 
     private final ThreadLocal<Metrics> metrics = new ThreadLocal<>();
-    private final NearbyTheaterPerformanceResultRepository resultRepository;
+    private final DbSequentialPerformanceResultRepository resultRepository;
 
     public NearbyTheaterPerformance(
-            NearbyTheaterPerformanceResultRepository resultRepository
+            DbSequentialPerformanceResultRepository resultRepository
     ) {
         this.resultRepository = resultRepository;
     }
@@ -110,7 +110,7 @@ public class NearbyTheaterPerformance {
         }
 
         resultRepository.save(
-                new NearbyTheaterPerformanceResult(
+                new DbSequentialPerformanceResult(
                         STEP,
                         current.address,
                         current.theaterCount,
