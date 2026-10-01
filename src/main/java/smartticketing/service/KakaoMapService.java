@@ -344,6 +344,15 @@ public class KakaoMapService {
                 place.kakaoPlaceId()
         );
 
+        // 카카오에서 받은 영화관 좌표를 극장 기준 데이터에 저장한다.
+        // 이후 스마트 예매에서 거리 계산, 위치 기반 추천 등에 재사용한다.
+        theater.setLatitude(
+                java.math.BigDecimal.valueOf(place.latitude())
+        );
+        theater.setLongitude(
+                java.math.BigDecimal.valueOf(place.longitude())
+        );
+
         theater.setActive(true);
 
         final Theater theaterToSave = theater;
