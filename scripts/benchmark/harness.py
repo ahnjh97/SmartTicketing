@@ -81,6 +81,14 @@ class FixtureServer(ThreadingHTTPServer):
 class FixtureHandler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionResetError, BrokenPipeError):
+            # The JVM closes its keep-alive connections during normal server shutdown.
+            # A disconnect during a measured request is still recorded by the HTTP client.
+            pass
+
     def log_message(self, *_):
         pass
 

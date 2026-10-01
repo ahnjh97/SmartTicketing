@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.parse import urlencode
 
-from harness import (Client, FixtureServer, default_fixtures, percentile, summarize,
+from harness import (Client, FixtureHandler, FixtureServer, default_fixtures, percentile, summarize,
                      validate_fixtures, validate_response)
 from runner import BRANCHES, FIELDS, java_executable, measure, report, seed_sql, stop_server
 
@@ -144,6 +144,11 @@ class QualityTests(unittest.TestCase):
 
 
 class HttpTests(unittest.TestCase):
+    def test_keepalive_reset_on_jvm_shutdown_is_quiet(self):
+        handler = FixtureHandler.__new__(FixtureHandler)
+        with patch('http.server.BaseHTTPRequestHandler.handle', side_effect=ConnectionResetError):
+            handler.handle()
+
     def test_real_http_fixture_and_unknown_routes(self):
         server = FixtureServer(default_fixtures(), route_ms=0, search_ms=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
