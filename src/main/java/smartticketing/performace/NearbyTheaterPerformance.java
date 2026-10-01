@@ -52,6 +52,16 @@ public class NearbyTheaterPerformance {
         }
     }
 
+    public void recordPublicTransitBatch(
+            int callCount,
+            long apiResponseTimeNanos
+    ) {
+        Metrics current = currentMetrics();
+        current.publicTransitCallCount += callCount;
+        current.apiCallCount += callCount;
+        current.apiResponseTimeNanos += apiResponseTimeNanos;
+    }
+
     public void setTheaterCount(int theaterCount) {
         currentMetrics().theaterCount = theaterCount;
     }
