@@ -30,9 +30,21 @@ public class NearbyTheaterPerformance {
         return measureApi(action, ApiType.WALK);
     }
 
-    public <T> T measureDbQuery(Supplier<T> action) {\n        Metrics current = currentMetrics();\n        long start = System.nanoTime();\n        try {\n            return action.get();\n        } finally {\n            current.dbQueryTimeNanos += System.nanoTime() - start;\n        }\n    }\n\n    public <T> T measureDbSave(Supplier<T> action) {
+    public <T> T measureDbQuery(Supplier<T> action) {
         Metrics current = currentMetrics();
         long start = System.nanoTime();
+
+        try {
+            return action.get();
+        } finally {
+            current.dbQueryTimeNanos += System.nanoTime() - start;
+        }
+    }
+
+    public <T> T measureDbSave(Supplier<T> action) {
+        Metrics current = currentMetrics();
+        long start = System.nanoTime();
+
         try {
             return action.get();
         } finally {
@@ -46,6 +58,7 @@ public class NearbyTheaterPerformance {
 
     public void finish() {
         Metrics current = currentMetrics();
+
         long totalResponseTimeNanos =
                 System.nanoTime() - current.totalStartNanos;
 
@@ -64,6 +77,7 @@ public class NearbyTheaterPerformance {
                       - apiResponseTime={}ms
 
                     DB
+                      - dbQueryTime={}ms
                       - dbSaveTime={}ms
 
                     TOTAL
@@ -76,6 +90,7 @@ public class NearbyTheaterPerformance {
                     current.walkCallCount,
                     current.apiCallCount,
                     toMillis(current.apiResponseTimeNanos),
+                    toMillis(current.dbQueryTimeNanos),
                     toMillis(current.dbSaveTimeNanos),
                     toMillis(totalResponseTimeNanos)
             );
@@ -96,12 +111,18 @@ public class NearbyTheaterPerformance {
         } finally {
             current.apiResponseTimeNanos +=
                     System.nanoTime() - start;
+
             current.apiCallCount++;
 
             switch (apiType) {
-                case THEATER_SEARCH -> current.theaterSearchCallCount++;
-                case PUBLIC_TRANSIT -> current.publicTransitCallCount++;
-                case WALK -> current.walkCallCount++;
+                case THEATER_SEARCH ->
+                        current.theaterSearchCallCount++;
+
+                case PUBLIC_TRANSIT ->
+                        current.publicTransitCallCount++;
+
+                case WALK ->
+                        current.walkCallCount++;
             }
         }
     }
@@ -134,7 +155,8 @@ public class NearbyTheaterPerformance {
         private final String address;
 
         private long apiResponseTimeNanos;
-        private long dbSaveTimeNanos;\n        private long dbQueryTimeNanos;
+        private long dbQueryTimeNanos;
+        private long dbSaveTimeNanos;
 
         private int apiCallCount;
         private int theaterSearchCallCount;
