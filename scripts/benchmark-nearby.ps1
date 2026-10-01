@@ -3,10 +3,11 @@ param(
     [ValidateRange(1, 100000)][int]$Runs = 100,
     [ValidateRange(0, 10000)][int]$WarmupRuns = 20,
     [ValidateRange(1, 100)][int]$Rounds = 3,
-    [ValidateSet('stub', 'live')][string]$Mode = 'stub',
+    [ValidateSet('stub', 'live')][string]$Mode = 'live',
     [string]$Python = '',
-    [string]$EnvFile = '',
+    [string]$EnvFile = (Join-Path $PSScriptRoot '../.env.benchmark'),
     [string]$Fixtures = '',
+    [string]$Origins = '',
     [switch]$PrepareOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -25,6 +26,7 @@ $arguments = @((Join-Path $PSScriptRoot 'benchmark/runner.py'), '--runs', $Runs,
     '--warmup', $WarmupRuns, '--rounds', $Rounds, '--mode', $Mode)
 if ($EnvFile) { $arguments += @('--env-file', $EnvFile) }
 if ($Fixtures) { $arguments += @('--fixtures', $Fixtures) }
+if ($Origins) { $arguments += @('--origins', $Origins) }
 if ($PrepareOnly) { $arguments += '--prepare-only' }
 & $Python @arguments
 if ($LASTEXITCODE -ne 0) { throw "Benchmark exited with code $LASTEXITCODE. See benchmark-results logs." }

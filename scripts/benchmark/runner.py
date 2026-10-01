@@ -20,13 +20,14 @@ import zipfile
 from datetime import datetime, timezone
 
 from harness import Client, FixtureServer, default_fixtures, summarize, validate_fixtures, validate_response
+from live import default_origins, live_scenarios, read_catalog, require_live_settings
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 BRANCHES = ['origin/perf/api-original', 'origin/perf/db-sequential', 'origin/perf/benchmark-500']
 FIELDS = ['branch', 'sha', 'scenario', 'round', 'phase', 'iteration', 'utc', 'status',
           'response_ms', 'valid', 'reason', 'theater_count', 'signature', 'search_calls',
-          'transit_calls', 'walk_calls', 'upstream_errors']
+          'transit_calls', 'walk_calls', 'upstream_errors', 'candidate_signature']
 PATHS = ['/v2/local/search/keyword.json', '/v2/routing/publictraffic', '/v2/routing/walk', 'errors']
 
 
@@ -68,12 +69,16 @@ def environment(env_file):
             if not line or line.startswith('#'):
                 continue
             key, separator, value = line.partition('=')
-            if separator and key.strip() in ('DB_USERNAME', 'DB_PASSWORD', 'KAKAO_MAP_REST_API_KEY'):
+            if separator and key.strip() in ('DB_USERNAME', 'DB_PASSWORD', 'DB_URL', 'KAKAO_MAP_REST_API_KEY',
+                                             'BENCH_SOURCE_DB_URL', 'BENCH_SOURCE_DB_USERNAME', 'BENCH_SOURCE_DB_PASSWORD'):
                 env[key.strip()] = value.strip().strip('"').strip("'")
     env['BENCH_MYSQL_USER'] = env.get('BOOKING_TEST_MYSQL_USER', env.get('DB_USERNAME', 'root'))
     env['BENCH_MYSQL_PASSWORD'] = env.get('BOOKING_TEST_MYSQL_PASSWORD', env.get('DB_PASSWORD', ''))
     env['BENCH_MYSQL_URL'] = 'jdbc:mysql://127.0.0.1:3306/?serverTimezone=UTC'
     env['BENCH_JWT_SECRET'] = secrets.token_hex(32)
+    env['BENCH_SOURCE_DB_URL'] = env.get('BENCH_SOURCE_DB_URL') or env.get('DB_URL', '')
+    env['BENCH_SOURCE_DB_USERNAME'] = env.get('BENCH_SOURCE_DB_USERNAME') or env.get('DB_USERNAME', 'root')
+    env['BENCH_SOURCE_DB_PASSWORD'] = env.get('BENCH_SOURCE_DB_PASSWORD', env.get('DB_PASSWORD', ''))
     return env
 
 
@@ -84,7 +89,7 @@ def command(args, cwd, log, env):
         raise RuntimeError(f'Command failed ({done.returncode}); see {log}')
 
 
-def prepare(out, env):
+def prepare(out, env, mode='live'):
     builds = []
     # Resolve ALL refs before exporting, so a moving ref cannot change a later round.
     pinned = [(branch, git('rev-parse', '--verify', branch + '^{commit}')) for branch in BRANCHES]
@@ -107,8 +112,9 @@ def prepare(out, env):
         needle = '.baseUrl("https://dapi.kakao.com")'
         if before.count(needle) != 1:
             raise ValueError(f'{branch}: expected exactly one upstream URL; review benchmark overlay')
-        java.write_text(before.replace(needle,
-            '.baseUrl(System.getenv("BENCH_UPSTREAM_URL"))'), encoding='utf-8')
+        if mode == 'stub':
+            java.write_text(before.replace(needle,
+                '.baseUrl(System.getenv("BENCH_UPSTREAM_URL"))'), encoding='utf-8')
         overlay = source / 'src/main/java/smartticketing/config/NearbyBenchmarkFixture.java'
         overlay.write_text('''package smartticketing.config;
 import java.nio.file.Files;
@@ -140,7 +146,7 @@ public class NearbyBenchmarkFixture {
 ''', encoding='utf-8')
         # Audit the only common source overlay; branch implementations remain otherwise unchanged.
         output_json(source / 'benchmark-overlay.json', {
-            'sha': sha, 'upstream_url': 'environment injection in KakaoMapService only',
+            'sha': sha, 'upstream_url': 'unchanged real API' if mode == 'live' else 'explicit stub environment injection',
             'fixture': 'ApplicationRunner inserts identical data, signals readiness and closes context on stop file',
             'service_before_sha256': hashlib.sha256(before.encode()).hexdigest(),
             'service_after_sha256': hashlib.sha256(java.read_bytes()).hexdigest()})
@@ -166,9 +172,13 @@ def sql_string(value):
 
 def seed_sql(scenarios):
     lines = []
+    seen = set()
     for s in scenarios:
         for t in s['theaters']:
-            values = [sql_string(t['brand']), sql_string(t['name']), sql_string(s['name']),
+            if t['id'] in seen:
+                continue
+            seen.add(t['id'])
+            values = [sql_string(t['brand']), sql_string(t['name']), sql_string(t.get('address', s['name'])),
                       sql_string(t['id']), str(float(t['latitude'])), str(float(t['longitude'])), '1']
             lines.append('INSERT INTO theaters (brand,name,address,kakao_place_id,latitude,longitude,is_active) '
                          + 'VALUES (' + ','.join(values) + ');')
@@ -273,6 +283,8 @@ def measure(build, rnd, scenario, args, env, out, writer, raw, stub):
                     row = dict(zip(FIELDS, [build['branch'], build['sha'], scenario['name'], rnd, phase, i,
                         datetime.now(timezone.utc).isoformat(), status, round(ms, 4), valid, error or reason,
                         size, signature, *calls]))
+                    row['candidate_signature'] = hashlib.sha256(json.dumps(sorted(
+                        str(r['kakaoPlaceId']) for r in json.loads(body))).encode()).hexdigest() if valid else ''
                     writer.writerow(row)
                     raw.flush()
                     if phase != 'measure' and not valid:
@@ -302,9 +314,10 @@ def report(out, complete):
     measured = [r for r in rows if r['phase'] == 'measure']
     eligible = complete and bool(measured) and all(r['valid'] == 'True' for r in rows)
     meta = json.loads((out / 'environment.json').read_text(encoding='utf-8'))
-    lines = ['# Nearby benchmark', '', f'Mode: **{meta["mode"]}**. Complete: {complete}. Valid comparison: {eligible}.',
+    lines = ['# Nearby benchmark', '', f'Mode: **{meta["mode"]}**. Complete: {complete}. All measured responses valid: {eligible}.',
              'Latency includes HTTP response body receipt; excludes JSON parsing. Percentiles use nearest rank.',
-             'Stub numbers describe simulated upstream delays, not production performance.', '',
+             ('Real Kakao API requests; no artificial delay. Original returns at most 15 theaters.'
+              if meta['mode'] == 'live' else 'Stub numbers describe simulated delays, not production performance.'), '',
              '| Branch | Scenario | N valid/total | Mean ms | p50 ms | p95 ms | Error % |',
              '|---|---|---:|---:|---:|---:|---:|']
     if meta.get('runs', 0) < 100 or meta.get('rounds', 0) < 3 or meta.get('warmup', 0) < 20:
@@ -322,6 +335,12 @@ def report(out, complete):
         for scenario in sorted({s['scenario'] for s in summaries}):
             for baseline, target in [(BRANCHES[0], BRANCHES[1]), (BRANCHES[1], BRANCHES[2])]:
                 a, b = aggregate[(baseline, scenario)], aggregate[(target, scenario)]
+                candidate_sets = [{r.get('candidate_signature', '') for r in measured
+                                   if r['branch'] == branch and r['scenario'] == scenario}
+                                  for branch in (baseline, target)]
+                if any(len(s) != 1 or '' in s for s in candidate_sets) or candidate_sets[0] != candidate_sets[1]:
+                    lines.append(f'- {scenario}: {baseline} -> {target}: candidate sets differ; no improvement percentage.')
+                    continue
                 reduction = 100 * (1 - b['p95_ms'] / a['p95_ms'])
                 lines.append(f'- {scenario}: {baseline} -> {target}: p95 {a["p95_ms"]:.2f} -> {b["p95_ms"]:.2f} ms ({reduction:.2f}% reduction).')
     else:
@@ -337,25 +356,34 @@ def main():
     p.add_argument('--runs', type=int, default=100)
     p.add_argument('--warmup', type=int, default=20)
     p.add_argument('--rounds', type=int, default=3)
-    p.add_argument('--mode', choices=['stub', 'live'], default='stub')
+    p.add_argument('--mode', choices=['stub', 'live'], default='live')
     p.add_argument('--fixtures', type=Path)
-    p.add_argument('--env-file', type=Path)
-    p.add_argument('--route-ms', type=int, default=100)
-    p.add_argument('--search-ms', type=int, default=50)
+    p.add_argument('--origins', type=Path, help='Live departure locations JSON; defaults to three Seoul locations')
+    p.add_argument('--env-file', type=Path, default=REPO / '.env.benchmark')
+    p.add_argument('--route-ms', type=int, default=100, help='Explicit stub mode only; ignored in live mode')
+    p.add_argument('--search-ms', type=int, default=50, help='Explicit stub mode only; ignored in live mode')
     p.add_argument('--timeout', type=int, default=120)
     p.add_argument('--startup-timeout', type=int, default=120)
     p.add_argument('--prepare-only', action='store_true')
     args = p.parse_args()
     if min(args.runs, args.rounds, args.timeout, args.startup_timeout) < 1 or min(args.warmup, args.route_ms, args.search_ms) < 0:
         p.error('Counts/timeouts must be positive; warmup and delays must be nonnegative')
-    if args.mode == 'live' and not args.fixtures:
-        p.error('Live mode requires an explicit real-theater fixture JSON; synthetic defaults are forbidden')
-    args.scenarios = json.loads(args.fixtures.read_text(encoding='utf-8-sig')) if args.fixtures else default_fixtures()
-    validate_fixtures(args.scenarios)
-    env = environment(args.env_file)
+    if args.mode == 'live' and args.fixtures:
+        p.error('Live mode reads theaters from BENCH_SOURCE_DB_URL; use --origins for departure locations')
+    if args.mode == 'stub':
+        args.scenarios = json.loads(args.fixtures.read_text(encoding='utf-8-sig')) if args.fixtures else default_fixtures()
+        validate_fixtures(args.scenarios)
+    else:
+        args.scenarios = []
+    if args.env_file and not args.env_file.exists() and not args.prepare_only:
+        p.error('Missing env file. Copy scripts/benchmark/benchmark.env.example to .env.benchmark and configure it.')
+    env = environment(args.env_file if args.env_file.exists() else None)
+    if args.mode == 'live' and not args.prepare_only:
+        try:
+            require_live_settings(env)
+        except ValueError as exc:
+            p.error(str(exc))
     env['BENCH_JAVA'] = java_executable(env)
-    if args.mode == 'live' and not env.get('KAKAO_MAP_REST_API_KEY'):
-        p.error('Live mode requires KAKAO_MAP_REST_API_KEY')
     out = REPO / 'benchmark-results' / (datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6])
     out.mkdir(parents=True)
     print(f'Results: {out}', flush=True)
@@ -373,12 +401,10 @@ def main():
     for f in HERE.iterdir():
         if f.is_file():
             shutil.copy2(f, out / 'harness' / f.name)
-    output_json(out / 'fixtures.json', args.scenarios)
-    (out / 'seed.sql').write_text(seed_sql(args.scenarios), encoding='utf-8')
     stub = None
     complete = False
     try:
-        builds = prepare(out, env)
+        builds = prepare(out, env, args.mode)
         if args.prepare_only:
             metadata['status'] = 'prepared'
             return 0
@@ -388,8 +414,18 @@ def main():
             env['BENCH_UPSTREAM_URL'] = f'http://127.0.0.1:{stub.server_port}'
             env['BENCH_API_KEY'] = 'fixture-only'
         else:
-            env['BENCH_UPSTREAM_URL'] = 'https://dapi.kakao.com'
             env['BENCH_API_KEY'] = env['KAKAO_MAP_REST_API_KEY']
+            snapshot = out / 'seoul-theaters.csv'
+            command([env['BENCH_JAVA'], '-cp', str(out / 'mysql-driver.jar'),
+                     str(out / 'harness/Snapshot.java'), str(snapshot)], REPO, out / 'snapshot.log', env)
+            catalog = read_catalog(snapshot)
+            origins = json.loads(args.origins.read_text(encoding='utf-8-sig')) if args.origins else default_origins()
+            args.scenarios = live_scenarios(origins, catalog)
+            metadata['catalog_sha256'] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+            metadata['catalog_count'] = len(catalog)
+        output_json(out / 'fixtures.json', args.scenarios)
+        seed_data = args.scenarios if stub else [dict(name='Seoul catalog', theaters=catalog)]
+        (out / 'seed.sql').write_text(seed_sql(seed_data), encoding='utf-8')
         metadata['status'] = 'running'
         with (out / 'raw.csv').open('w', encoding='utf-8', newline='') as raw:
             writer = csv.DictWriter(raw, fieldnames=FIELDS)
