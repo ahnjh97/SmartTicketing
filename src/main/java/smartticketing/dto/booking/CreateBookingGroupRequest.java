@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.Valid;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -14,10 +16,11 @@ public record CreateBookingGroupRequest(
         @NotNull BookingEntryPoint entryPoint,
         @NotNull @Min(1) Long movieId,
         @NotNull LocalDate viewingDate,
-        @NotNull @Min(1) Integer partySize,
+        @NotNull @Min(1) @Max(6) Integer partySize,
         LocalTime startTimeFrom,
         LocalTime startTimeTo,
-        @Min(1) Long selectedShowtimeId
+        @Min(1) Long selectedShowtimeId,
+        @NotNull @Valid AudienceRequest audience
 ) {
     @JsonIgnore
     @AssertTrue(message = "영화별은 시간 범위, 극장별은 선택 회차가 필요합니다.")

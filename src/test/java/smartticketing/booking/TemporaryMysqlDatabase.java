@@ -16,8 +16,15 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
     private Connection admin;
     private boolean created;
     private SessionFactory factory;
+    private Configuration configuration;
+    private java.util.function.Consumer<String> sqlObserver;
 
     TemporaryMysqlDatabase(String... legacySetup) throws Exception {
+        this(null, legacySetup);
+    }
+
+    TemporaryMysqlDatabase(java.util.function.Consumer<String> sqlObserver, String... legacySetup) throws Exception {
+        this.sqlObserver = sqlObserver;
         String user = System.getenv("BOOKING_TEST_MYSQL_USER"), password = System.getenv("BOOKING_TEST_MYSQL_PASSWORD");
         if (user == null || user.isBlank() || password == null) throw new IllegalStateException("Set BOOKING_TEST_MYSQL_USER and BOOKING_TEST_MYSQL_PASSWORD");
         try {
@@ -45,6 +52,8 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
             for (var bean : scanner.findCandidateComponents("smartticketing.entity")) {
                 config.addAnnotatedClass(Class.forName(bean.getBeanClassName()));
             }
+            configuration = config;
+            if (sqlObserver != null) config.setStatementInspector(sql -> { sqlObserver.accept(sql); return sql; });
             factory = config.buildSessionFactory();
         } catch (Exception failure) {
             try { close(); } catch (Exception cleanup) { failure.addSuppressed(cleanup); }
@@ -53,6 +62,24 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
     }
 
     EntityManager open() { return factory.createEntityManager(); }
+
+    SessionFactory factory() { return factory; }
+
+    /** DB 내용은 보존하고 앱의 ORM 연결/캐시만 재시작한다. */
+    void restartPersistence() {
+        factory.close();
+        var fresh = new Configuration().setPhysicalNamingStrategy(new PhysicalNamingStrategySnakeCaseImpl());
+        fresh.setProperties(configuration.getProperties());
+        var scanner = new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Entity.class));
+        for (var bean : scanner.findCandidateComponents("smartticketing.entity")) {
+            try { fresh.addAnnotatedClass(Class.forName(bean.getBeanClassName())); }
+            catch (ClassNotFoundException e) { throw new IllegalStateException(e); }
+        }
+        if (sqlObserver != null) fresh.setStatementInspector(sql -> { sqlObserver.accept(sql); return sql; });
+        configuration = fresh;
+        factory = configuration.buildSessionFactory();
+    }
 
     @Override public void close() throws SQLException {
         try { if (factory != null) factory.close(); }

@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 
 /** 그룹 PK로 활성 선점 슬롯을 하나로 제한한다. 만료/결제 시 서비스가 삭제한다. */
 @Entity
-@Table(name = "booking_group_holds", uniqueConstraints = {
+@Table(name = "booking_group_holds", indexes = {
+        @Index(name = "idx_booking_hold_expiry", columnList = "expires_at, group_id")
+}, uniqueConstraints = {
         @UniqueConstraint(name = "uk_booking_group_hold_reservation", columnNames = "reservation_id")
 })
 @Getter
