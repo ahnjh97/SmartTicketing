@@ -1,5 +1,5 @@
 param(
-    [int]$Runs = 500,
+    [int]$Runs = 100,
     [int]$WarmupRuns = 5,
     [int]$Port = 8080,
     [string]$Sort = "TRANSIT",
