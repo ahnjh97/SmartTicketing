@@ -1,4 +1,4 @@
-package com.SmartTicketing.SmartTicketing.performance;
+package smartticketing.performace;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

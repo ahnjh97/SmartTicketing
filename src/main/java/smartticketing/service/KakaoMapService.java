@@ -1,10 +1,10 @@
-package com.SmartTicketing.SmartTicketing.service;
+package smartticketing.service;
 
-import com.SmartTicketing.SmartTicketing.dto.theater.NearbyTheaterResponse;
-import com.SmartTicketing.SmartTicketing.entity.Theater;
-import com.SmartTicketing.SmartTicketing.entity.enums.TheaterBrand;
-import com.SmartTicketing.SmartTicketing.repository.TheaterRepository;
-import com.SmartTicketing.SmartTicketing.performance.NearbyTheaterPerformance;
+import smartticketing.dto.theater.NearbyTheaterResponse;
+import smartticketing.entity.Theater;
+import smartticketing.entity.enums.TheaterBrand;
+import smartticketing.repository.TheaterRepository;
+import smartticketing.performace.NearbyTheaterPerformance;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
