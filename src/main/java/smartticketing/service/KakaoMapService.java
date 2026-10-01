@@ -325,15 +325,14 @@ public class KakaoMapService {
 
         theater.setActive(true);
 
-        // 이미 받아온 장소 좌표를 저장하여 다음 단계 극장 조회에서 재사용한다.
-        theater.setLatitude(java.math.BigDecimal.valueOf(place.latitude()));
-        theater.setLongitude(java.math.BigDecimal.valueOf(place.longitude()));
-
+        // 카카오 API가 반환한 극장 좌표는 아래 경로 계산에만 사용한다.
+        // DB(Theater)에는 위도/경도를 저장하지 않는다.
+        final Theater theaterToSave = theater;
         theater =
                 performance.measureDbSave(
                         () ->
                                 theaters.save(
-                                        theater
+                                        theaterToSave
                                 )
                 );
 
