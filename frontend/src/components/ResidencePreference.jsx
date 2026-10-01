@@ -194,7 +194,10 @@ export default function ResidencePreference({
     const [hoveredSeatPosition, setHoveredSeatPosition] =
         useState(null);
 
-    const [locationLoading, setLocationLoading] =
+    const [currentLocationLoading, setCurrentLocationLoading] =
+        useState(false);
+
+    const [mapSearchLoading, setMapSearchLoading] =
         useState(false);
 
     const [theaterLoading, setTheaterLoading] =
@@ -370,7 +373,7 @@ export default function ResidencePreference({
 
         setError("");
         setMessage("");
-        setLocationLoading(true);
+        setCurrentLocationLoading(true);
 
         navigator.geolocation.getCurrentPosition(
             async (
@@ -395,13 +398,13 @@ export default function ResidencePreference({
                         "현재 위치 처리에 실패했습니다."
                     );
                 } finally {
-                    setLocationLoading(
+                    setCurrentLocationLoading(
                         false
                     );
                 }
             },
             (geoError) => {
-                setLocationLoading(
+                setCurrentLocationLoading(
                     false
                 );
 
@@ -732,7 +735,7 @@ export default function ResidencePreference({
 
         setError("");
         setMessage("");
-        setLocationLoading(true);
+        setMapSearchLoading(true);
 
         try {
             const kakao =
@@ -801,7 +804,7 @@ export default function ResidencePreference({
                 "선택한 위치 조회에 실패했습니다."
             );
         } finally {
-            setLocationLoading(
+            setMapSearchLoading(
                 false
             );
         }
@@ -1346,9 +1349,9 @@ export default function ResidencePreference({
                         type="button"
                         className="primary-button location-current-button"
                         onClick={getCurrentLocation}
-                        disabled={locationLoading}
+                        disabled={currentLocationLoading}
                     >
-                        {locationLoading
+                        {currentLocationLoading
                             ? "현재 위치 확인 중..."
                             : "⌖ 현재 사용자 위치에서 조회"}
                     </button>
@@ -1361,7 +1364,7 @@ export default function ResidencePreference({
                                 : "secondary-button location-map-button"
                         }
                         onClick={startMapSelection}
-                        disabled={locationLoading}
+                        disabled={currentLocationLoading}
                     >
                         🗺️ {isMapSelectionMode
                             ? "위치 선택 중"
@@ -1392,19 +1395,15 @@ export default function ResidencePreference({
 
                 <button
                     type="button"
-                    className={
-                        isMapSelectionMode
-                            ? "primary-button map-search-button"
-                            : "secondary-button map-search-button"
-                    }
+                    className="primary-button map-search-button"
                     onClick={finishMapSelection}
                     disabled={
                         !isMapSelectionMode ||
-                        locationLoading ||
+                        mapSearchLoading ||
                         theaterLoading
                     }
                 >
-                    {locationLoading
+                    {mapSearchLoading
                         ? "위치 확인 중..."
                         : "이 위치에서 영화관 조회"}
                 </button>
