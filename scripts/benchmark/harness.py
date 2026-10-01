@@ -37,14 +37,16 @@ def validate_fixtures(scenarios):
         raise ValueError("Fixtures must be a nonempty scenario array")
     names, ids = set(), set()
     for s in scenarios:
-        if s['name'] in names or not 1 <= len(s['theaters']) <= 15:
-            raise ValueError("Unique scenario names and 1..15 theaters per scenario required")
+        if s['name'] in names or not s['theaters']:
+            raise ValueError("Unique scenario names and at least one theater per scenario required")
         names.add(s['name'])
         for obj in [s] + s['theaters']:
             if not -90 <= obj['latitude'] <= 90 or not -180 <= obj['longitude'] <= 180:
                 raise ValueError("Invalid coordinates")
+        if len({str(t['id']) for t in s['theaters']}) != len(s['theaters']):
+            raise ValueError('Duplicate theater ID in scenario')
         for t in s['theaters']:
-            if str(t['id']) in ids or t['brand'] not in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
+            if t['brand'] not in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
                 raise ValueError("Unique theater IDs and supported brands required")
             ids.add(str(t['id']))
             if t['transitMinutes'] <= 0 or t['transitDistance'] < 0:
@@ -65,13 +67,43 @@ def distance(a, b):
     return round(6371000 * 2 * math.atan2(math.sqrt(x), math.sqrt(1 - x)))
 
 
+def original_candidates(scenario):
+    result = []
+    for brand in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
+        result.extend(sorted((t for t in scenario['theaters'] if t['brand'] == brand),
+                             key=lambda t: (distance(scenario, t), str(t['id'])))[:15])
+    return result
+
+
+def catalog_fixtures(scenarios):
+    # The catalog is real; routes are deliberately synthetic, never reported as Kakao timings.
+    for s in scenarios:
+        s['theaters'] = [dict(t, transitMinutes=max(1, math.ceil(distance(s, t) / 200)),
+                              transitDistance=distance(s, t)) for t in s['theaters']]
+    return scenarios
+
+
 class FixtureServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, scenarios, route_ms=100, search_ms=50):
+    def __init__(self, scenarios, route_ms=100, search_ms=50, delay_profile='fixed', seed=2026):
         super().__init__(('127.0.0.1', 0), FixtureHandler)
         self.scenarios, self.route_ms, self.search_ms = scenarios, route_ms, search_ms
         self.lock, self.counts = threading.Lock(), Counter()
+        self.delay_profile, self.seed, self.sample = delay_profile, seed, ''
+        self.halted = ''
+
+    def begin_sample(self, label):
+        self.sample = label
+
+    def delay(self, path, query):
+        base = self.search_ms if 'search' in path else self.route_ms
+        canonical = json.dumps([self.seed, self.sample, path, sorted(query.items())], ensure_ascii=False)
+        number = int(hashlib.sha256(canonical.encode()).hexdigest()[:8], 16)
+        # Stable per route/sample: independent of branch, arrival order and concurrency.
+        factor = (4 if number % 10 == 0 else .5 + (number % 101) / 100) if self.delay_profile == 'variable' else 1
+        return base * factor / 1000
+
 
     def snapshot(self):
         with self.lock:
@@ -104,15 +136,18 @@ class FixtureHandler(BaseHTTPRequestHandler):
                 brand = {'CGV': 'CGV', '롯데시네마': 'LOTTE_CINEMA', '메가박스': 'MEGABOX'}[q['query'][0]]
                 body = {'documents': [dict(id=t['id'], place_name=t['name'], x=str(t['longitude']),
                         y=str(t['latitude']), distance=str(distance(s, t)), road_address_name=s['name'],
-                        place_url='https://example.invalid/fixture') for t in s['theaters'] if t['brand'] == brand]}
-                time.sleep(self.server.search_ms / 1000)
+                        place_url='https://example.invalid/fixture') for t in original_candidates(s) if t['brand'] == brand]}
+                time.sleep(self.server.delay(u.path, q))
             elif u.path in ('/v2/routing/publictraffic', '/v2/routing/walk'):
-                t = next(t for s in self.server.scenarios for t in s['theaters']
+                s = next(s for s in self.server.scenarios
+                         if abs(s['latitude'] - float(q['start_y'][0])) < 1e-6
+                         and abs(s['longitude'] - float(q['start_x'][0])) < 1e-6)
+                t = next(t for t in s['theaters']
                          if abs(t['latitude'] - float(q['end_y'][0])) < 1e-6
                          and abs(t['longitude'] - float(q['end_x'][0])) < 1e-6)
                 props = {'totalTime': t['transitMinutes'] * 60, 'totalDistance': t['transitDistance']}
                 body = {'status': 'OK', 'routes': [{'properties': props}], 'route': {'properties': props}}
-                time.sleep(self.server.route_ms / 1000)
+                time.sleep(self.server.delay(u.path, q))
             else:
                 status, body = 404, {'error': 'Unknown fixture path'}
         except (KeyError, StopIteration, ValueError):
@@ -172,7 +207,8 @@ def validate_response(status, body, scenario, mode, original=False):
         if not isinstance(rows, list) or not rows:
             return False, 'empty_or_non_array', 0, ''
         ids = [str(r['kakaoPlaceId']) for r in rows]
-        expected = {str(t['id']): t for t in scenario['theaters']}
+        expected_rows = original_candidates(scenario) if original and mode == 'stub' else scenario['theaters']
+        expected = {str(t['id']): t for t in expected_rows}
         if len(set(ids)) != len(ids):
             return False, 'duplicate_candidates', len(rows), ''
         # Original discovers places via API and caps output at 15. Record its actual
@@ -180,6 +216,13 @@ def validate_response(status, body, scenario, mode, original=False):
         if mode == 'live' and original:
             if len(rows) > 15:
                 return False, 'original_limit_exceeded', len(rows), ''
+        elif mode == 'stub' and original:
+            ranked = sorted(expected_rows, key=lambda t: t['transitMinutes'])
+            cutoff = ranked[min(15, len(ranked)) - 1]['transitMinutes']
+            required = {str(t['id']) for t in ranked if t['transitMinutes'] < cutoff}
+            allowed = {str(t['id']) for t in ranked if t['transitMinutes'] <= cutoff}
+            if len(ids) != min(15, len(ranked)) or not required <= set(ids) <= allowed:
+                return False, 'candidate_mismatch', len(rows), ''
         elif set(ids) != set(expected):
             return False, 'candidate_mismatch', len(rows), ''
         minutes = [r['transitMinutes'] for r in rows]

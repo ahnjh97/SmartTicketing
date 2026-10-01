@@ -39,9 +39,10 @@ class SnapshotCheck {
 @unittest.skipUnless(os.environ.get('BENCH_TEST_MYSQL') == '1', 'Set BENCH_TEST_MYSQL=1 for local MySQL integration')
 class SnapshotMysqlTests(unittest.TestCase):
     def test_read_only_seoul_snapshot(self):
-        env = environment(REPO / '.env.benchmark')
+        env = environment(REPO / ('.env.benchmark' if (REPO / '.env.benchmark').exists() else '.env'))
         java = java_executable(env)
-        drivers = list((Path.home() / '.gradle/caches/modules-2/files-2.1/com.mysql/mysql-connector-j').rglob('mysql-connector-j-*.jar'))
+        drivers = [p for p in (Path.home() / '.gradle/caches/modules-2/files-2.1/com.mysql/mysql-connector-j').rglob('mysql-connector-j-*.jar')
+                   if not p.name.endswith(('-sources.jar', '-javadoc.jar'))]
         self.assertTrue(drivers, 'Run bootJar once to cache the JDBC driver')
         schema = 'nearby_bench_' + uuid.uuid4().hex
         env.update(BENCH_SOURCE_DB_URL='jdbc:mysql://127.0.0.1:3306/' + schema,
