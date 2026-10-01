@@ -12,32 +12,11 @@ public class NearbyTheaterPerformance {
     private static final Logger log =
             LoggerFactory.getLogger(NearbyTheaterPerformance.class);
 
-    private long totalStartNanos;
-    private long apiResponseTimeNanos;
-    private long dbSaveTimeNanos;
-
-    private int apiCallCount;
-    private int theaterSearchCallCount;
-    private int publicTransitCallCount;
-    private int walkCallCount;
-
-    private double latitude;
-    private double longitude;
-    private int theaterCount;
+    private final ThreadLocal<Metrics> metrics =
+            new ThreadLocal<>();
 
     public void start(double latitude, double longitude) {
-        this.latitude = latitude;
-        this.longitude = longitude;
-
-        totalStartNanos = System.nanoTime();
-        apiResponseTimeNanos = 0;
-        dbSaveTimeNanos = 0;
-
-        apiCallCount = 0;
-        theaterSearchCallCount = 0;
-        publicTransitCallCount = 0;
-        walkCallCount = 0;
-        theaterCount = 0;
+        metrics.set(new Metrics(latitude, longitude));
     }
 
     public <T> T measureTheaterSearch(Supplier<T> action) {
@@ -53,73 +32,96 @@ public class NearbyTheaterPerformance {
     }
 
     public <T> T measureDbSave(Supplier<T> action) {
+        Metrics current = currentMetrics();
         long start = System.nanoTime();
 
         try {
             return action.get();
         } finally {
-            dbSaveTimeNanos += System.nanoTime() - start;
+            current.dbSaveTimeNanos += System.nanoTime() - start;
         }
     }
 
     public void setTheaterCount(int theaterCount) {
-        this.theaterCount = theaterCount;
+        currentMetrics().theaterCount = theaterCount;
     }
 
     public void finish() {
+        Metrics current = currentMetrics();
         long totalResponseTimeNanos =
-                System.nanoTime() - totalStartNanos;
+                System.nanoTime() - current.totalStartNanos;
 
-        log.info(
-                """
-                [NEARBY_THEATER_PERFORMANCE]
-                location=(lat={}, lon={})
-                theaterCount={}
-                
-                Kakao API
-                  - theaterSearch={}회
-                  - publicTransit={}회
-                  - walk={}회
-                  - totalApiCalls={}회
-                  - apiResponseTime={}ms
-                
-                DB
-                  - dbSaveTime={}ms
-                
-                TOTAL
-                  - totalResponseTime={}ms
-                """,
-                latitude,
-                longitude,
-                theaterCount,
-                theaterSearchCallCount,
-                publicTransitCallCount,
-                walkCallCount,
-                apiCallCount,
-                toMillis(apiResponseTimeNanos),
-                toMillis(dbSaveTimeNanos),
-                toMillis(totalResponseTimeNanos)
-        );
+        try {
+            log.info(
+                    """
+                    [NEARBY_THEATER_PERFORMANCE]
+                    location=(lat={}, lon={})
+                    theaterCount={}
+
+                    Kakao API
+                      - theaterSearch={}회
+                      - publicTransit={}회
+                      - walk={}회
+                      - totalApiCalls={}회
+                      - apiResponseTime={}ms
+
+                    DB
+                      - dbSaveTime={}ms
+
+                    TOTAL
+                      - totalResponseTime={}ms
+                    """,
+                    current.latitude,
+                    current.longitude,
+                    current.theaterCount,
+                    current.theaterSearchCallCount,
+                    current.publicTransitCallCount,
+                    current.walkCallCount,
+                    current.apiCallCount,
+                    toMillis(current.apiResponseTimeNanos),
+                    toMillis(current.dbSaveTimeNanos),
+                    toMillis(totalResponseTimeNanos)
+            );
+        } finally {
+            metrics.remove();
+        }
     }
 
     private <T> T measureApi(
             Supplier<T> action,
             ApiType apiType
     ) {
+        Metrics current = currentMetrics();
         long start = System.nanoTime();
 
         try {
             return action.get();
         } finally {
-            apiResponseTimeNanos += System.nanoTime() - start;
-            apiCallCount++;
+            current.apiResponseTimeNanos +=
+                    System.nanoTime() - start;
+            current.apiCallCount++;
 
             switch (apiType) {
-                case THEATER_SEARCH -> theaterSearchCallCount++;
-                case PUBLIC_TRANSIT -> publicTransitCallCount++;
-                case WALK -> walkCallCount++;
+                case THEATER_SEARCH ->
+                        current.theaterSearchCallCount++;
+                case PUBLIC_TRANSIT ->
+                        current.publicTransitCallCount++;
+                case WALK ->
+                        current.walkCallCount++;
             }
         }
+    }
+
+    private Metrics currentMetrics() {
+        Metrics current = metrics.get();
+
+        if (current == null) {
+            throw new IllegalStateException(
+                    "성능 측정이 시작되지 않았습니다."
+            );
+        }
+
+        return current;
     }
 
     private long toMillis(long nanos) {
@@ -130,5 +132,28 @@ public class NearbyTheaterPerformance {
         THEATER_SEARCH,
         PUBLIC_TRANSIT,
         WALK
+    }
+
+    private static class Metrics {
+
+        private final long totalStartNanos =
+                System.nanoTime();
+
+        private final double latitude;
+        private final double longitude;
+
+        private long apiResponseTimeNanos;
+        private long dbSaveTimeNanos;
+
+        private int apiCallCount;
+        private int theaterSearchCallCount;
+        private int publicTransitCallCount;
+        private int walkCallCount;
+        private int theaterCount;
+
+        private Metrics(double latitude, double longitude) {
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
     }
 }
