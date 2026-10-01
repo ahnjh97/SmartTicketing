@@ -69,6 +69,7 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/login/**",
                                 "/api/admin/**",
+                                "/api/main",
                                 "/error"
                         ).permitAll()
 
