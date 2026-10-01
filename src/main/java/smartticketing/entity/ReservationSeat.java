@@ -32,4 +32,8 @@ public class ReservationSeat {
 
     @Column(nullable = false)
     private Integer price;
+
+    // 과거 예약은 null 보존. 신규 선점에서 확정한 금액 구분만 저장한다.
+    @Column(name = "audience_type", length = 10)
+    private String audienceType;
 }

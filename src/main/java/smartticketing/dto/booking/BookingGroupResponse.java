@@ -13,5 +13,5 @@ public record BookingGroupResponse(
         Long id, BookingEntryPoint entryPoint, Long movieId, LocalDate viewingDate,
         Integer partySize, LocalTime startTimeFrom, LocalTime startTimeTo,
         Long selectedShowtimeId, List<Long> theaterPreferences, List<SeatPosition> seatPreferences,
-        BookingGroupStatus status, Long activeReservationId
+        BookingGroupStatus status, Long activeReservationId, AudienceRequest audience, String rating
 ) { }
