@@ -929,6 +929,10 @@ export default function ResidencePreference({
         longitude,
         resolvedAddress
     ) {
+        // 위치 조회가 새로 실행되면 이전 위치에서 고른 극장 선택을 비웁니다.
+        // 새 위치 기준으로 다시 선호 극장을 선택할 수 있게 합니다.
+        setSelectedTheaters([]);
+
         setTheaterLoading(
             true
         );
