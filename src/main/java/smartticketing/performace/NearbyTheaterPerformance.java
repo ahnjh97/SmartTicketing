@@ -95,7 +95,6 @@ public class NearbyTheaterPerformance {
 
             resultRepository.save(
                     new DbSequentialPerformanceResult(
-                            STEP,
                             current.address,
                             current.theaterCount,
                             current.theaterSearchCallCount,
