@@ -3,6 +3,8 @@ package smartticketing.performace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import smartticketing.entity.NearbyTheaterPerformanceResult;
+import smartticketing.repository.NearbyTheaterPerformanceResultRepository;
 
 import java.util.function.Supplier;
 
@@ -12,7 +14,16 @@ public class NearbyTheaterPerformance {
     private static final Logger log =
             LoggerFactory.getLogger(NearbyTheaterPerformance.class);
 
+    private static final String STEP = "STEP1_API_ORIGINAL";
+
     private final ThreadLocal<Metrics> metrics = new ThreadLocal<>();
+    private final NearbyTheaterPerformanceResultRepository resultRepository;
+
+    public NearbyTheaterPerformance(
+            NearbyTheaterPerformanceResultRepository resultRepository
+    ) {
+        this.resultRepository = resultRepository;
+    }
 
     public void start(String address) {
         metrics.set(new Metrics(address));
@@ -64,6 +75,7 @@ public class NearbyTheaterPerformance {
                       - apiResponseTime={}ms
 
                     DB
+                      - dbQueryTime={}ms
                       - dbSaveTime={}ms
 
                     TOTAL
@@ -76,9 +88,27 @@ public class NearbyTheaterPerformance {
                     current.walkCallCount,
                     current.apiCallCount,
                     toMillis(current.apiResponseTimeNanos),
+                    toMillis(current.dbQueryTimeNanos),
                     toMillis(current.dbSaveTimeNanos),
                     toMillis(totalResponseTimeNanos)
             );
+        }
+
+        resultRepository.save(
+                new NearbyTheaterPerformanceResult(
+                        STEP,
+                        current.address,
+                        current.theaterCount,
+                        current.theaterSearchCallCount,
+                        current.publicTransitCallCount,
+                        current.walkCallCount,
+                        current.apiCallCount,
+                        toMillis(current.apiResponseTimeNanos),
+                        toMillis(current.dbQueryTimeNanos),
+                        toMillis(current.dbSaveTimeNanos),
+                        toMillis(totalResponseTimeNanos)
+                )
+        );
         } finally {
             metrics.remove();
         }
@@ -134,6 +164,7 @@ public class NearbyTheaterPerformance {
         private final String address;
 
         private long apiResponseTimeNanos;
+        private long dbQueryTimeNanos;
         private long dbSaveTimeNanos;
 
         private int apiCallCount;
