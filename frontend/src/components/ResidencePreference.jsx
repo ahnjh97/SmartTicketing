@@ -1152,22 +1152,24 @@ export default function ResidencePreference({
                         }
                     );
 
-                const infoWindow =
-                    new window.kakao.maps.InfoWindow({
+                const overlay =
+                    new window.kakao.maps.CustomOverlay({
+                        position,
                         content: `
                             <div class="map-theater-info">
                                 <strong>${theater.name}</strong>
                             </div>
                         `,
+                        yAnchor: 1.45,
+                        zIndex: 20,
                     });
 
                 window.kakao.maps.event.addListener(
                     marker,
                     "mouseover",
                     () => {
-                        infoWindow.open(
-                            mapInstanceRef.current,
-                            marker
+                        overlay.setMap(
+                            mapInstanceRef.current
                         );
                     }
                 );
@@ -1176,7 +1178,7 @@ export default function ResidencePreference({
                     marker,
                     "mouseout",
                     () => {
-                        infoWindow.close();
+                        overlay.setMap(null);
                     }
                 );
 
@@ -1215,7 +1217,7 @@ export default function ResidencePreference({
                 );
 
                 theaterOverlaysRef.current.push(
-                    infoWindow
+                    overlay
                 );
 
             }
