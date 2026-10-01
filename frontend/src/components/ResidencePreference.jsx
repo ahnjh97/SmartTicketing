@@ -773,7 +773,7 @@ export default function ResidencePreference({
         );
     }
 
-    function selectPlaceSearchResult(place) {
+    async function selectPlaceSearchResult(place) {
         const map = mapInstanceRef.current;
 
         if (!map) {
@@ -806,17 +806,28 @@ export default function ResidencePreference({
             longitude,
         });
         setLocationSource("MAP");
-        setAddress(
+
+        const resolvedAddress =
             place.road_address_name ||
             place.address_name ||
-            ""
-        );
+            place.place_name;
+
+        setAddress(resolvedAddress);
         setPlaceSearchResults([]);
         setError("");
         setMessage("");
-        setIsMapSelectionMode(true);
-        clearMapSearchVisuals();
-        showSelectionPin(true);
+        setIsMapSelectionMode(false);
+        showSelectionPin(false);
+
+        await loadNearbyTheaters(
+            latitude,
+            longitude,
+            resolvedAddress
+        );
+
+        setMessage(
+            "검색한 위치 기준으로 주변 영화관을 조회했습니다."
+        );
     }
 
     function finishMapSelection() {
