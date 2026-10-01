@@ -900,6 +900,17 @@ export default function ResidencePreference({
                 resolvedAddress
             );
 
+            // 조회 기준점을 다시 지도 중앙에 맞춰 마커가 바로 보이도록 합니다.
+            if (map) {
+                map.setCenter(
+                    new window.kakao.maps.LatLng(
+                        selectedLocation.latitude,
+                        selectedLocation.longitude
+                    )
+                );
+                map.setLevel(6);
+            }
+
             await loadNearbyTheaters(
                 selectedLocation.latitude,
                 selectedLocation.longitude,
@@ -937,6 +948,8 @@ export default function ResidencePreference({
             true
         );
 
+        // 새 위치 조회 전 기존 마커를 제거하고 새 결과만 표시합니다.
+        clearMapSearchVisuals();
         setError("");
 
         try {
