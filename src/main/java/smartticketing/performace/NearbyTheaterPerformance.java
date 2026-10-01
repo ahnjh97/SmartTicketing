@@ -30,7 +30,7 @@ public class NearbyTheaterPerformance {
         return measureApi(action, ApiType.WALK);
     }
 
-    public <T> T measureDbSave(Supplier<T> action) {
+    public <T> T measureDbQuery(Supplier<T> action) {\n        Metrics current = currentMetrics();\n        long start = System.nanoTime();\n        try {\n            return action.get();\n        } finally {\n            current.dbQueryTimeNanos += System.nanoTime() - start;\n        }\n    }\n\n    public <T> T measureDbSave(Supplier<T> action) {
         Metrics current = currentMetrics();
         long start = System.nanoTime();
         try {
@@ -134,7 +134,7 @@ public class NearbyTheaterPerformance {
         private final String address;
 
         private long apiResponseTimeNanos;
-        private long dbSaveTimeNanos;
+        private long dbSaveTimeNanos;\n        private long dbQueryTimeNanos;
 
         private int apiCallCount;
         private int theaterSearchCallCount;
