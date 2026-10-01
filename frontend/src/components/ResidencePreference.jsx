@@ -695,13 +695,27 @@ export default function ResidencePreference({
     }
 
     function finishMapSelection() {
-        setIsMapSelectionMode(false);
-        showSelectionPin(false);
         searchSelectedLocation();
     }
 
     async function searchSelectedLocation() {
-        if (!location) {
+        const map = mapInstanceRef.current;
+
+        let selectedLocation = location;
+
+        if (isMapSelectionMode && map) {
+            const center = map.getCenter();
+
+            selectedLocation = {
+                latitude: center.getLat(),
+                longitude: center.getLng(),
+            };
+
+            setLocation(selectedLocation);
+            setLocationSource("MAP");
+        }
+
+        if (!selectedLocation) {
             setError(
                 "지도에서 위치를 선택해주세요."
             );
@@ -723,8 +737,8 @@ export default function ResidencePreference({
                 await new Promise(
                     (resolve, reject) => {
                         geocoder.coord2Address(
-                            location.longitude,
-                            location.latitude,
+                            selectedLocation.longitude,
+                            selectedLocation.latitude,
                             (result, status) => {
                                 if (
                                     status !==
@@ -762,10 +776,13 @@ export default function ResidencePreference({
             );
 
             await loadNearbyTheaters(
-                location.latitude,
-                location.longitude,
+                selectedLocation.latitude,
+                selectedLocation.longitude,
                 resolvedAddress
             );
+
+            setIsMapSelectionMode(false);
+            showSelectionPin(false);
 
             setMessage(
                 "선택한 위치 기준으로 주변 영화관을 조회했습니다."
