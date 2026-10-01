@@ -89,16 +89,16 @@ public class SeoulTheaterRouteCollectionService {
                 RouteInfo transit = findPublicTransit(
                         grid.latitude(),
                         grid.longitude(),
-                        theater.getLatitude(),
-                        theater.getLongitude()
+                        theater.getLatitude() == null ? null : theater.getLatitude().doubleValue(),
+                        theater.getLongitude() == null ? null : theater.getLongitude().doubleValue()
                 );
                 transitApiCalls++;
 
                 RouteInfo walk = findWalk(
                         grid.latitude(),
                         grid.longitude(),
-                        theater.getLatitude(),
-                        theater.getLongitude()
+                        theater.getLatitude() == null ? null : theater.getLatitude().doubleValue(),
+                        theater.getLongitude() == null ? null : theater.getLongitude().doubleValue()
                 );
                 walkApiCalls++;
 
