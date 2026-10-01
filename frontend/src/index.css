@@ -1788,3 +1788,35 @@ input:focus {
     cursor: not-allowed;
     opacity: 0.55;
 }
+
+/* Clean Kakao map presentation */
+.kakao-map {
+    overflow: hidden;
+    border: 1px solid #2f2f2f;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.map-selection-wrapper {
+    overflow: hidden;
+    border-radius: 14px;
+}
+
+.map-selection-wrapper .kakao-map {
+    border-radius: 14px;
+}
+
+.map-selection-wrapper .map-center-pin span {
+    font-size: 34px;
+}
+
+.map-selection-wrapper .map-center-pin {
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+}
+
+@media (max-width: 700px) {
+    .kakao-map,
+    .map-selection-wrapper {
+        border-radius: 10px;
+    }
+}
