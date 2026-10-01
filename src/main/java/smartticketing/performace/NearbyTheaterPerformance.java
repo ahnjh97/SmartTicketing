@@ -61,27 +61,13 @@ public class NearbyTheaterPerformance {
                 System.nanoTime() - current.totalStartNanos;
 
         try {
+            long apiResponseTimeMs = toMillis(current.apiResponseTimeNanos);
+            long dbQueryTimeMs = toMillis(current.dbQueryTimeNanos);
+            long dbSaveTimeMs = toMillis(current.dbSaveTimeNanos);
+            long totalResponseTimeMs = toMillis(totalResponseTimeNanos);
+
             log.info(
-                    """
-                    [NEARBY_THEATER_PERFORMANCE]
-                    step={}
-                    location={}
-                    theaterCount={}
-
-                    Kakao API
-                      - theaterSearch={}회
-                      - publicTransit={}회
-                      - walk={}회
-                      - totalApiCalls={}회
-                      - apiResponseTime={}ms
-
-                    DB
-                      - dbQueryTime={}ms
-                      - dbSaveTime={}ms
-
-                    TOTAL
-                      - totalResponseTime={}ms
-                    """,
+                    "[NEARBY_THEATER_PERFORMANCE] step={} location={} theaterCount={} theaterSearch={}회 publicTransit={}회 walk={}회 totalApiCalls={}회 apiResponseTime={}ms dbQueryTime={}ms dbSaveTime={}ms totalResponseTime={}ms",
                     STEP,
                     current.address,
                     current.theaterCount,
@@ -89,28 +75,27 @@ public class NearbyTheaterPerformance {
                     current.publicTransitCallCount,
                     current.walkCallCount,
                     current.apiCallCount,
-                    toMillis(current.apiResponseTimeNanos),
-                    toMillis(current.dbQueryTimeNanos),
-                    toMillis(current.dbSaveTimeNanos),
-                    toMillis(totalResponseTimeNanos)
+                    apiResponseTimeMs,
+                    dbQueryTimeMs,
+                    dbSaveTimeMs,
+                    totalResponseTimeMs
             );
-        }
 
-        resultRepository.save(
-                new ApiOriginalPerformanceResult(
-                        STEP,
-                        current.address,
-                        current.theaterCount,
-                        current.theaterSearchCallCount,
-                        current.publicTransitCallCount,
-                        current.walkCallCount,
-                        current.apiCallCount,
-                        toMillis(current.apiResponseTimeNanos),
-                        toMillis(current.dbQueryTimeNanos),
-                        toMillis(current.dbSaveTimeNanos),
-                        toMillis(totalResponseTimeNanos)
-                )
-        );
+            resultRepository.save(
+                    new ApiOriginalPerformanceResult(
+                            STEP,
+                            current.address,
+                            current.theaterCount,
+                            current.theaterSearchCallCount,
+                            current.publicTransitCallCount,
+                            current.walkCallCount,
+                            current.apiCallCount,
+                            apiResponseTimeMs,
+                            dbQueryTimeMs,
+                            dbSaveTimeMs,
+                            totalResponseTimeMs
+                    )
+            );
         } finally {
             metrics.remove();
         }
