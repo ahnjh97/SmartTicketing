@@ -1160,7 +1160,7 @@ export default function ResidencePreference({
                                 <strong>${theater.name}</strong>
                             </div>
                         `,
-                        yAnchor: 1.45,
+                        yAnchor: 1.8,
                         zIndex: 20,
                     });
 
