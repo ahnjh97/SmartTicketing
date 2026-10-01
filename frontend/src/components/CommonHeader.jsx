@@ -1,3 +1,4 @@
+import glass from './GlassButton.module.css';
 import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
 import { Link, matchPath, NavLink, useLocation } from "react-router-dom";
@@ -84,10 +85,10 @@ export default function CommonHeader({
     function renderAccountItems() {
         return accountItems.map(({ view, label }) => (
             view === "logout"
-                ? <button key={view} type="button" className="common-header-link"
+                ? <button key={view} type="button" className={`common-header-link ${glass.button}`}
                     disabled={disabled} onClick={handleLogout}>{label}</button>
                 : <NavLink key={view} to={PAGE_PATHS[view]}
-                className={`common-header-link${view === "signup" ? " common-header-signup" : ""}`}
+                className={`common-header-link${view === "signup" ? " common-header-signup" : ` ${glass.button}`}`}
                 aria-disabled={navigationDisabled || undefined}
                 tabIndex={navigationDisabled ? -1 : undefined} onClick={handleNavigation}>
                 {label}

@@ -1,0 +1,9 @@
+.container { position: relative; }
+.rail { overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+.rail::-webkit-scrollbar { display: none; }
+.rail:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+.container .arrow { position: absolute; z-index: 1; top: var(--rail-arrow-top, 42%); transform: translateY(-50%); width: 48px; height: 48px; padding: 0; border-radius: 6px; }
+.arrow span { font-family: Arial, sans-serif; font-size: 32px; line-height: 1; }
+.previous { left: -16px; }.next { right: -16px; }
+.container .arrow[hidden] { display: none; }
+@media (max-width: 599px) { .previous { left: -8px; }.next { right: -8px; }.container .arrow { width: 44px; height: 44px; } }

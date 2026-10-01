@@ -127,12 +127,12 @@
 }
 
 .common-header-account .common-header-link:not(.common-header-signup) {
-    background: rgb(255 255 255 / 10%);
+    background: var(--glass-background);
     color: #fff;
 }
 
 .common-header-account .common-header-link:not(.common-header-signup):hover:not(:disabled):not([aria-disabled="true"]) {
-    background: rgb(255 255 255 / 18%);
+    background: var(--glass-hover);
 }
 
 .app-shell-empty {
