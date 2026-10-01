@@ -30,7 +30,7 @@ function HomeMovieCard({ movie, isUpcoming }) {
 
 function MovieSection({ title, movies, loaded, isUpcoming }) {
     return <section className={styles.catalog} aria-label={title}>
-        <h2>{title} <span aria-hidden="true"></span></h2>
+        <h2>{title}</h2>
         {loaded && !movies.length && <p role="status">표시할 영화가 없습니다.</p>}
         {movies.length > 0 && <HorizontalRail label={title} className={styles.rail}>
             {movies.map(movie => <HomeMovieCard key={movie.id} movie={movie} isUpcoming={isUpcoming} />)}
@@ -48,7 +48,7 @@ export default function HomePage() {
     return <div className={ui.surface}>
         {featured && <MovieHero key={featured.id} movie={featured} home />}
         <QueryStatus query={chart} />
-        <MovieSection title="상영작" movies={(chart.data?.nowShowing || []).slice(0, 10)} loaded={loaded} />
-        <MovieSection title="상영예정작" movies={(chart.data?.comingSoon || []).slice(0, 10)} loaded={loaded} isUpcoming />
+        <MovieSection title="상영작" movies={chart.data?.nowShowing || []} loaded={loaded} />
+        <MovieSection title="상영예정작" movies={chart.data?.comingSoon || []} loaded={loaded} isUpcoming />
     </div>;
 }
