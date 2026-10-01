@@ -64,6 +64,7 @@ public class NearbyTheaterPerformance {
             log.info(
                     """
                     [NEARBY_THEATER_PERFORMANCE]
+                    step={}
                     location={}
                     theaterCount={}
 
@@ -81,6 +82,7 @@ public class NearbyTheaterPerformance {
                     TOTAL
                       - totalResponseTime={}ms
                     """,
+                    STEP,
                     current.address,
                     current.theaterCount,
                     current.theaterSearchCallCount,
