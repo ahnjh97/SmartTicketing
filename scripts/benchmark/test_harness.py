@@ -1,6 +1,8 @@
 import csv
 import http.client
 import json
+import io
+import os
 from pathlib import Path
 import tempfile
 import subprocess
@@ -12,7 +14,8 @@ from urllib.parse import urlencode
 
 from harness import (Client, FixtureHandler, FixtureServer, default_fixtures, percentile, summarize,
                      validate_fixtures, validate_response)
-from runner import BRANCHES, FIELDS, java_executable, measure, report, seed_sql, stop_server
+from runner import BRANCHES, FIELDS, java_executable, main, measure, report, seed_sql, stop_server
+from live import live_scenarios, read_catalog, require_live_settings
 
 
 class QualityTests(unittest.TestCase):
@@ -31,7 +34,7 @@ class QualityTests(unittest.TestCase):
 
     def test_empty_duplicate_and_wrong_candidates_fail(self):
         self.rows[1]['kakaoPlaceId'] = self.rows[0]['kakaoPlaceId']
-        self.assertEqual(self.validate()[1], 'candidate_mismatch')
+        self.assertEqual(self.validate()[1], 'duplicate_candidates')
         self.rows = []
         self.assertFalse(self.validate()[0])
 
@@ -170,6 +173,58 @@ class HttpTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+
+class LiveTests(unittest.TestCase):
+    def test_default_mode_requires_real_inputs_before_build_or_mock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / 'config'
+            env_file.write_text('DB_PASSWORD=\n')
+            with patch.dict(os.environ, {}, clear=True), patch('sys.argv', ['runner', '--env-file', str(env_file)]), \
+                    patch('sys.stderr', new_callable=io.StringIO), patch('runner.prepare') as build, \
+                    patch('runner.FixtureServer') as mock_api:
+                with self.assertRaises(SystemExit) as error:
+                    main()
+                self.assertEqual(error.exception.code, 2)
+                build.assert_not_called()
+                mock_api.assert_not_called()
+
+    def test_real_candidates_allow_overlap_and_more_than_15(self):
+        catalog = [dict(id=str(i), latitude=37.5666, longitude=126.9781,
+                        brand='CGV', name=f'cinema {i}', address='서울특별시 중구') for i in range(20)]
+        origins = [dict(name=n, latitude=37.5665, longitude=126.9780) for n in ('a', 'b')]
+        scenarios = live_scenarios(origins, catalog)
+        self.assertEqual([len(s['theaters']) for s in scenarios], [20, 20])
+        self.assertEqual(seed_sql(scenarios).count('INSERT INTO theaters'), 20)
+        self.assertIn('서울특별시 중구'.encode().hex(), seed_sql(scenarios))
+
+    def test_empty_catalog_does_not_generate_fakes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'catalog.csv'
+            path.write_text('id,name,brand,address,latitude,longitude\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'Load the team catalog first'):
+                read_catalog(path)
+
+    def test_live_original_limit_and_db_full_set_are_distinguished(self):
+        scenario = default_fixtures()[0]
+        rows = [dict(kakaoPlaceId='external-place', transitMinutes=12, transitDistance=1000, walkMinutes=40)]
+        self.assertTrue(validate_response(200, json.dumps(rows), scenario, 'live', True)[0])
+        self.assertFalse(validate_response(200, json.dumps(rows), scenario, 'live', False)[0])
+
+    def test_mismatched_candidates_do_not_produce_improvement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / 'environment.json').write_text('{"mode":"live"}', encoding='utf-8')
+            with (folder / 'raw.csv').open('w', newline='', encoding='utf-8') as stream:
+                writer = csv.DictWriter(stream, fieldnames=FIELDS)
+                writer.writeheader()
+                for branch, signature in zip(BRANCHES, ['external-set', 'db-set', 'db-set']):
+                    writer.writerow(dict(branch=branch, scenario='s', round=1, phase='measure',
+                                         valid=True, response_ms=100, candidate_signature=signature))
+            report(folder, True)
+            text = (folder / 'report.md').read_text()
+            self.assertEqual(text.count('% reduction'), 1)
+            self.assertIn('candidate sets differ', text)
 
     def test_client_records_actual_http_status(self):
         server = FixtureServer(default_fixtures(), route_ms=0, search_ms=0)

@@ -4,10 +4,11 @@ param(
     [int]$Runs = 100,
     [int]$WarmupRuns = 20,
     [int]$Rounds = 3,
-    [ValidateSet('stub', 'live')][string]$Mode = 'stub',
+    [ValidateSet('stub', 'live')][string]$Mode = 'live',
     [string]$Python = '',
     [string]$EnvFile = '',
     [string]$Fixtures = '',
+    [string]$Origins = '',
     [switch]$PrepareOnly
 )
 $ErrorActionPreference = 'Stop'
