@@ -186,9 +186,6 @@ export default function ResidencePreference({
     const [theaters, setTheaters] =
         useState([]);
 
-    const [theaterSort, setTheaterSort] =
-        useState("DISTANCE");
-
     const [selectedTheaters, setSelectedTheaters] =
         useState(
             (user.preferredTheaters ?? [])
@@ -1520,30 +1517,8 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    현재 위치 기준 10km 이내의 영화관을 조회합니다.
+                    선택한 위치를 기준으로 가까운 영화관 20개를 표시합니다.
                 </p>
-
-                <div className="theater-sort-tabs">
-                    {[
-                        ["DISTANCE", "가까운순(직선거리)"],
-                        ["TRANSIT", "대중교통 거리순"],
-                        ["WALK", "도보 거리순"],
-                    ].map(([sort, label]) => (
-                        <button
-                            key={sort}
-                            type="button"
-                            className={
-                                theaterSort === sort
-                                    ? "theater-sort-tab active"
-                                    : "theater-sort-tab"
-                            }
-                            onClick={() => changeTheaterSort(sort)}
-                            disabled={theaterLoading || !location}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
 
                 {theaterLoading && (
                     <p className="help">
@@ -1572,23 +1547,30 @@ export default function ResidencePreference({
                                     Number(theater.theaterId)
                                 );
 
+                            const kakaoDirectionsUrl =
+                                "https://map.kakao.com/?sName=" +
+                                encodeURIComponent(address) +
+                                "&eName=" +
+                                encodeURIComponent(theater.name);
+
                             return (
-                                <button
-                                    type="button"
-                                    key={
-                                        theater.theaterId
-                                    }
+                                <div
+                                    key={theater.theaterId}
                                     className={
                                         selected
                                             ? "theater-item selected"
                                             : "theater-item"
                                     }
-                                    onClick={() =>
-                                        toggleTheater(
-                                            Number(theater.theaterId)
-                                        )
-                                    }
                                 >
+                                    <button
+                                        type="button"
+                                        className="theater-item-main"
+                                        onClick={() =>
+                                            toggleTheater(
+                                                Number(theater.theaterId)
+                                            )
+                                        }
+                                    >
                                     <div className="theater-rank">
                                         {index + 1}
                                     </div>
@@ -1659,7 +1641,17 @@ export default function ResidencePreference({
                                             </div>
                                         )}
                                     </div>
-                                </button>
+
+                                    <a
+                                        className="theater-route-button"
+                                        href={kakaoDirectionsUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        길찾기
+                                    </a>
+                                </div>
                             );
                         }
                     )}
