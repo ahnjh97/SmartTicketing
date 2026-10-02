@@ -1520,10 +1520,26 @@ export default function ResidencePreference({
                                 );
 
                             const kakaoDirectionsUrl =
-                                "https://map.kakao.com/?sName=" +
-                                encodeURIComponent(address) +
-                                "&eName=" +
-                                encodeURIComponent(theater.name);
+                                location &&
+                                theater.latitude != null &&
+                                theater.longitude != null
+                                    ? "https://map.kakao.com/?map_type=TYPE_MAP&target=car&rt=" +
+                                      [
+                                          location.longitude,
+                                          location.latitude,
+                                          theater.longitude,
+                                          theater.latitude,
+                                      ].join(",") +
+                                      "&rt1=" +
+                                      encodeURIComponent(address || "선택한 위치") +
+                                      "&rt2=" +
+                                      encodeURIComponent(theater.name)
+                                    : "https://map.kakao.com/link/to/" +
+                                      encodeURIComponent(theater.name) +
+                                      "," +
+                                      theater.latitude +
+                                      "," +
+                                      theater.longitude;
 
                             return (
                                 <div
