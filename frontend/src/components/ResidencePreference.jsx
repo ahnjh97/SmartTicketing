@@ -1723,13 +1723,21 @@ export default function ResidencePreference({
                                     </button>
 
                                     <a
-                                        className="theater-route-button"
+                                        className={
+                                            selected
+                                                ? "theater-route-button selected"
+                                                : "theater-route-button"
+                                        }
                                         href={kakaoDirectionsUrl}
                                         target="_blank"
                                         rel="noreferrer"
                                         onClick={(event) => event.stopPropagation()}
                                     >
-                                        길찾기
+                                        {selected
+                                            ? (selectedTheaters.indexOf(
+                                                Number(theater.theaterId)
+                                              ) + 1) + "순위 | 길찾기"
+                                            : "길찾기"}
                                     </a>
                                 </div>
                             );
