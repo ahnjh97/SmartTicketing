@@ -15,7 +15,7 @@ public class QueueExpirySqlFilter extends TurboFilter {
     private static final Pattern EXPIRY_QUERY = Pattern.compile(
             "select id,created_at,opportunity_expires_at,queue_number,request_group_id,"
             + "showtime_id,status,updated_at,user_id from waiting_queues(?: [a-zA-Z_][a-zA-Z0-9_]*)?"
-            + " where status=\\? and opportunity_expires_at is not null and opportunity_expires_at<=\\?");
+            + " where status=\\?(?: and request_group_id is null)? and opportunity_expires_at is not null and opportunity_expires_at<=\\?");
     private static final Pattern HOLD_EXPIRY_QUERY = Pattern.compile(
             "select group_id from booking_group_holds(?: [a-zA-Z_][a-zA-Z0-9_]*)?"
             + " where expires_at<=\\? order by expires_at,group_id limit \\?");

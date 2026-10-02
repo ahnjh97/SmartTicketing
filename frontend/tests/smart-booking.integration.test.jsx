@@ -13,6 +13,7 @@ const reservation = { id:501,groupId:401,status:'PENDING',movieTitle:movie.title
 let group, saved, failure, lost, attempts, paid, pending;
 const response = (body,status=200) => new Response(JSON.stringify(body),{status});
 async function api(url,options={}) {
+    if(url==='/api/booking-groups/401/waiting-queues') return response({groupId:401,groupStatus:'ACTIVE',activeReservationId:null,items:[],choices:[]});
     if(url==='/api/users/me') return response(member);
     if(url.startsWith('/api/movies?')) return response({items:[movie]});
     if(url==='/api/movies/41') return response(movie);
@@ -61,8 +62,8 @@ test('theater smart sends only selected showtime and collects party on this scre
 test.each(['SOLD_OUT','NO_CONTIGUOUS_SEATS','LAYOUT_UNVERIFIED'])('%s offers explicit alternatives and honest waiting notice',async code=>{
     failure=code;mount();await confirm();await screen.findByRole('heading',{name:'이번에는 자리를 확보하지 못했어요'});
     fireEvent.click(screen.getByRole('button',{name:'예비번호·대기 안내'}));
-    expect(screen.getByText('예비번호는 발급되지 않았고, 대기에 등록되지 않았습니다.')).toBeTruthy();
-    expect(fetch.mock.calls.some(([url])=>/waiting|queues|payment/.test(url))).toBe(false);
+    expect(screen.getByText('신청 전에는 대기 등록이나 예비번호 발급이 이루어지지 않습니다.')).toBeTruthy();
+    expect(fetch.mock.calls.some(([url,options])=>/waiting|queues/.test(url) && options.method==='POST')).toBe(false);
     expect(screen.getByRole('link',{name:/극장·회차 직접 선택/})).toBeTruthy();
 });
 test('network retry preserves smart request key and never optimistically confirms seats',async()=>{
@@ -92,6 +93,21 @@ test('a committed hold with lost response restores its reservation URL before pa
     const path=screen.getByTestId('url').textContent;cleanup();mount(path);
     await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
 });
+test('a new waiting hold replaces an old reservation URL and survives completed payment',async()=>{
+    group={id:401,partySize:2,audience:{adultCount:2,youthCount:0,companionsEligible:true,guardianAccompanying:false}};
+    saved={...reservation,id:502};
+    fetch.mockImplementation(async(url,options)=>{
+        if(url==='/api/booking-groups/401') return response({...group,activeReservationId:paid?null:502});
+        if(url==='/api/reservations/502/payment') return response({reservation:saved,status:paid?'SUCCESS':null,ticket:null});
+        if(url==='/api/reservations/502/mock-payments') {paid=true;saved={...saved,status:'CONFIRMED'};return response({reservation:saved},201);}
+        return api(url,options);
+    });
+    mount(`${moviePath}&group=401&reservation=501`);
+    await screen.findByRole('heading',{name:'좌석을 선점했습니다'});expect(screen.getByTestId('url').textContent).toContain('reservation=502');
+    fireEvent.click(screen.getByRole('button',{name:'20,000원 모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
+    const path=screen.getByTestId('url').textContent;cleanup();mount(path);await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
+});
+
 test('no seat availability still allows smart failure guidance; mismatched audience cannot submit',async()=>{
     mount();fireEvent.change(await screen.findByLabelText('성인 인원'),{target:{value:'1'}});
     fireEvent.click(screen.getByLabelText(/동반 관객 모두/));

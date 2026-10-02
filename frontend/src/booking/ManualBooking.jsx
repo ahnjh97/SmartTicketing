@@ -3,6 +3,7 @@ import GlassButton from '../components/GlassButton.jsx';
 import { QueryStatus } from './BookingComponents.jsx';
 import useCatalog from './useCatalog.js';
 import useManualHold from './useManualHold.js';
+import WaitingPanel from './WaitingPanel.jsx';
 import AudienceFields from './AudienceFields.jsx';
 import SeatPicker from './SeatPicker.jsx';
 import ReservationPanel from './ReservationPanel.jsx';
@@ -71,5 +72,6 @@ export default function ManualBooking({ booking }) {
             </div> : <><QueryStatus query={shows} /><p role="alert">선택한 회차를 이용할 수 없습니다. 날짜와 회차를 다시 확인해주세요.</p></>}
         {flow.error && <div className={styles.errorBox} role="alert"><strong>요청을 완료하지 못했습니다</strong><p>{flow.error.message}</p>
             <GlassButton disabled={flow.busy} onClick={flow.refresh}>현재 상태 다시 확인</GlassButton><p className={styles.hint}>통신이 끊겼다면 같은 동작을 다시 요청해도 중복 처리되지 않습니다.</p></div>}
+        {flow.user && flow.group && <WaitingPanel key={`${flow.user.id}:${flow.group.id}`} flow={flow}/>}
     </div>;
 }

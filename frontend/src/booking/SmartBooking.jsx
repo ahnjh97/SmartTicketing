@@ -8,6 +8,7 @@ import useManualHold from './useManualHold.js';
 import { validParty } from './state.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import styles from './SmartBooking.module.css';
+import WaitingPanel from './WaitingPanel.jsx';
 import ui from './BookingComponents.module.css';
 
 const count = value => /^[0-6]$/.test(value ?? '') ? Number(value) : 0;
@@ -93,8 +94,8 @@ export default function SmartBooking({ booking }) {
                 <Link to={`/theaters?date=${booking.date}`} onClick={flow.resetIntent}>극장·회차 직접 선택 →</Link>
                 {flow.error.code === 'NO_THEATER_SCOPE' && <Link to="/preferences" onClick={flow.resetIntent}>선호극장 설정 →</Link>}
                 {choices && <GlassButton aria-expanded={waiting} onClick={() => setWaiting(value => !value)}>예비번호·대기 안내</GlassButton>}</div>
-            {waiting && <div className={styles.waiting}><strong>대기 신청은 아직 준비 중입니다</strong><p>예비번호는 발급되지 않았고, 대기에 등록되지 않았습니다.</p>
-                <p>대기 기능은 선호순위를 고려하며 구역별 대기 쏠림을 줄이는 방향으로 준비할 예정입니다.</p></div>}
+            {waiting && <div className={styles.waiting}><strong>아래에서 대기할 회차를 직접 선택하세요</strong><p>신청 전에는 대기 등록이나 예비번호 발급이 이루어지지 않습니다.</p></div>}
         </section>}
+        {flow.user && flow.group && <WaitingPanel key={`${flow.user.id}:${flow.group.id}`} flow={flow}/>}
     </div>;
 }

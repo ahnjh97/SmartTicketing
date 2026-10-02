@@ -53,7 +53,8 @@ class BookingHoldHttpTests {
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
                         BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class,
                         BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class,
-                        BookingSmartController.class, BookingSmartService.class)
+                        BookingSmartController.class, BookingSmartService.class,
+                        smartticketing.controller.BookingWaitingController.class, BookingWaitingService.class, BookingWaitingDispatcher.class)
                 .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true")
                 .withBean(TicketRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(TicketRepository.class))
                 .withBean(ReservationRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationRepository.class))
@@ -227,6 +228,50 @@ class BookingHoldHttpTests {
                         .contentType("application/json").content("{\"paymentMethod\":\"MOCK\"}"))
                         .andExpect(status().isCreated()).andExpect(jsonPath("$.ticket.status").value("VALID"));
                 try (var em=db.open()) { assertThat(em.createQuery("select count(w) from WaitingQueue w",Long.class).getSingleResult()).isZero(); }
+            });
+        }
+    }
+
+    @Test void waitingHttpRequiresOwnerExplicitSelectionAndReplaysWithoutDuplicateRows() throws Exception {
+        try (var db = new TemporaryMysqlDatabase(); var validation = Validation.buildDefaultValidatorFactory()) {
+            long[] ids=seed(db);
+            runner(db,clock,validation.getValidator()).run(context -> {
+                assertThat(context).hasNotFailed();
+                var mvc=MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+                var auth=jwt().jwt(j -> j.subject(Long.toString(ids[0])));
+                var foreign=jwt().jwt(j -> j.subject(Long.toString(ids[5])));
+                var body="""
+                        {"entryPoint":"THEATER_SMART","movieId":%d,"viewingDate":"2026-10-01","partySize":2,
+                        "selectedShowtimeId":%d,"audience":{"adultCount":2,"youthCount":0,"companionsEligible":true,"guardianAccompanying":false}}
+                        """.formatted(ids[1],ids[2]);
+                var created=mvc.perform(post("/api/booking-groups").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content(body)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                long group=json.readTree(created).get("id").asLong(); var path="/api/booking-groups/"+group+"/waiting-queues";
+                mvc.perform(get(path)).andExpect(status().isUnauthorized());
+                mvc.perform(get(path).with(foreign)).andExpect(status().isNotFound());
+                mvc.perform(get(path).with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0))
+                        .andExpect(jsonPath("$.choices[0].showtimeId").value(ids[2]));
+                mvc.perform(post(path).with(auth).header("Idempotency-Key",UUID.randomUUID()).contentType("application/json").content("{\"showtimeIds\":[]}"))
+                        .andExpect(status().isBadRequest());
+                String key=UUID.randomUUID().toString(); String request="{\"showtimeIds\":["+ids[2]+"]}";
+                mvc.perform(post(path).with(foreign).header("Idempotency-Key",key).contentType("application/json").content(request)).andExpect(status().isNotFound());
+                var response=mvc.perform(post(path).with(auth).header("Idempotency-Key",key).contentType("application/json").content(request))
+                        .andExpect(status().isCreated()).andExpect(jsonPath("$.items[0].queueNumber").value(1))
+                        .andExpect(jsonPath("$.items[0].aheadCount").value(0)).andReturn().getResponse().getContentAsString();
+                mvc.perform(post(path).with(auth).header("Idempotency-Key",key).contentType("application/json").content(request))
+                        .andExpect(status().isCreated()).andExpect(content().json(response));
+                var tx=new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+                var em=context.getBean(EntityManager.class);
+                tx.execute(s -> { em.find(Users.class,ids[0]).setBirthDate(null); return null; });
+                // A skipped condition failure through the real Spring proxy must not poison the transaction.
+                assertThat(context.getBean(BookingWaitingDispatcher.class).dispatch(ids[2])).isZero();
+                tx.execute(s -> { em.find(Users.class,ids[0]).setBirthDate(LocalDate.of(1990,1,1)); return null; });
+                context.getBean(BookingWaitingDispatcher.class).dispatch(ids[2]);
+                mvc.perform(get(path).with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].status").value("HOLDING"));
+                mvc.perform(post("/api/booking-groups/"+group+"/cancel").with(foreign).header("Idempotency-Key",UUID.randomUUID())).andExpect(status().isNotFound());
+                mvc.perform(post("/api/booking-groups/"+group+"/cancel").with(auth).header("Idempotency-Key",UUID.randomUUID()))
+                        .andExpect(status().isOk()).andExpect(jsonPath("$.groupStatus").value("CANCELLED"))
+                        .andExpect(jsonPath("$.items[0].status").value("CANCELLED"));
             });
         }
     }

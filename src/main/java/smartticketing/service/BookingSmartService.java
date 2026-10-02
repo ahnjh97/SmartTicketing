@@ -104,6 +104,9 @@ public class BookingSmartService {
         if (movie) query.setParameter("theaters", theaters);
         else query.setParameter("show", group.getSelectedShowtime().getId());
         var shows = query.getResultList();
+        var ended = em.createQuery("select q.showtime.id from WaitingQueue q where q.requestGroup.id=:g and q.status in :states", Long.class)
+                .setParameter("g", groupId).setParameter("states", List.of(QueueStatus.EXPIRED, QueueStatus.CANCELLED)).getResultList();
+        shows = shows.stream().filter(s -> !ended.contains(s.getId())).toList();
         if (shows.isEmpty()) return Search.failure("NO_SHOWTIMES", "선택 조건에 맞는 예매 가능한 회차가 없습니다.");
         var inventory = em.createQuery("""
                 select i from ShowtimeSeat i join fetch i.seat where i.showtime.id in :ids order by i.id

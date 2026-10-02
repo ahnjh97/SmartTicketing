@@ -5,7 +5,7 @@ import useAuth from '../hooks/useAuth.js';
 import { positive } from './state.js';
 
 // Persist only request identities. The server remains authoritative for ownership, money and time.
-function requestKey(userId, operation, body) {
+export function requestKey(userId, operation, body) {
     const slot = `booking.request.${userId}.${operation}`;
     const intent = JSON.stringify(body);
     let saved;
@@ -15,7 +15,7 @@ function requestKey(userId, operation, body) {
     try { sessionStorage.setItem(slot, JSON.stringify(value)); } catch { /* still idempotent in this request */ }
     return { ...value, slot };
 }
-function forget(request) { try { sessionStorage.removeItem(request.slot); } catch { /* optional */ } }
+export function forget(request) { try { sessionStorage.removeItem(request.slot); } catch { /* optional */ } }
 
 // Shared hold/payment lifecycle; smart changes only the acquisition endpoint and request intent.
 export default function useManualHold({ smart = false } = {}) {
@@ -43,12 +43,12 @@ export default function useManualHold({ smart = false } = {}) {
             const requestSequence = ++sequence;
             try {
                 const group = groupId ? await bookingApi.group(groupId, controller.signal) : null;
-                const id = reservationId || group?.activeReservationId;
+                const id = group?.activeReservationId || reservationId;
                 const payment = id ? await bookingApi.payment(id, controller.signal) : null;
                 const reservation = payment?.reservation;
                 if (active && sequence === requestSequence && !gate.current && generation.current === readGeneration) {
                     // Normalize the recovery URL before exposing payment controls.
-                    if (reservation && !reservationId) {
+                    if (reservation && String(reservation.id) !== reservationId) {
                         setFailure(null);
                         setParams(previous => {
                             const next = new URLSearchParams(previous); next.set('reservation', reservation.id); return next;
@@ -94,7 +94,7 @@ export default function useManualHold({ smart = false } = {}) {
             // A network/5xx response may have committed: retain the key for safe retransmission.
             if (request && error.status >= 400 && error.status < 500 && error.status !== 401) forget(request);
             if (live.current === identity) {
-                if (smart && attemptedGroup && !groupId) {
+                if (attemptedGroup && !groupId) {
                     const next = new URLSearchParams(params); next.set('group', attemptedGroup.id);
                     setFailure({ identity: `${user.id}:${next}`, error, group: attemptedGroup });
                     setParams(next, { replace: true });
