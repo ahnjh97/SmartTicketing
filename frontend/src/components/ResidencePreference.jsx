@@ -1142,12 +1142,17 @@ export default function ResidencePreference({
                 "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
                 logoFile;
 
+            // 실제 클릭/마우스 이벤트를 받는 투명 기준 마커.
+            // 로고는 CustomOverlay로 원형 마커를 만들어 그 위에 표시합니다.
             const markerImage =
                 new window.kakao.maps.MarkerImage(
-                    logoUrl,
-                    new window.kakao.maps.Size(markerSize, markerSize),
+                    "data:image/svg+xml;charset=UTF-8," +
+                        encodeURIComponent(
+                            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="transparent"/></svg>'
+                        ),
+                    new window.kakao.maps.Size(2, 2),
                     {
-                        offset: new window.kakao.maps.Point(center, center),
+                        offset: new window.kakao.maps.Point(1, 1),
                     }
                 );
 
@@ -1157,8 +1162,47 @@ export default function ResidencePreference({
                     position,
                     image: markerImage,
                     title: theater.name,
+                    zIndex: selected ? 31 : 21,
+                });
+
+            const logoElement = document.createElement("div");
+            logoElement.className = "map-theater-logo-marker";
+            logoElement.style.width = markerSize + "px";
+            logoElement.style.height = markerSize + "px";
+            logoElement.style.border = "3px solid " + borderColor;
+            logoElement.style.borderRadius = "50%";
+            logoElement.style.background = "#fff";
+            logoElement.style.boxSizing = "border-box";
+            logoElement.style.overflow = "hidden";
+            logoElement.style.display = "flex";
+            logoElement.style.alignItems = "center";
+            logoElement.style.justifyContent = "center";
+            logoElement.style.pointerEvents = "none";
+            logoElement.style.boxShadow = selected
+                ? "0 2px 8px rgba(0,0,0,.35)"
+                : "0 1px 5px rgba(0,0,0,.28)";
+
+            const logoElementImage = document.createElement("img");
+            logoElementImage.src = logoUrl;
+            logoElementImage.alt = "";
+            logoElementImage.draggable = false;
+            logoElementImage.style.width = "100%";
+            logoElementImage.style.height = "100%";
+            logoElementImage.style.objectFit = "cover";
+            logoElementImage.style.display = "block";
+            logoElement.appendChild(logoElementImage);
+
+            const logoOverlay =
+                new window.kakao.maps.CustomOverlay({
+                    position,
+                    content: logoElement,
+                    xAnchor: 0.5,
+                    yAnchor: 0.5,
                     zIndex: selected ? 30 : 20,
                 });
+
+            logoOverlay.setMap(mapInstanceRef.current);
+            theaterOverlaysRef.current.push(logoOverlay);
 
             const distanceText =
                 theater.distance != null
