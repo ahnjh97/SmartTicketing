@@ -31,7 +31,10 @@ public class TheaterDataInitializer implements ApplicationRunner {
             return;
         }
         try {
-            log.info("서울 영화관 준비 완료: {}", service.collectSeoulTheaters());
+            var result = service.collectSeoulTheaters();
+            log.info("[DB 데이터] theaters 삽입 {}건, 수정 {}건 | 수집 요청 생략 {}건 | 외부 API {}회 | 극장 준비 {}ms",
+                    result.get("insertedCount"), result.get("updatedCount"), result.get("skippedQueryCount"),
+                    result.get("apiCallCount"), result.get("elapsedMs"));
         } catch (Exception e) {
             log.warn("서울 영화관 준비 미완료 ({}). 기존 DB로 실행하며 다음 시작/관리자 요청에서 이어서 수집합니다.",
                     e.getClass().getSimpleName());

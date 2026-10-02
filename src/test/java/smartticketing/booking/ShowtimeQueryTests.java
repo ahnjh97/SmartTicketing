@@ -67,7 +67,7 @@ class ShowtimeQueryTests {
         var byTheater = query.showtimes(null, theaterId, LocalDate.of(2026, 10, 1), null, null);
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
         assertThat(byTheater.items()).isEqualTo(byMovie.items());
-        assertThat(byMovie.items()).extracting(i -> i.availableSeats()).containsExactlyInAnyOrder(108L, 0L, 63L);
+        assertThat(byMovie.items()).extracting(i -> i.availableSeats()).containsExactlyInAnyOrder(120L, 0L, 70L);
         assertThat(byMovie.items()).extracting(i -> i.maxContiguousSeats()).containsExactlyInAnyOrder(6, 0, 1);
     }
 
@@ -90,13 +90,13 @@ class ShowtimeQueryTests {
         statistics.setStatisticsEnabled(true); statistics.clear();
         var result = query.seats(normal);
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
-        assertThat(result.availableSeats()).isEqualTo(108);
+        assertThat(result.availableSeats()).isEqualTo(120);
         assertThat(result.maxContiguousSeats()).isEqualTo(6);
         assertThat(result.layoutComplete()).isTrue();
         assertThat(result.serverTime().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
         assertThat(query.seats(sold).availableSeats()).isZero();
         assertThat(query.seats(sold).maxContiguousSeats()).isZero();
-        assertThat(query.seats(fragmented).availableSeats()).isEqualTo(63);
+        assertThat(query.seats(fragmented).availableSeats()).isEqualTo(70);
         assertThat(query.seats(fragmented).maxContiguousSeats()).isEqualTo(1);
     }
 
@@ -106,7 +106,7 @@ class ShowtimeQueryTests {
                 .setParameter("id", showtime.getId()).getResultList().getFirst();
         seat.setStatus(SeatStatus.HOLDING); seat.setHoldExpiredAt(LocalDateTime.of(2026, 9, 30, 0, 0));
         Long id = seat.getId(), showtimeId = showtime.getId(); em.flush(); em.clear();
-        assertThat(query.seats(showtimeId).availableSeats()).isEqualTo(107);
+        assertThat(query.seats(showtimeId).availableSeats()).isEqualTo(119);
         assertThat(em.find(ShowtimeSeat.class, id).getStatus()).isEqualTo(SeatStatus.HOLDING);
         assertThat(em.find(Showtime.class, showtimeId).getAvailableSeats()).isEqualTo(999);
     }
@@ -118,7 +118,7 @@ class ShowtimeQueryTests {
         inventory.getFirst().getSeat().setActive(false);
         inventory.forEach(i -> i.getSeat().setAdjacencySegment(null)); em.flush(); em.clear();
         var result = query.seats(showtime.getId());
-        assertThat(result.totalSeats()).isEqualTo(107);
+        assertThat(result.totalSeats()).isEqualTo(119);
         assertThat(result.layoutComplete()).isFalse();
         assertThat(result.maxContiguousSeats()).isEqualTo(1);
     }

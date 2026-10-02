@@ -35,8 +35,8 @@ function getSeatPosition(
     }
 
     const horizontal =
-        seatNumber <= 2 ||
-        seatNumber >= 11
+        seatNumber <= 3 ||
+        seatNumber >= 10
             ? "SIDE"
             : "MIDDLE";
 

@@ -32,7 +32,7 @@ public class MovieDataInitializer implements ApplicationRunner {
             return;
         }
         try {
-            log.info("영화 준비 결과: {}", movieImportService.importConfiguredMovies());
+            movieImportService.importConfiguredMovies();
         } catch (Exception e) {
             log.warn("영화 준비 미완료 ({}). 기존 DB로 실행하며 다음 시작/관리자 요청에서 재시도합니다.",
                     e.getClass().getSimpleName());

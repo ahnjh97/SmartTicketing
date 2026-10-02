@@ -53,11 +53,14 @@ public class SeoulTheaterCollectionService {
         brands.put("메가박스", TheaterBrand.MEGABOX);
         if (refresh) writer.reset(SEOUL_DISTRICTS.stream()
                 .flatMap(d -> brands.values().stream().map(b -> key(d, b))).toList());
+        var keys = SEOUL_DISTRICTS.stream().flatMap(d -> brands.values().stream().map(b -> key(d, b))).toList();
+        var states = new HashMap<String, smartticketing.entity.TheaterCollectionProgress>();
+        progress.findAllById(keys).forEach(state -> states.put(state.getId(), state));
 
         for (String district : SEOUL_DISTRICTS) {
             for (var brand : brands.entrySet()) {
                 String key = key(district, brand.getValue());
-                var state = progress.findById(key).orElse(null);
+                var state = states.get(key);
                 if (state != null && state.isComplete()) { skipped++; continue; }
                 int page = state == null ? 1 : state.getNextPage();
                 while (true) {

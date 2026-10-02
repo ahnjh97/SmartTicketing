@@ -31,6 +31,19 @@ class MovieImportTests {
     }
     @AfterEach void verifyServer() { server.verify(); }
 
+    @Test void defaultMetadataIsLoadedInBulkWithoutReadingEntireCatalog() {
+        var checked = new Movie(); checked.setId(1L); checked.setTmdbMovieId(11L);
+        checked.setMetadataFetchedAt(LocalDateTime.now()); checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
+        when(movies.findByTmdbMovieId(anyLong())).thenReturn(Optional.of(checked));
+        when(movies.findByTmdbMovieIdIn(anyList())).thenReturn(java.util.List.of(checked));
+        assertThat(service.importConfiguredMovies().skippedCount()).isEqualTo(2);
+        assertThat(checked.getRating()).isEqualTo("ALL");
+        assertThat(checked.getAudienceCount()).isEqualTo(10000);
+        verify(movies).findByTmdbMovieIdIn(java.util.List.of(11L, 12L));
+        verify(movies).findTop10ByReleaseDateIsNotNullOrderByReleaseDateDesc();
+        verify(movies, never()).findAll();
+    }
+
     @Test void databaseHitDoesNotCallExternalApi() {
         var movie = new Movie(); movie.setTmdbMovieId(11L); movie.setTitle("기존");
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(movie));

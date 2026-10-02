@@ -32,7 +32,7 @@ class TheaterCollectionTests {
         var builder = RestClient.builder().baseUrl("https://kakao.test");
         server = MockRestServiceServer.bindTo(builder).build(); client = builder.build();
         service = new SeoulTheaterCollectionService(progress, writer, client, "test");
-        when(progress.findById(anyString())).thenAnswer(c -> Optional.ofNullable(states.get(c.getArgument(0))));
+        when(progress.findAllById(any())).thenAnswer(c -> new ArrayList<>(states.values()));
         when(writer.savePage(anyString(), anyInt(), anyBoolean(), anyList())).thenAnswer(c -> {
             var state = new TheaterCollectionProgress(c.getArgument(0));
             state.setNextPage((int)c.getArgument(1) + 1); state.setComplete(c.getArgument(2));

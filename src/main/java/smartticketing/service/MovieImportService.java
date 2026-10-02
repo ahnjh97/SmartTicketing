@@ -75,6 +75,7 @@ public class MovieImportService {
     }
 
     public synchronized MovieImportResult importConfiguredMovies(boolean refresh) {
+        long startedAt = System.nanoTime();
         int savedCount = 0;
         int skippedCount = 0;
         int updatedCount = 0;
@@ -110,20 +111,18 @@ public class MovieImportService {
             }
         }
 
-        applyConfiguredDefaults();
+        int defaultsUpdated = applyConfiguredDefaults();
 
-        log.info("영화 가져오기 완료 - 저장 {}건, 건너뜀 {}건, 실패 {}건",
-                savedCount, skippedCount, failedIds.size());
+        log.info("[DB 데이터] movies 메타데이터 삽입 {}건, 수정 {}건 | 기본정보 보정 {}건 | 건너뜀 {}건 | 실패 {}건 | 영화 준비 {}ms",
+                savedCount, updatedCount, defaultsUpdated, skippedCount, failedIds.size(),
+                (System.nanoTime() - startedAt) / 1_000_000);
         return new MovieImportResult(savedCount, skippedCount, failedIds, updatedCount);
     }
 
     private int applyConfiguredDefaults() {
-        int filledCount = 0;
-        for (Long tmdbId : movieIds) {
-            var found = movieRepository.findByTmdbMovieId(tmdbId);
-            if (found.isEmpty()) continue;
-
-            Movie movie = found.get();
+        var changedIds = new java.util.HashSet<Long>();
+        for (Movie movie : movieRepository.findByTmdbMovieIdIn(movieIds)) {
+            Long tmdbId = movie.getTmdbMovieId();
             boolean changed = false;
 
             if (movie.getAudienceCount() == 0 && audienceSeeds.containsKey(tmdbId)) {
@@ -137,28 +136,28 @@ public class MovieImportService {
 
             if (changed) {
                 movieRepository.save(movie);
-                filledCount++;
+                changedIds.add(movie.getId());
             }
         }
 
         // =========================================================================
         // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작(10/11 ~ 10/17)으로 지정
         // =========================================================================
-        List<Movie> upcomingMovies = movieRepository.findAll().stream()
-                .filter(m -> m.getReleaseDate() != null)
-                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()) // 1. 가장 미래 개봉일 순 정렬
-                .limit(10) // 2. 가장 최신/미래 영화 딱 10개 추출
+        List<Movie> upcomingMovies = movieRepository.findTop10ByReleaseDateIsNotNullOrderByReleaseDateDesc().stream()
                 .sorted(Comparator.comparing(Movie::getReleaseDate)) // 3. 다시 오름차순 정렬
                 .toList();
 
         for (int i = 0; i < upcomingMovies.size(); i++) {
             Movie upcomingMovie = upcomingMovies.get(i);
             LocalDate adjustedDate = LocalDate.of(2026, 10, 11).plusDays(i % 7);
-            upcomingMovie.setReleaseDate(adjustedDate);
-            movieRepository.save(upcomingMovie);
+            if (!adjustedDate.equals(upcomingMovie.getReleaseDate())) {
+                upcomingMovie.setReleaseDate(adjustedDate);
+                movieRepository.save(upcomingMovie);
+                changedIds.add(upcomingMovie.getId());
+            }
         }
 
-        return filledCount;
+        return changedIds.size();
     }
 
     /** 3단계 조회 서비스에서 사용. DB에 있는 영화는 외부 API 없이 즉시 반환한다. */

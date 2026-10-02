@@ -36,25 +36,25 @@ class BookingSeedTests {
     @Test void generatesSevenDaysWithExactLayoutPriceAndReproducibleScenarios() {
         var result = seed(CLOCK).seed(List.of(theater.getId()));
         assertThat(result.createdScreens()).isEqualTo(3);
-        assertThat(result.createdSeats()).isEqualTo(324);
+        assertThat(result.createdSeats()).isEqualTo(360);
         assertThat(result.createdShowtimes()).isEqualTo(21);
-        assertThat(result.createdShowtimeSeats()).isEqualTo(2268);
+        assertThat(result.createdShowtimeSeats()).isEqualTo(2520);
         assertThat(showtimes().stream().map(s -> s.getStartTime().toLocalDate()).distinct()).hasSize(7);
         for (var showtime : showtimes()) {
             assertThat(showtime.getPricePerPerson()).isEqualTo(10000);
             assertThat(Duration.between(showtime.getStartTime(), showtime.getEndTime()).toMinutes()).isEqualTo(120);
             var inv = inventory(showtime);
-            assertThat(inv).hasSize(108);
+            assertThat(inv).hasSize(120);
             assertThat(inv.stream().filter(s -> s.getStatus() == SeatStatus.AVAILABLE).count()).isEqualTo(showtime.getAvailableSeats().longValue());
             if (showtime.getScreen().getSeedKey().endsWith("sold-out")) {
                 assertThat(showtime.getAvailableSeats()).isZero();
                 assertThat(inv).allMatch(s -> s.getStatus() == SeatStatus.BLOCKED && s.getReservation() == null);
             } else if (showtime.getScreen().getSeedKey().endsWith("fragmented")) {
-                assertThat(showtime.getAvailableSeats()).isEqualTo(63);
+                assertThat(showtime.getAvailableSeats()).isEqualTo(70);
                 var free = inv.stream().filter(s -> s.getStatus() == SeatStatus.AVAILABLE).map(ShowtimeSeat::getSeat).toList();
                 assertThat(free).allMatch(a -> free.stream().noneMatch(b -> a.getSeatRow().equals(b.getSeatRow())
                         && a.getAdjacencySegment().equals(b.getAdjacencySegment()) && b.getPositionInSegment() == a.getPositionInSegment() + 1));
-            } else assertThat(showtime.getAvailableSeats()).isEqualTo(108);
+            } else assertThat(showtime.getAvailableSeats()).isEqualTo(120);
         }
         var seats = em.createQuery("from Seat where seatRow = 'A'", Seat.class).getResultList();
         assertThat(seats.stream().filter(s -> s.getSeatNumber() <= 3 || s.getSeatNumber() >= 10)).allMatch(s -> s.getSeatPosition() == SeatPosition.SIDE_FRONT);
@@ -70,7 +70,7 @@ class BookingSeedTests {
         reservation.setCreatedAt(LocalDateTime.now(CLOCK)); reservation.setUpdatedAt(LocalDateTime.now(CLOCK)); em.persist(reservation);
         var held = inventory(showtime).getFirst(); held.setStatus(SeatStatus.HOLDING); held.setReservation(reservation);
         held.setHoldExpiredAt(LocalDateTime.now(CLOCK).plusMinutes(5));
-        showtime.setAvailableSeats(107); showtime.setPricePerPerson(17000); em.flush();
+        showtime.setAvailableSeats(119); showtime.setPricePerPerson(17000); em.flush();
         Long heldId = held.getId(), showtimeId = showtime.getId(), reservationId = reservation.getId();
         var result = seed(CLOCK).seed(List.of(theater.getId(), theater.getId()));
         assertThat(result.createdShowtimes()).isZero(); assertThat(result.createdSeats()).isZero();
@@ -78,7 +78,7 @@ class BookingSeedTests {
         assertThat(em.find(ShowtimeSeat.class, heldId).getStatus()).isEqualTo(SeatStatus.HOLDING);
         assertThat(em.find(ShowtimeSeat.class, heldId).getReservation().getId()).isEqualTo(reservationId);
         assertThat(em.find(Showtime.class, showtimeId).getPricePerPerson()).isEqualTo(17000);
-        assertThat(em.find(Showtime.class, showtimeId).getAvailableSeats()).isEqualTo(107);
+        assertThat(em.find(Showtime.class, showtimeId).getAvailableSeats()).isEqualTo(119);
     }
 
     @Test void nextDayOnlyAppendsNewFutureDayAndKeepsOldRows() {
