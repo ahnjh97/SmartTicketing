@@ -21,6 +21,12 @@ export default function SignupPage() {
     const [birthDate, setBirthDate] =
         useState("");
 
+    const currentDate =
+        new Date().toISOString().slice(0, 10);
+
+    const minimumBirthDate =
+        "1900-01-01";
+
     const [loginId, setLoginId] =
         useState("");
 
@@ -144,6 +150,11 @@ export default function SignupPage() {
             [setError]
         );
 
+    function handleBirthDateChange(event) {
+        setBirthDate(event.target.value);
+        setError("");
+    }
+
     function handleLoginIdChange(event) {
         checkVersion.current++;
 
@@ -166,6 +177,11 @@ export default function SignupPage() {
 
     function handleSubmit(event) {
         event.preventDefault();
+
+        if (!birthDate) {
+            setError("생년월일을 입력해주세요.");
+            return;
+        }
 
         if (
             loginIdCheckStatus !==
@@ -258,11 +274,10 @@ export default function SignupPage() {
                     id="signup-birth-date"
                     type="date"
                     value={birthDate}
-                    onChange={(event) =>
-                        setBirthDate(
-                            event.target.value
-                        )
-                    }
+                    onChange={handleBirthDateChange}
+                    min={minimumBirthDate}
+                    max={currentDate}
+                    aria-label="생년월일"
                     required
                 />
 
