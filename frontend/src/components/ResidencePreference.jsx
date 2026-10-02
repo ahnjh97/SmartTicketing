@@ -1183,10 +1183,6 @@ export default function ResidencePreference({
                         return;
                     }
 
-                    theaterOverlaysRef.current.forEach(
-                        (item) => item.setMap(null)
-                    );
-
                     const projection =
                         map.getProjection();
 
@@ -1198,15 +1194,28 @@ export default function ResidencePreference({
                     const showBelow =
                         point.y < 65;
 
+                    // 다른 영화관 오버레이를 건드리지 않고
+                    // 현재 영화관의 오버레이만 전환합니다.
+                    // 모든 오버레이를 setMap(null)로 숨겼다가
+                    // 다시 표시하면 Kakao Map의 mouseover/mouseout이
+                    // 반복되면서 깜빡이는 현상이 발생할 수 있습니다.
                     if (showBelow) {
                         overlay.setMap(null);
-                        belowOverlay.setPosition(position);
-                        belowOverlay.setMap(map);
+
+                        if (belowOverlay.getMap() !== map) {
+                            belowOverlay.setPosition(position);
+                            belowOverlay.setMap(map);
+                        }
+
                         belowOverlay.setZIndex(40);
                     } else {
                         belowOverlay.setMap(null);
-                        overlay.setPosition(position);
-                        overlay.setMap(map);
+
+                        if (overlay.getMap() !== map) {
+                            overlay.setPosition(position);
+                            overlay.setMap(map);
+                        }
+
                         overlay.setZIndex(40);
                     }
                 }
