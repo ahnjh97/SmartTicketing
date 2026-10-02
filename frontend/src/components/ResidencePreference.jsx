@@ -268,7 +268,7 @@ export default function ResidencePreference({
         return () => {
             window.removeEventListener("resize", updateTheaterMarqueeWidths);
         };
-    }, [theaters]);
+    }, [theaters, selectedTheaters]);
 
     useEffect(() => {
         let active = true;
