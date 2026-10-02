@@ -2215,6 +2215,20 @@ input:focus {
 .profile-card .withdraw-button:hover:not(:disabled) {
     border-color: rgba(255, 204, 0, 0.3);
     background: rgba(55, 55, 55, 0.46);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 5px 16px rgba(0, 0, 0, 0.12);
+}
+
+.profile-card .primary-button:focus-visible:not(:disabled),
+.profile-card .primary-button:active:not(:disabled) {
+    background: rgba(55, 55, 55, 0.46);
+    border-color: rgba(255, 204, 0, 0.3);
+    color: #fff;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 5px 16px rgba(0, 0, 0, 0.12);
+    transform: none;
 }
 
 @media (max-width: 700px) {
