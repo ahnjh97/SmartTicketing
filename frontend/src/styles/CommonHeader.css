@@ -1,7 +1,8 @@
+/* Common header */
 .common-header {
     position: absolute;
     inset: 0 0 auto;
-    z-index: 10;
+    z-index: 100;
     background: transparent;
 }
 
@@ -135,6 +136,189 @@
     background: var(--glass-hover);
 }
 
+.common-header-panel-trigger {
+    gap: 7px;
+    cursor: pointer;
+}
+
+.common-header-trigger-icon {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+}
+
+.common-header-trigger-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.common-header-notification-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 2px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: none;
+}
+
+.common-header-popover {
+    position: absolute;
+    top: calc(100% - 2px);
+    right: 24px;
+    z-index: 110;
+    width: min(400px, calc(100vw - 32px));
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 16px;
+    background: rgb(24 24 24 / 96%);
+    box-shadow: 0 18px 50px rgb(0 0 0 / 38%);
+    backdrop-filter: blur(18px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-12px);
+    transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease;
+}
+
+.common-header-popover.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.common-header-ticket-popover {
+    width: min(440px, calc(100vw - 32px));
+}
+
+.common-header-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.common-header-popover-header > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.common-header-popover-header strong {
+    font-size: 17px;
+}
+
+.common-header-popover-header span {
+    font-size: 12px;
+    color: rgb(255 255 255 / 50%);
+}
+
+.common-header-popover-header button,
+.common-header-popover-actions button {
+    border: 0;
+    background: transparent;
+    color: rgb(255 255 255 / 65%);
+    cursor: pointer;
+}
+
+.common-header-popover-header button:hover:not(:disabled),
+.common-header-popover-actions button:hover {
+    color: #fff;
+}
+
+.common-header-popover-header button:disabled {
+    opacity: .35;
+    cursor: default;
+}
+
+.common-header-popover-body {
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+}
+
+.common-header-popover-empty {
+    margin: 0;
+    padding: 36px 20px;
+    text-align: center;
+    color: rgb(255 255 255 / 55%);
+}
+
+.common-header-notification-item,
+.common-header-ticket-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.common-header-notification-item:last-child,
+.common-header-ticket-item:last-child {
+    border-bottom: 0;
+}
+
+.common-header-notification-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.common-header-notification-item.is-unread {
+    background: rgb(255 196 38 / 7%);
+}
+
+.common-header-notification-item strong,
+.common-header-ticket-title strong {
+    font-size: 14px;
+}
+
+.common-header-notification-item p,
+.common-header-ticket-item p {
+    margin: 5px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgb(255 255 255 / 76%);
+}
+
+.common-header-notification-item time,
+.common-header-ticket-item small {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: rgb(255 255 255 / 45%);
+}
+
+.common-header-popover-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.common-header-ticket-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.common-header-ticket-title span {
+    font-size: 11px;
+    color: rgb(255 255 255 / 55%);
+}
+
 .app-shell-empty {
     flex: 1;
     background: transparent;
@@ -222,6 +406,10 @@
     border-radius: 8px;
 }
 
+.common-header-mobile-menu .common-header-panel-trigger {
+    width: 100%;
+}
+
 .common-header-mobile-menu .common-header-menu-link.is-active {
     color: #fff;
     font-weight: 700;
@@ -230,6 +418,13 @@
 .common-header-mobile-menu .common-header-link:not(.common-header-signup):hover:not(:disabled):not([aria-disabled="true"]) {
     background: rgb(255 255 255 / 10%);
     color: #fff;
+}
+
+@media (max-width: 700px) {
+    .common-header-popover {
+        right: 12px;
+        width: min(400px, calc(100vw - 24px));
+    }
 }
 
 @media (max-width: 420px) {
@@ -258,27 +453,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .common-header-popover {
+        transition: none;
+    }
+
     .common-header-brand,
     .common-header-link,
     .common-header-menu-toggle {
         transition: none;
     }
-}
-
-
-.common-header-notification-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    margin-left: 6px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--color-accent);
-    color: var(--color-on-accent);
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1;
-    text-shadow: none;
 }
