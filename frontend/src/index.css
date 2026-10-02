@@ -801,7 +801,7 @@ input:focus {
 }
 
 .theater-name-marquee:hover strong {
-    animation: theater-name-marquee 7s ease-in-out infinite alternate;
+    animation: theater-name-marquee 3s ease-in-out infinite alternate;
 }
 
 .theater-main small {
