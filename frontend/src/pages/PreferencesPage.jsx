@@ -16,7 +16,7 @@ export default function PreferencesPage() {
                 <div className="profile-header">
                     <div>
                         <h1>회원정보 수정</h1>
-                        <p className="subtitle">거주지, 선호 영화관, 선호 좌석을 수정합니다.</p>
+                        <p className="subtitle">위치, 선호 영화관, 선호 좌석을 수정합니다.</p>
                     </div>
                     <button type="button" className="logout-button"
                         onClick={() => navigate(PAGE_PATHS.profile, { replace: true })}>취소</button>

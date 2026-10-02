@@ -1485,16 +1485,6 @@ export default function ResidencePreference({
             )}
 
             <section>
-                <h2>
-                    거주지 설정
-                </h2>
-
-                <p className="help">
-                    현재 위치를 기준으로
-                    거주지를 자동 확인하고
-                    주변 10km 영화관을
-                    조회합니다.
-                </p>
 
                 <div className="location-action-buttons">
                     <button
