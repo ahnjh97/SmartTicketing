@@ -912,7 +912,7 @@ input:focus {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
     white-space: nowrap;
     pointer-events: none;
-    transform: translateY(-6px);
+    transform: translateY(-4px);
     backdrop-filter: blur(6px);
 }
 
@@ -927,6 +927,19 @@ input:focus {
     background: rgba(20, 20, 20, 0.94);
     border-right: 1px solid rgba(255, 196, 38, 0.65);
     border-bottom: 1px solid rgba(255, 196, 38, 0.65);
+}
+
+.map-theater-info.below {
+    transform: translateY(4px);
+}
+
+.map-theater-info.below::after {
+    top: -5px;
+    bottom: auto;
+    border-top: 1px solid rgba(255, 196, 38, 0.65);
+    border-left: 1px solid rgba(255, 196, 38, 0.65);
+    border-right: 0;
+    border-bottom: 0;
 }
 
 .map-theater-info strong {
