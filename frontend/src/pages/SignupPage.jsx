@@ -18,30 +18,14 @@ export default function SignupPage() {
     const [name, setName] =
         useState("");
 
-    const birthYearRef =
-        useRef(null);
-
-    const birthMonthRef =
-        useRef(null);
-
-    const birthDayRef =
-        useRef(null);
-
-    const [birthYear, setBirthYear] =
+    const [birthDate, setBirthDate] =
         useState("");
 
-    const [birthMonth, setBirthMonth] =
-        useState("");
+    const currentDate =
+        new Date().toISOString().slice(0, 10);
 
-    const [birthDay, setBirthDay] =
-        useState("");
-
-    const birthDate =
-        birthYear.length === 4
-        && birthMonth.length === 2
-        && birthDay.length === 2
-            ? birthYear + "-" + birthMonth + "-" + birthDay
-            : "";
+    const minimumBirthDate =
+        "1900-01-01";
 
     const [loginId, setLoginId] =
         useState("");
@@ -166,41 +150,9 @@ export default function SignupPage() {
             [setError]
         );
 
-    function handleBirthYearChange(event) {
-        const value =
-            event.target.value
-                .replace(/\D/g, "")
-                .slice(0, 4);
-
-        setBirthYear(value);
+    function handleBirthDateChange(event) {
+        setBirthDate(event.target.value);
         setError("");
-
-        if (value.length === 4) {
-            birthMonthRef.current?.focus();
-            birthMonthRef.current?.select();
-        }
-    }
-
-    function handleBirthMonthChange(event) {
-        const value =
-            event.target.value
-                .replace(/\D/g, "")
-                .slice(0, 2);
-
-        setBirthMonth(value);
-
-        if (value.length === 2) {
-            birthDayRef.current?.focus();
-            birthDayRef.current?.select();
-        }
-    }
-
-    function handleBirthDayChange(event) {
-        setBirthDay(
-            event.target.value
-                .replace(/\D/g, "")
-                .slice(0, 2)
-        );
     }
 
     function handleLoginIdChange(event) {
@@ -226,19 +178,8 @@ export default function SignupPage() {
     function handleSubmit(event) {
         event.preventDefault();
 
-        const year = Number(birthYear);
-        const month = Number(birthMonth);
-        const day = Number(birthDay);
-        if (
-            birthYear.length !== 4 ||
-            birthMonth.length !== 2 ||
-            month < 1 ||
-            month > 12 ||
-            birthDay.length !== 2 ||
-            day < 1 ||
-            day > new Date(year, month, 0).getDate()
-        ) {
-            setError("올바른 생년월일을 입력해주세요.");
+        if (!birthDate) {
+            setError("생년월일을 입력해주세요.");
             return;
         }
 
@@ -329,47 +270,16 @@ export default function SignupPage() {
                     생년월일
                 </label>
 
-                <div className="birth-date-input-row">
-                    <input
-                        ref={birthYearRef}
-                        type="text"
-                        inputMode="numeric"
-                        value={birthYear}
-                        onChange={handleBirthYearChange}
-                        placeholder="YYYY"
-                        maxLength={4}
-                        aria-label="생년월일 년도"
-                        required
-                    />
-
-                    <span>-</span>
-
-                    <input
-                        ref={birthMonthRef}
-                        type="text"
-                        inputMode="numeric"
-                        value={birthMonth}
-                        onChange={handleBirthMonthChange}
-                        placeholder="MM"
-                        maxLength={2}
-                        aria-label="생년월일 월"
-                        required
-                    />
-
-                    <span>-</span>
-
-                    <input
-                        ref={birthDayRef}
-                        type="text"
-                        inputMode="numeric"
-                        value={birthDay}
-                        onChange={handleBirthDayChange}
-                        placeholder="DD"
-                        maxLength={2}
-                        aria-label="생년월일 일"
-                        required
-                    />
-                </div>
+                <input
+                    id="signup-birth-date"
+                    type="date"
+                    value={birthDate}
+                    onChange={handleBirthDateChange}
+                    min={minimumBirthDate}
+                    max={currentDate}
+                    aria-label="생년월일"
+                    required
+                />
 
                 <label htmlFor="signup-login-id">
                     아이디
