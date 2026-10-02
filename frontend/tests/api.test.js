@@ -59,8 +59,8 @@ test("query values are encoded and nearby filters reach the existing endpoint", 
     await authApi.checkLoginId("a&b + 한글");
     assert.equal(new URL(calls[0].url, "http://localhost").searchParams.get("loginId"), "a&b + 한글");
     assert.equal(calls[0].headers.Authorization, undefined);
-    await theaterApi.nearby({ latitude: 37.5, longitude: 127, radius: 3000 });
-    assert.equal(calls[1].url, "/api/theaters/nearby?latitude=37.5&longitude=127&radius=3000");
+    await theaterApi.nearby({ latitude: 37.5, longitude: 127 });
+    assert.equal(calls[1].url, "/api/theaters/nearby?latitude=37.5&longitude=127&sort=DISTANCE");
     assert.equal(apiUrl("/api/notifications", { unreadOnly: false, omitted: undefined }),
         "/api/notifications?unreadOnly=false");
 });
