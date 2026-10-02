@@ -1,3 +1,4 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
@@ -25,13 +26,13 @@ export default function ReservationPanel({ flow, onRestart }) {
         {pending && <div className={styles.clock} data-urgent={remaining < 60}>
             <span>결제까지 남은 시간</span><strong role="timer" aria-label={`남은 시간 ${time}`}>{time}</strong>
             <div className={styles.timeTrack}><i style={{ width: `${Math.min(100, remaining / 3)}%` }} /></div>
-            <small>서버 기준 · 실패하거나 새로고침해도 연장되지 않습니다</small>
+            <small>서버 시간 기준입니다. 실패하거나 새로고침해도 연장되지 않습니다</small>
         </div>}
         <div className={styles.ticket} data-confirmed={confirmed}>
             <div className={styles.ticketHeading}><span>SMART TICKETING</span><span>{r.status}</span></div>
-            <h3>{r.movieTitle}</h3><p>{r.theaterName} · {r.screenName}</p>
-            <p>{r.startTime.slice(0,10)} · {r.startTime.slice(11,16)} → {r.endTime.slice(0,10) !== r.startTime.slice(0,10) && '익일 '}{r.endTime.slice(11,16)}</p>
-            <div className={styles.ticketSeats}><span>SEATS</span><strong>{r.seatLabels.join(' · ')}</strong></div>
+            <h3>{r.movieTitle}</h3><p><InlineDetails items={[r.theaterName, r.screenName]} /></p>
+            <p><InlineDetails items={[r.startTime.slice(0,10), <>{r.startTime.slice(11,16)} → {r.endTime.slice(0,10) !== r.startTime.slice(0,10) && '익일 '}{r.endTime.slice(11,16)}</>]} /></p>
+            <div className={styles.ticketSeats}><span>SEATS</span><strong>{r.seatLabels.join(', ')}</strong></div>
             <div className={styles.total}><span>{r.status === 'CANCELLED' ? '예약 금액' : '서버 확정 금액'}</span><strong>{r.totalAmount.toLocaleString('ko-KR')}<small>원</small></strong></div>
             {ticket && <p className={styles.ticketNumber}>티켓 번호 <strong>{ticket.ticketNumber}</strong></p>}
         </div>
@@ -54,6 +55,6 @@ export default function ReservationPanel({ flow, onRestart }) {
             <div className={styles.resultActions}><GlassButton disabled={busy} onClick={() => setConfirmCancel(false)}>유지하기</GlassButton>
                 <button className={ui.primary} disabled={busy} onClick={async () => { await cancel(); setConfirmCancel(false); }}>전체 취소 확정</button></div>
         </div>}
-        <p className={styles.hint}>상영 시작 전까지 전체 취소 가능 · 부분 취소 불가</p>
+        <p className={styles.hint}>상영 시작 전까지 전체 취소만 가능합니다. 부분 취소는 불가합니다.</p>
     </section>;
 }

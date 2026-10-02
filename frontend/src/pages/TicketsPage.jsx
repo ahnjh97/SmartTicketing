@@ -1,3 +1,4 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import { Link } from 'react-router-dom';
@@ -46,13 +47,13 @@ export default function TicketsPage() {
                         {tickets.map((ticket) => (
                             <article key={ticket.ticketId} className={styles.ticket}>
                                 <h2>{ticket.movieTitle}</h2>
-                                <p>{ticket.theaterName} · {ticket.screenName}</p>
+                                <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
                                 <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
                                 <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
                                 <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
                                 <p>QR: {ticket.qrCode}</p>
                                 <p>상태: {ticket.status}</p>
-                                {ticket.groupId && <Link className={glass.button} to={`/booking/restore?group=${ticket.groupId}`}>예약 상세·전체 취소</Link>}
+                                {ticket.groupId && <Link className={glass.button} to={`/booking/restore?group=${ticket.groupId}`}>예약 상세 및 전체 취소</Link>}
                             </article>
                         ))}
                     </div>

@@ -61,10 +61,10 @@ test('theater smart sends only selected showtime and collects party on this scre
 });
 test.each(['SOLD_OUT','NO_CONTIGUOUS_SEATS','LAYOUT_UNVERIFIED'])('%s offers explicit alternatives and honest waiting notice',async code=>{
     failure=code;mount();await confirm();await screen.findByRole('heading',{name:'이번에는 자리를 확보하지 못했어요'});
-    fireEvent.click(screen.getByRole('button',{name:'예비번호·대기 안내'}));
+    fireEvent.click(screen.getByRole('button',{name:'예비번호와 대기 안내'}));
     expect(screen.getByText('신청 전에는 대기 등록이나 예비번호 발급이 이루어지지 않습니다.')).toBeTruthy();
     expect(fetch.mock.calls.some(([url,options])=>/waiting|queues/.test(url) && options.method==='POST')).toBe(false);
-    expect(screen.getByRole('link',{name:/극장·회차 직접 선택/})).toBeTruthy();
+    expect(screen.getByRole('link',{name:/극장과 회차 직접 선택/})).toBeTruthy();
 });
 test('network retry preserves smart request key and never optimistically confirms seats',async()=>{
     lost=true;mount();await confirm();await screen.findByText('네트워크 연결 끊김');

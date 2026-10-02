@@ -30,7 +30,7 @@ test('explicit multi-show selection is required and renders number separately fr
 test('paused and holding are distinct and server allocation refreshes the shared reservation flow',async()=>{
     data={...initial(),groupStatus:'HOLDING',activeReservationId:99,items:[item('HOLDING'),item('PAUSED',2)],choices:[]};
     render(<WaitingPanel flow={flow}/>);
-    await screen.findByText('다른 회차 선점으로 일시정지'); expect(screen.getByText('좌석 확보 · 결제 대기')).toBeTruthy();
+    await screen.findByText('다른 회차 선점으로 일시정지'); expect(screen.getByText('좌석 확보 후 결제 대기')).toBeTruthy();
     await waitFor(()=>expect(flow.refresh).toHaveBeenCalled());
     expect(screen.queryByRole('checkbox')).toBeNull();
 });
@@ -46,7 +46,7 @@ test('uncertain registration retries with the same idempotency key without optim
 test('group cancellation is explicit and leaves terminal rows visible',async()=>{
     data={...initial(),items:[item('WAITING')],choices:[]};render(<WaitingPanel flow={flow}/>);
     fireEvent.click(await screen.findByRole('button',{name:'이 그룹 전체 취소'}));expect(bookingApi.cancelGroup).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button',{name:'전체 대기·선점 취소 확정'}));await screen.findByText('이 관람 요청은 취소되었습니다.');
+    fireEvent.click(screen.getByRole('button',{name:'전체 대기와 선점 취소 확정'}));await screen.findByText('이 관람 요청은 취소되었습니다.');
     expect(screen.getByText('취소됨')).toBeTruthy();expect(bookingApi.cancelGroup).toHaveBeenCalledTimes(1);
 });
 test('stale fetch is ignored after switching groups and cleaned-up requests are aborted',async()=>{
@@ -56,7 +56,7 @@ test('stale fetch is ignored after switching groups and cleaned-up requests are 
     view.rerender(<WaitingPanel flow={{...flow,group:{id:8,status:'ACTIVE'}}}/>);
     await screen.findByRole('checkbox',{name:/극장 1/});
     await act(async()=>resolve({...initial(),items:[item('HOLDING')],activeReservationId:77,choices:[]}));
-    expect(signal.aborted).toBe(true);expect(screen.queryByText('좌석 확보 · 결제 대기')).toBeNull();
+    expect(signal.aborted).toBe(true);expect(screen.queryByText('좌석 확보 후 결제 대기')).toBeNull();
 });
 test('expired opportunity stays terminal while resumed waiting keeps the issued number',async()=>{
     data={...initial(),items:[item('EXPIRED'),item('WAITING',2)],choices:[]};render(<WaitingPanel flow={flow}/>);

@@ -28,7 +28,7 @@ export function availability(show, party) {
         return show.maxContiguousSeats < Number(party) ? '분할 착석 가능' : '조회상 선택 가능';
     }
     if (party > 1 && show.maxContiguousSeats < party) return '연속좌석 부족';
-    return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 · 인원 선택 후 확인`;
+    return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 (인원 선택 후 확인)`;
 }
 export function rememberBooking(url) {
     if (!/^\/(movies|theaters|booking\/restore)(\?|$)/.test(url)) return;

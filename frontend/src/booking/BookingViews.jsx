@@ -1,3 +1,4 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './BookingViews.module.css';
 import ui from './BookingComponents.module.css';
@@ -28,13 +29,13 @@ function ShowtimePanel({ booking }) {
 export function BookingConfirmation({ booking }) {
     const { theaterMode, user, date, from, until, party, entry, update, theater, movies, detail, shows, selectedShow, selectedMovie, valid, smartReady } = booking;
     return (<section className={ui.panel + ' ' + styles.confirmation} aria-label="선택 확인">
-            <h2>선택 확인 · 예매 준비 중</h2>
+            <h2>선택 확인 후 예매 준비</h2>
             <QueryStatus query={theaterMode ? theater : detail} />{theaterMode && <QueryStatus query={movies} />}<QueryStatus query={shows} />
             {valid && (entry !== 'THEATER_SMART' || smartReady) ? <>
-                <p>{selectedMovie?.title} · {date}</p>
-                {theaterMode ? <p>{theater.data?.name} · {selectedShow.startTime.slice(11, 16)} → {selectedShow.endsNextDay && '익일 '}{selectedShow.endTime.slice(11, 16)} · 인원은 다음 단계에서 선택</p>
-                    : <p>{from} 이상 ~ {until} 미만{from > until && ' (다음 날)'} · 총 {party}명</p>}
-                <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점·결제·대기 신청은 실행되지 않았습니다.</p>
+                <p><InlineDetails items={[selectedMovie?.title, date]} /></p>
+                {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endsNextDay && '익일 '}{selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
+                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만{from > until && ' (다음 날)'}</>, `총 ${party}명`]} /></p>}
+                <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점, 결제, 대기 신청은 실행되지 않았습니다.</p>
                 {!user && <Link to="/login">로그인하고 이 선택으로 돌아오기</Link>}
             </> : (shows.loading || detail.loading || theater.loading || movies.loading) ? null
                 : <p role="alert">선택을 다시 확인해주세요. 날짜가 지났거나 해당 회차/좌석을 이용할 수 없습니다.</p>}
@@ -46,7 +47,7 @@ export function TheaterBooking({ booking }) {
     return (<>
             <div className={styles.theaterToolbar}>
                 <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
-                    <label className={ui.srOnly} htmlFor="theater-query">극장 이름·주소 검색</label>
+                    <label className={ui.srOnly} htmlFor="theater-query">극장 이름 또는 주소 검색</label>
                     <input id="theater-query" value={search} maxLength={100} onChange={e => update({ q: e.target.value, page: 0 })} placeholder="극장명 검색" />
                     <button className={ui.primary} type="submit">검색</button>
                 </form>
@@ -54,7 +55,7 @@ export function TheaterBooking({ booking }) {
                 <span className={styles.note}>선호 극장</span>
                 <div className={styles.favorites}>
                     {!user ? <Link to="/login">로그인 후 선호 극장</Link> : !preferences.length ? <span>저장한 선호 극장이 없습니다.</span>
-                        : (expanded ? preferences : preferences.slice(0, 3)).map(t => <GlassButton key={t.theaterId} aria-label={`${t.priority}순위 · ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>★ {t.theaterName || `극장 ${t.theaterId}`}</GlassButton>)}
+                        : (expanded ? preferences : preferences.slice(0, 3)).map(t => <GlassButton key={t.theaterId} aria-label={`${t.priority}순위 ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>★ {t.theaterName || `극장 ${t.theaterId}`}</GlassButton>)}
                     {preferences.length > 3 && <GlassButton onClick={() => setExpanded(!expanded)}>{expanded ? '접기' : '나머지 선호 극장 보기'}</GlassButton>}
                 </div>
             </div>
@@ -95,16 +96,16 @@ export function MovieBooking({ booking }) {
                 <BookingButtons disabled={!valid} onEnter={enter} />
             </div>
             <div className={styles.conditionsNote}>
-                <p>서울 시간 · 하한 포함, 상한 제외. 상한이 더 이르면 다음 날까지 검색합니다. 시간 초기화 시 남은 전체 회차를 조회합니다. 스마트예매 진입에는 시간 범위가 필요합니다.</p>
+                <p>서울 시간 기준이며, 하한은 포함하고 상한은 제외합니다. 상한이 더 이르면 다음 날까지 검색합니다. 시간 초기화 시 남은 전체 회차를 조회합니다. 스마트예매 진입에는 시간 범위가 필요합니다.</p>
                 {from && until && rangeValid && !rangeFuture && <p role="alert">이미 지난 시작 시간입니다. 현재 시각 이후로 다시 선택해주세요.</p>}
                 {from && until && rangeValid && until < from && <p>종료 범위는 다음 날 {until} 미만입니다.</p>}
-                {!rangeValid && <p role="alert">시작·종료 시간을 30분 단위로 선택해주세요.</p>}
+                {!rangeValid && <p role="alert">시작 시간과 종료 시간을 30분 단위로 선택해주세요.</p>}
                 {!validParty(party) && <p>총인원을 1~6명으로 선택해주세요.</p>}
-                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 스마트예매는 전체 연석을 우선하며, 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2·3+3·2+4로 나눠 앉을 수 있습니다. 각 묶음은 연석이며 서로 다른 행·통로 구간도 가능합니다. 같은 회차에서 전원 좌석을 한 번에 확보합니다.</p></details>
+                <details><summary>인원과 좌석 조건 안내</summary><p>최대 6명. 스마트예매는 전체 연석을 우선하며, 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2, 3+3, 2+4로 나눠 앉을 수 있습니다. 각 묶음은 연석이며 서로 다른 행이나 통로 구간도 가능합니다. 같은 회차에서 전원 좌석을 한 번에 확보합니다.</p></details>
                 <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-                {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차·좌석 상태 {items.length}개</summary>
+                {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차와 좌석 상태 {items.length}개</summary>
                     <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} label={availability(show, validParty(party) ? Number(party) : null)} />)}</div>
-                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차·좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
+                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차와 좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
                 </details>}
             </div>
         </>);

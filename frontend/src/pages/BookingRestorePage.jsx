@@ -25,9 +25,9 @@ export default function BookingRestorePage() {
     }, [identity, user, id, revision]);
     const current = result?.identity === identity ? result : null;
     if (current?.data) return <Navigate to={current.data.path} replace/>;
-    return <section className={styles.page}><div className={styles.panel}><h1>예약·대기 복구</h1>
+    return <section className={styles.page}><div className={styles.panel}><h1>예약 및 대기 복구</h1>
         {!positive(id) ? <p role="alert">올바른 예매 링크가 아닙니다.</p> : current?.error ? <><p role="alert">{current.error.message}</p>
             <GlassButton onClick={() => { setResult(null); setRevision(n => n + 1); }}>다시 확인</GlassButton></> : <p role="status">서버에서 현재 예매 상태를 확인하고 있습니다…</p>}
-        <Link to="/tickets">내 티켓·예매 목록</Link>
+        <Link to="/tickets">내 티켓과 예매 목록</Link>
     </div></section>;
 }

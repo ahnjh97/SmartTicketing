@@ -1,3 +1,4 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import { useSearchParams, Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
 import { QueryStatus } from './BookingComponents.jsx';
@@ -38,7 +39,7 @@ export default function ManualBooking({ booking }) {
     return <div className={styles.manual}>
         <div className={styles.heading}><div><p className={styles.eyebrow}>MAKE IT A MOVIE NIGHT</p><h2>{flow.reservation ? '나의 예매' : '나의 자리를 선택하세요'}</h2></div>
             <GlassButton disabled={flow.busy} onClick={() => booking.update({ entry: null, group: null, reservation: null, seats: null })}>회차 선택으로</GlassButton></div>
-        <ol className={styles.steps} aria-label="예매 진행 단계">{['인원·좌석', '선점·모의결제', '티켓'].map((label,index) => {
+        <ol className={styles.steps} aria-label="예매 진행 단계">{['인원과 좌석', '선점 후 모의결제', '티켓'].map((label,index) => {
             const step = flow.reservation?.status === 'CONFIRMED' ? 2 : flow.reservation ? 1 : 0;
             return <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}><span>{index < step ? '✓' : `0${index+1}`}</span>{label}</li>;
         })}</ol>
@@ -56,10 +57,10 @@ export default function ManualBooking({ booking }) {
                 </div>
                 <aside className={styles.summary} aria-label="선택한 예매 정보">
                     <p className={styles.eyebrow}>YOUR MOVIE</p><h3>{movie?.title}</h3><p>{movie?.rating || '등급 미확인'}</p>
-                    <div className={styles.summaryDetails}><span>{theater.data?.name} · {show.screenName}</span><strong>{booking.date}</strong>
+                    <div className={styles.summaryDetails}><InlineDetails items={[theater.data?.name, show.screenName]} /><strong>{booking.date}</strong>
                         <span>{show.startTime.slice(11,16)} → {show.endsNextDay && '익일 '}{show.endTime.slice(11,16)}</span></div>
                     <div className={styles.chips}>{selected.length ? selected.map(id => { const seat = seats.data?.seats.find(item => item.id === id); return <span key={id}>{seat ? `${seat.row}${seat.number}` : '확인 중'}</span>; }) : <p>마음에 드는 좌석을 선택하세요</p>}</div>
-                    <p>성인 {audience.adultCount}명 · 청소년 {audience.youthCount}명</p>
+                    <p><InlineDetails items={[`성인 ${audience.adultCount}명`, `청소년 ${audience.youthCount}명`]} /></p>
                     {party < 1 || party > 6 ? <p className={styles.error}>총인원을 1~6명으로 선택해주세요.</p> : null}
                     <p className={styles.hint}>최종 금액은 좌석 선점 시 서버가 계산합니다.</p>
                     {show.pricePerPerson !== 10000 && <p className={styles.error}>회차 가격을 확인할 수 없어 예매할 수 없습니다.</p>}
