@@ -1978,3 +1978,103 @@ input:focus {
         min-height: 0;
     }
 }
+
+/* My Page - reuse the visual language of /theaters */
+.profile-card {
+    max-width: 900px;
+}
+
+.profile-header {
+    margin-bottom: 20px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #353535;
+}
+
+.user-info {
+    gap: 10px;
+}
+
+.user-info > div {
+    min-height: 82px;
+    padding: 14px;
+    border: 1px solid #353535;
+    border-radius: 10px;
+    background: #1d1d1d;
+    transition:
+        transform 0.18s ease,
+        border-color 0.18s ease,
+        background 0.18s ease;
+}
+
+.user-info > div:hover {
+    transform: translateY(-1px);
+    border-color: #666;
+    background: #232323;
+}
+
+.user-info > div:nth-child(5),
+.user-info > div:nth-child(6) {
+    min-height: 126px;
+}
+
+.user-info span {
+    margin-bottom: 6px;
+    color: #777;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.user-info strong {
+    font-size: 14px;
+}
+
+.user-info > div:nth-child(5) > div,
+.user-info > div:nth-child(6) > div {
+    margin-top: 7px;
+    color: #ddd;
+    line-height: 1.4;
+}
+
+.user-info > div:nth-child(5) > div > div,
+.user-info > div:nth-child(6) > div > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px !important;
+    padding: 6px 8px;
+    border: 1px solid #303030;
+    border-radius: 7px;
+    background: #202020;
+}
+
+.user-info > div:nth-child(5) > div > div strong,
+.user-info > div:nth-child(6) > div > div strong {
+    flex: 0 0 auto;
+    min-width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #303030;
+    color: #ffcc00;
+    font-size: 9px;
+}
+
+.profile-action-area {
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid #353535;
+}
+
+@media (max-width: 700px) {
+    .profile-card {
+        max-width: 100%;
+    }
+
+    .user-info > div:nth-child(5),
+    .user-info > div:nth-child(6) {
+        min-height: 0;
+    }
+}
