@@ -259,7 +259,9 @@ test('date change clears movie and showtime, preserves the theater and seven dat
     expect(url.searchParams.get('theater')).toBe('71');
     expect(url.searchParams.has('movie')).toBe(false);
     expect(url.searchParams.has('showtime')).toBe(false);
-    expect(screen.queryByRole('region', { name: '상영 회차' })).toBe(null);
+    expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /23:00 → 익일 01:00/, pressed: true })).toBe(null);
+    expect((await screen.findByRole('button', { name: '일반예매' })).disabled).toBe(true);
 });
 
 test('OAuth callback restores the same saved booking and strips token from address', async () => {
@@ -311,4 +313,17 @@ test('authenticated nearby results use DB theater IDs and preserve the existing 
     expect(screen.getByTestId('url').textContent).toContain('theater=72');
     const call = fetch.mock.calls.find(([url]) => url.startsWith('/api/theaters/nearby?'));
     expect(call[1].headers.Authorization).toBe('Bearer nearby-test-token');
+});
+
+test('movie details retain main metadata with spaced fields instead of middle dots', async () => {
+    fetch.mockImplementation(url => url === '/api/movies/41'
+        ? Promise.resolve(json({ ...movie, rating: '12', releaseDate: '2026-10-01', genres: '액션, 모험', director: '감독 이름', castNames: '배우 이름' }))
+        : baseFetch(url));
+    mount('/movies?movie=41');
+    await screen.findByText('2026.10.01 개봉');
+    expect(screen.getByText('12세')).toBeTruthy();
+    expect(screen.getByText('액션, 모험')).toBeTruthy();
+    expect(screen.getByText('감독 이름')).toBeTruthy();
+    expect(screen.getByText('배우 이름')).toBeTruthy();
+    expect(screen.getByRole('region', { name: '서울의 밤 영화 소개' }).textContent).not.toContain('·');
 });

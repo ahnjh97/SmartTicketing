@@ -47,6 +47,20 @@ class ShowtimeScheduleSeedTests {
                 first.createdShowtimes(), firstMs, repeatMs, statements.size());
     }
 
+    @Test void longMoviesGetFewerRoundsWithinNextDayClosingTime() {
+        var movie = em.createQuery("from Movie", Movie.class).getSingleResult();
+        movie.setRunningTime(181); em.flush(); em.clear();
+        var service = new ShowtimeScheduleSeedService(em, 1, 2);
+        assertThat(service.seedTheater(theaterId).createdShowtimes()).isPositive();
+        var tomorrow = LocalDate.now(ZoneId.of("Asia/Seoul")).plusDays(1);
+        var shows = em.createQuery("from Showtime where startTime >= :start and startTime < :end order by startTime", Showtime.class)
+                .setParameter("start", tomorrow.atTime(8, 0))
+                .setParameter("end", tomorrow.plusDays(1).atTime(8, 0)).getResultList();
+        assertThat(shows).hasSize(5);
+        assertThat(shows).allMatch(show -> !show.getEndTime().isAfter(tomorrow.plusDays(1).atTime(3, 30)));
+        assertThat(service.seedTheater(theaterId)).isEqualTo(new ShowtimeScheduleSeedService.Result(0, 0));
+    }
+
     @Test void preservesEditedShowsAndDoesNotAdoptSameNamedScreen() {
         var screen = new Screen(); screen.setTheater(em.find(Theater.class, theaterId)); screen.setName("1관"); em.persist(screen);
         var service = new ShowtimeScheduleSeedService(em, 2, 7);

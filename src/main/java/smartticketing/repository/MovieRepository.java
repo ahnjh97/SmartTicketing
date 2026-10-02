@@ -16,7 +16,8 @@ public interface MovieRepository extends JpaRepository<Movie, Long> {
     boolean existsByTmdbMovieId(Long tmdbMovieId);
     Optional<Movie> findByTmdbMovieId(Long tmdbMovieId);
     List<Movie> findByTmdbMovieIdIn(List<Long> tmdbMovieIds);
-    List<Movie> findTop10ByReleaseDateIsNotNullOrderByReleaseDateDesc();
+    List<Movie> findTop10ByReleaseDateIsNotNullOrderByReleaseDateDescTmdbMovieIdAsc();
+    List<Movie> findTop10ByReleaseDateIsNotNullAndTmdbMovieIdNotInOrderByReleaseDateDescTmdbMovieIdAsc(List<Long> excludedIds);
     List<Movie> findByActiveTrueOrderByIdAsc();
 
     List<Movie> findTop10ByActiveTrueAndReleaseDateLessThanEqualOrderByAudienceCountDescReleaseDateDesc(LocalDate baseDate);
