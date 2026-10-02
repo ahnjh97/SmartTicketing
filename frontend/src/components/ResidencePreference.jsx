@@ -1147,16 +1147,45 @@ export default function ResidencePreference({
                         : `${theater.distance}m`
                     : "";
 
-            const overlayContent =
-                `<div class="map-theater-info">
-                    <strong>${theater.name}</strong>
-                    ${distanceText ? `<span>${distanceText}</span>` : ""}
-                </div>`;
+            const createOverlayContent = (below = false) => {
+                const element =
+                    document.createElement("div");
+
+                element.className =
+                    below
+                        ? "map-theater-info below"
+                        : "map-theater-info";
+
+                const nameElement =
+                    document.createElement("strong");
+
+                nameElement.textContent =
+                    theater.name;
+
+                element.appendChild(
+                    nameElement
+                );
+
+                if (distanceText) {
+                    const distanceElement =
+                        document.createElement("span");
+
+                    distanceElement.textContent =
+                        distanceText;
+
+                    element.appendChild(
+                        distanceElement
+                    );
+                }
+
+                return element;
+            };
 
             const overlay =
                 new window.kakao.maps.CustomOverlay({
                     position,
-                    content: overlayContent,
+                    content:
+                        createOverlayContent(),
                     yAnchor: 1,
                     zIndex: 40,
                 });
@@ -1164,13 +1193,69 @@ export default function ResidencePreference({
             const belowOverlay =
                 new window.kakao.maps.CustomOverlay({
                     position,
-                    content: overlayContent.replace(
-                        "map-theater-info",
-                        "map-theater-info below"
-                    ),
+                    content:
+                        createOverlayContent(true),
                     yAnchor: 0,
                     zIndex: 40,
                 });
+
+            let hideTimer = null;
+
+            const clearHideTimer = () => {
+                if (hideTimer) {
+                    window.clearTimeout(
+                        hideTimer
+                    );
+
+                    hideTimer = null;
+                }
+            };
+
+            const hideOverlays = () => {
+                clearHideTimer();
+                overlay.setMap(null);
+                belowOverlay.setMap(null);
+            };
+
+            const scheduleHide = () => {
+                clearHideTimer();
+
+                hideTimer =
+                    window.setTimeout(
+                        () => {
+                            overlay.setMap(null);
+                            belowOverlay.setMap(null);
+                            hideTimer = null;
+                        },
+                        120
+                    );
+            };
+
+            const overlayElement =
+                overlay.getContent();
+
+            const belowOverlayElement =
+                belowOverlay.getContent();
+
+            overlayElement.addEventListener(
+                "mouseenter",
+                clearHideTimer
+            );
+
+            belowOverlayElement.addEventListener(
+                "mouseenter",
+                clearHideTimer
+            );
+
+            overlayElement.addEventListener(
+                "mouseleave",
+                scheduleHide
+            );
+
+            belowOverlayElement.addEventListener(
+                "mouseleave",
+                scheduleHide
+            );
 
             window.kakao.maps.event.addListener(
                 marker,
@@ -1183,6 +1268,8 @@ export default function ResidencePreference({
                         return;
                     }
 
+                    clearHideTimer();
+
                     const projection =
                         map.getProjection();
 
@@ -1194,28 +1281,19 @@ export default function ResidencePreference({
                     const showBelow =
                         point.y < 65;
 
-                    // 다른 영화관 오버레이를 건드리지 않고
-                    // 현재 영화관의 오버레이만 전환합니다.
-                    // 모든 오버레이를 setMap(null)로 숨겼다가
-                    // 다시 표시하면 Kakao Map의 mouseover/mouseout이
-                    // 반복되면서 깜빡이는 현상이 발생할 수 있습니다.
                     if (showBelow) {
                         overlay.setMap(null);
-
-                        if (belowOverlay.getMap() !== map) {
-                            belowOverlay.setPosition(position);
-                            belowOverlay.setMap(map);
-                        }
-
+                        belowOverlay.setPosition(
+                            position
+                        );
+                        belowOverlay.setMap(map);
                         belowOverlay.setZIndex(40);
                     } else {
                         belowOverlay.setMap(null);
-
-                        if (overlay.getMap() !== map) {
-                            overlay.setPosition(position);
-                            overlay.setMap(map);
-                        }
-
+                        overlay.setPosition(
+                            position
+                        );
+                        overlay.setMap(map);
                         overlay.setZIndex(40);
                     }
                 }
@@ -1224,10 +1302,7 @@ export default function ResidencePreference({
             window.kakao.maps.event.addListener(
                 marker,
                 "mouseout",
-                () => {
-                    overlay.setMap(null);
-                    belowOverlay.setMap(null);
-                }
+                scheduleHide
             );
 
             theaterMarkersRef.current.push(marker);
