@@ -18,8 +18,30 @@ export default function SignupPage() {
     const [name, setName] =
         useState("");
 
-    const [birthDate, setBirthDate] =
+    const birthYearRef =
+        useRef(null);
+
+    const birthMonthRef =
+        useRef(null);
+
+    const birthDayRef =
+        useRef(null);
+
+    const [birthYear, setBirthYear] =
         useState("");
+
+    const [birthMonth, setBirthMonth] =
+        useState("");
+
+    const [birthDay, setBirthDay] =
+        useState("");
+
+    const birthDate =
+        birthYear.length === 4
+        && birthMonth.length === 2
+        && birthDay.length === 2
+            ? birthYear + "-" + birthMonth + "-" + birthDay
+            : "";
 
     const [loginId, setLoginId] =
         useState("");
@@ -144,6 +166,42 @@ export default function SignupPage() {
             [setError]
         );
 
+    function handleBirthYearChange(event) {
+        const value =
+            event.target.value
+                .replace(/\D/g, "")
+                .slice(0, 4);
+
+        setBirthYear(value);
+
+        if (value.length === 4) {
+            birthMonthRef.current?.focus();
+            birthMonthRef.current?.select();
+        }
+    }
+
+    function handleBirthMonthChange(event) {
+        const value =
+            event.target.value
+                .replace(/\D/g, "")
+                .slice(0, 2);
+
+        setBirthMonth(value);
+
+        if (value.length === 2) {
+            birthDayRef.current?.focus();
+            birthDayRef.current?.select();
+        }
+    }
+
+    function handleBirthDayChange(event) {
+        setBirthDay(
+            event.target.value
+                .replace(/\D/g, "")
+                .slice(0, 2)
+        );
+    }
+
     function handleLoginIdChange(event) {
         checkVersion.current++;
 
@@ -254,17 +312,47 @@ export default function SignupPage() {
                     생년월일
                 </label>
 
-                <input
-                    id="signup-birth-date"
-                    type="date"
-                    value={birthDate}
-                    onChange={(event) =>
-                        setBirthDate(
-                            event.target.value
-                        )
-                    }
-                    required
-                />
+                <div className="birth-date-input-row">
+                    <input
+                        ref={birthYearRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={birthYear}
+                        onChange={handleBirthYearChange}
+                        placeholder="YYYY"
+                        maxLength={4}
+                        aria-label="생년월일 년도"
+                        required
+                    />
+
+                    <span>-</span>
+
+                    <input
+                        ref={birthMonthRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={birthMonth}
+                        onChange={handleBirthMonthChange}
+                        placeholder="MM"
+                        maxLength={2}
+                        aria-label="생년월일 월"
+                        required
+                    />
+
+                    <span>-</span>
+
+                    <input
+                        ref={birthDayRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={birthDay}
+                        onChange={handleBirthDayChange}
+                        placeholder="DD"
+                        maxLength={2}
+                        aria-label="생년월일 일"
+                        required
+                    />
+                </div>
 
                 <label htmlFor="signup-login-id">
                     아이디
