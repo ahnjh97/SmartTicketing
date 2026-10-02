@@ -1644,6 +1644,7 @@ export default function ResidencePreference({
                                             </div>
                                         )}
                                     </div>
+                                    </button>
 
                                     <a
                                         className="theater-route-button"
