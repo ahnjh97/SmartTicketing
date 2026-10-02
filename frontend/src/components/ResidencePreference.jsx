@@ -1147,18 +1147,28 @@ export default function ResidencePreference({
                         : `${theater.distance}m`
                     : "";
 
+            const overlayContent =
+                `<div class="map-theater-info">
+                    <strong>${theater.name}</strong>
+                    ${distanceText ? `<span>${distanceText}</span>` : ""}
+                </div>`;
+
             const overlay =
                 new window.kakao.maps.CustomOverlay({
                     position,
-                    content: `
-                        <div class="map-theater-info">
-                            <strong>${theater.name}</strong>
-                            ${distanceText
-                                ? `<span>${distanceText}</span>`
-                                : ""}
-                        </div>
-                    `,
+                    content: overlayContent,
                     yAnchor: 1,
+                    zIndex: 40,
+                });
+
+            const belowOverlay =
+                new window.kakao.maps.CustomOverlay({
+                    position,
+                    content: overlayContent.replace(
+                        "map-theater-info",
+                        "map-theater-info below"
+                    ),
+                    yAnchor: 0,
                     zIndex: 40,
                 });
 
@@ -1188,30 +1198,17 @@ export default function ResidencePreference({
                     const showBelow =
                         point.y < 65;
 
-                    const element =
-                        document.createElement("div");
-
-                    element.className =
-                        showBelow
-                            ? "map-theater-info below"
-                            : "map-theater-info";
-
-                    element.innerHTML =
-                        `<strong>${theater.name}</strong>` +
-                        (distanceText
-                            ? `<span>${distanceText}</span>`
-                            : "");
-
-                    overlay.setContent(
-                        element
-                    );
-                    overlay.setPosition(
-                        position
-                    );
-                    overlay.setMap(map);
-
-                    // 지도 상단 경계에 가까우면 오버레이를 마커 아래로 뒤집습니다.
-                    overlay.setZIndex(40);
+                    if (showBelow) {
+                        overlay.setMap(null);
+                        belowOverlay.setPosition(position);
+                        belowOverlay.setMap(map);
+                        belowOverlay.setZIndex(40);
+                    } else {
+                        belowOverlay.setMap(null);
+                        overlay.setPosition(position);
+                        overlay.setMap(map);
+                        overlay.setZIndex(40);
+                    }
                 }
             );
 
@@ -1220,11 +1217,13 @@ export default function ResidencePreference({
                 "mouseout",
                 () => {
                     overlay.setMap(null);
+                    belowOverlay.setMap(null);
                 }
             );
 
             theaterMarkersRef.current.push(marker);
             theaterOverlaysRef.current.push(overlay);
+            theaterOverlaysRef.current.push(belowOverlay);
         });
     }
 
