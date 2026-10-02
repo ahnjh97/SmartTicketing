@@ -162,6 +162,12 @@ export default function ResidencePreference({
     const theaterOverlaysRef =
         useRef([]);
 
+    const theaterMarkerImageCacheRef =
+        useRef(new Map());
+
+    const theaterLogoDataCacheRef =
+        useRef(new Map());
+
     const kakaoReadyRef =
         useRef(false);
 
@@ -1083,6 +1089,453 @@ export default function ResidencePreference({
             renderTheaterMarkers(theaters);
         }
     }, [selectedTheaters, theaters]);
+    function getTheaterBrand(
+        theater
+    ) {
+        const brand = String(
+            theater.brand ?? ""
+        ).toUpperCase();
+
+        return brand === "CGV"
+            ? "CGV"
+            : brand === "LOTTE_CINEMA"
+                ? "LOTTE_CINEMA"
+                : "MEGABOX";
+    }
+
+    function getTheaterLogoUrl(
+        brand
+    ) {
+        return (
+            "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
+            brand +
+            ".png"
+        );
+    }
+
+    function createTransparentMarkerImage(
+        markerSize
+    ) {
+        const svg =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+            markerSize +
+            '" height="' +
+            markerSize +
+            '" viewBox="0 0 ' +
+            markerSize +
+            " " +
+            markerSize +
+            '"><rect width="' +
+            markerSize +
+            '" height="' +
+            markerSize +
+            '" fill="transparent"/></svg>';
+
+        return new window.kakao.maps.MarkerImage(
+            "data:image/svg+xml;charset=UTF-8," +
+                encodeURIComponent(svg),
+            new window.kakao.maps.Size(
+                markerSize,
+                markerSize
+            ),
+            {
+                offset: new window.kakao.maps.Point(
+                    markerSize / 2,
+                    markerSize / 2
+                ),
+            }
+        );
+    }
+
+    function loadTheaterLogoData(
+        brand
+    ) {
+        const cached =
+            theaterLogoDataCacheRef.current.get(
+                brand
+            );
+
+        if (cached) {
+            return cached;
+        }
+
+        const promise = new Promise(
+            (resolve, reject) => {
+                const image = new Image();
+                image.crossOrigin = "anonymous";
+
+                image.onload = () => {
+                    try {
+                        const sourceWidth =
+                            image.naturalWidth;
+                        const sourceHeight =
+                            image.naturalHeight;
+
+                        if (
+                            !sourceWidth ||
+                            !sourceHeight
+                        ) {
+                            reject(
+                                new Error(
+                                    "영화관 로고 이미지 크기를 확인하지 못했습니다."
+                                )
+                            );
+                            return;
+                        }
+
+                        const canvas =
+                            document.createElement("canvas");
+                        canvas.width = sourceWidth;
+                        canvas.height = sourceHeight;
+
+                        const context =
+                            canvas.getContext("2d", {
+                                willReadFrequently: true,
+                            });
+
+                        if (!context) {
+                            reject(
+                                new Error(
+                                    "영화관 로고 이미지를 처리하지 못했습니다."
+                                )
+                            );
+                            return;
+                        }
+
+                        context.drawImage(
+                            image,
+                            0,
+                            0,
+                            sourceWidth,
+                            sourceHeight
+                        );
+
+                        const imageData =
+                            context.getImageData(
+                                0,
+                                0,
+                                sourceWidth,
+                                sourceHeight
+                            );
+
+                        const pixels =
+                            imageData.data;
+                        let minX = sourceWidth;
+                        let minY = sourceHeight;
+                        let maxX = -1;
+                        let maxY = -1;
+
+                        for (
+                            let y = 0;
+                            y < sourceHeight;
+                            y += 1
+                        ) {
+                            for (
+                                let x = 0;
+                                x < sourceWidth;
+                                x += 1
+                            ) {
+                                const index =
+                                    (y * sourceWidth + x) * 4;
+                                const red = pixels[index];
+                                const green = pixels[index + 1];
+                                const blue = pixels[index + 2];
+
+                                const max = Math.max(
+                                    red,
+                                    green,
+                                    blue
+                                );
+                                const min = Math.min(
+                                    red,
+                                    green,
+                                    blue
+                                );
+                                const saturation =
+                                    max - min;
+
+                                if (
+                                    saturation < 28 &&
+                                    max < 235
+                                ) {
+                                    pixels[index + 3] = 0;
+                                    continue;
+                                }
+
+                                if (
+                                    pixels[index + 3] > 0
+                                ) {
+                                    minX = Math.min(
+                                        minX,
+                                        x
+                                    );
+                                    minY = Math.min(
+                                        minY,
+                                        y
+                                    );
+                                    maxX = Math.max(
+                                        maxX,
+                                        x
+                                    );
+                                    maxY = Math.max(
+                                        maxY,
+                                        y
+                                    );
+                                }
+                            }
+                        }
+
+                        if (
+                            maxX < minX ||
+                            maxY < minY
+                        ) {
+                            reject(
+                                new Error(
+                                    "영화관 로고 영역을 찾지 못했습니다."
+                                )
+                            );
+                            return;
+                        }
+
+                        context.putImageData(
+                            imageData,
+                            0,
+                            0
+                        );
+
+                        const padding = Math.max(
+                            2,
+                            Math.round(
+                                Math.max(
+                                    maxX - minX + 1,
+                                    maxY - minY + 1
+                                ) * 0.04
+                            )
+                        );
+                        const cropX = Math.max(
+                            0,
+                            minX - padding
+                        );
+                        const cropY = Math.max(
+                            0,
+                            minY - padding
+                        );
+                        const cropRight = Math.min(
+                            sourceWidth - 1,
+                            maxX + padding
+                        );
+                        const cropBottom = Math.min(
+                            sourceHeight - 1,
+                            maxY + padding
+                        );
+                        const cropWidth =
+                            cropRight - cropX + 1;
+                        const cropHeight =
+                            cropBottom - cropY + 1;
+                        const cropSize = Math.max(
+                            cropWidth,
+                            cropHeight
+                        );
+
+                        const cropCanvas =
+                            document.createElement("canvas");
+                        cropCanvas.width = cropSize;
+                        cropCanvas.height = cropSize;
+
+                        const cropContext =
+                            cropCanvas.getContext("2d");
+
+                        if (!cropContext) {
+                            reject(
+                                new Error(
+                                    "영화관 로고를 잘라내지 못했습니다."
+                                )
+                            );
+                            return;
+                        }
+
+                        cropContext.drawImage(
+                            canvas,
+                            cropX,
+                            cropY,
+                            cropWidth,
+                            cropHeight,
+                            (cropSize - cropWidth) / 2,
+                            (cropSize - cropHeight) / 2,
+                            cropWidth,
+                            cropHeight
+                        );
+
+                        resolve(
+                            cropCanvas.toDataURL(
+                                "image/png"
+                            )
+                        );
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+
+                image.onerror = () =>
+                    reject(
+                        new Error(
+                            "영화관 로고 이미지를 불러오지 못했습니다."
+                        )
+                    );
+
+                image.src = getTheaterLogoUrl(
+                    brand
+                );
+            }
+        );
+
+        theaterLogoDataCacheRef.current.set(
+            brand,
+            promise
+        );
+
+        return promise;
+    }
+
+    async function getTheaterMarkerImage(
+        brand,
+        selected,
+        markerSize
+    ) {
+        const cacheKey =
+            brand +
+            ":" +
+            (selected ? "selected" : "normal") +
+            ":" +
+            markerSize;
+
+        const cached =
+            theaterMarkerImageCacheRef.current.get(
+                cacheKey
+            );
+
+        if (cached) {
+            return cached;
+        }
+
+        const logoDataUrl =
+            await loadTheaterLogoData(
+                brand
+            );
+
+        const canvas =
+            document.createElement("canvas");
+        const pixelSize =
+            Math.round(markerSize * 2);
+        canvas.width = pixelSize;
+        canvas.height = pixelSize;
+
+        const context =
+            canvas.getContext("2d");
+
+        if (!context) {
+            throw new Error(
+                "영화관 마커를 생성하지 못했습니다."
+            );
+        }
+
+        const center =
+            pixelSize / 2;
+        const radius =
+            pixelSize / 2 - 3;
+        const borderWidth =
+            selected ? 6 : 5;
+
+        context.clearRect(
+            0,
+            0,
+            pixelSize,
+            pixelSize
+        );
+
+        context.beginPath();
+        context.arc(
+            center,
+            center,
+            radius,
+            0,
+            Math.PI * 2
+        );
+        context.fillStyle = "#fff";
+        context.fill();
+        context.lineWidth = borderWidth;
+        context.strokeStyle = selected
+            ? "#ffc426"
+            : "#111";
+        context.stroke();
+
+        context.save();
+        context.beginPath();
+        context.arc(
+            center,
+            center,
+            radius - borderWidth / 2,
+            0,
+            Math.PI * 2
+        );
+        context.clip();
+
+        const logoImage =
+            await new Promise(
+                (resolve, reject) => {
+                    const image = new Image();
+                    image.onload = () =>
+                        resolve(image);
+                    image.onerror = () =>
+                        reject(
+                            new Error(
+                                "가공된 영화관 로고를 불러오지 못했습니다."
+                            )
+                        );
+                    image.src = logoDataUrl;
+                }
+            );
+
+        const logoPadding =
+            Math.round(pixelSize * 0.12);
+        const logoSize =
+            pixelSize - logoPadding * 2;
+
+        context.drawImage(
+            logoImage,
+            center - logoSize / 2,
+            center - logoSize / 2,
+            logoSize,
+            logoSize
+        );
+        context.restore();
+
+        const dataUrl =
+            canvas.toDataURL("image/png");
+
+        const markerImage =
+            new window.kakao.maps.MarkerImage(
+                dataUrl,
+                new window.kakao.maps.Size(
+                    markerSize,
+                    markerSize
+                ),
+                {
+                    offset: new window.kakao.maps.Point(
+                        markerSize / 2,
+                        markerSize / 2
+                    ),
+                }
+            );
+
+        theaterMarkerImageCacheRef.current.set(
+            cacheKey,
+            markerImage
+        );
+
+        return markerImage;
+    }
+
     function renderTheaterMarkers(
         theaterList
     ) {
@@ -1122,202 +1575,39 @@ export default function ResidencePreference({
                     Number(theater.theaterId)
                 );
 
-            const brand = String(theater.brand ?? "").toUpperCase();
+            const brand =
+                getTheaterBrand(theater);
+            const markerSize =
+                selected ? 46 : 42;
 
-            const logoFile =
-                brand === "CGV"
-                    ? "CGV.png"
-                    : brand === "LOTTE_CINEMA"
-                        ? "LOTTE_CINEMA.png"
-                        : "MEGABOX.png";
-
-            const markerSize = selected ? 46 : 42;
-            const borderColor = selected ? "#ffc426" : "#111";
-
-            const logoUrl =
-                "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
-                logoFile;
-
-            // 실제 클릭/마우스 이벤트를 받는 투명 기준 마커.
-            // 로고는 CustomOverlay로 원형 마커를 만들어 그 위에 표시합니다.
-            const markerImage =
-                new window.kakao.maps.MarkerImage(
-                    "data:image/svg+xml;charset=UTF-8," +
-                        encodeURIComponent(
-                            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="transparent"/></svg>'
-                        ),
-                    new window.kakao.maps.Size(2, 2),
-                    {
-                        offset: new window.kakao.maps.Point(1, 1),
-                    }
-                );
-
+            // 실제 로고가 준비되기 전에도 동일한 크기의 투명 MarkerImage를 사용해
+            // 마우스 이벤트 영역을 유지합니다. 로고가 준비되면 MarkerImage만 교체합니다.
             const marker =
                 new window.kakao.maps.Marker({
                     map: mapInstanceRef.current,
                     position,
-                    image: markerImage,
+                    image: createTransparentMarkerImage(
+                        markerSize
+                    ),
                     title: theater.name,
                     zIndex: selected ? 31 : 21,
                 });
 
-            const logoElement = document.createElement("div");
-            logoElement.className = "map-theater-logo-marker";
-            logoElement.style.width = markerSize + "px";
-            logoElement.style.height = markerSize + "px";
-            logoElement.style.border = "3px solid " + borderColor;
-            logoElement.style.borderRadius = "50%";
-            logoElement.style.background = "#fff";
-            logoElement.style.boxSizing = "border-box";
-            logoElement.style.overflow = "hidden";
-            logoElement.style.display = "flex";
-            logoElement.style.alignItems = "center";
-            logoElement.style.justifyContent = "center";
-            logoElement.style.pointerEvents = "none";
-            logoElement.style.boxShadow = selected
-                ? "0 2px 8px rgba(0,0,0,.35)"
-                : "0 1px 5px rgba(0,0,0,.28)";
-
-            const logoElementImage = document.createElement("img");
-            logoElementImage.src = logoUrl;
-            logoElementImage.alt = "";
-            logoElementImage.draggable = false;
-            logoElementImage.style.width = "100%";
-            logoElementImage.style.height = "100%";
-            logoElementImage.style.objectFit = "contain";
-            logoElementImage.style.display = "block";
-            logoElementImage.style.transform = "scale(1.45)";
-            logoElementImage.style.transformOrigin = "center";
-            logoElement.appendChild(logoElementImage);
-
-            // 업로드된 PNG의 작업용 검정 원과 회색 배경을 제거하고
-            // 실제 로고 부분만 다시 잘라서 마커 안에 크게 표시합니다.
-            logoElementImage.crossOrigin = "anonymous";
-            logoElementImage.onload = () => {
-                try {
-                    const sourceWidth = logoElementImage.naturalWidth;
-                    const sourceHeight = logoElementImage.naturalHeight;
-
-                    if (!sourceWidth || !sourceHeight) {
-                        return;
+            getTheaterMarkerImage(
+                brand,
+                selected,
+                markerSize
+            )
+                .then((markerImage) => {
+                    if (marker.getMap()) {
+                        marker.setImage(
+                            markerImage
+                        );
                     }
-
-                    const canvas = document.createElement("canvas");
-                    canvas.width = sourceWidth;
-                    canvas.height = sourceHeight;
-
-                    const context = canvas.getContext("2d", { willReadFrequently: true });
-
-                    if (!context) {
-                        return;
-                    }
-
-                    context.drawImage(
-                        logoElementImage,
-                        0,
-                        0,
-                        sourceWidth,
-                        sourceHeight
-                    );
-
-                    const imageData = context.getImageData(
-                        0,
-                        0,
-                        sourceWidth,
-                        sourceHeight
-                    );
-
-                    const pixels = imageData.data;
-                    let minX = sourceWidth;
-                    let minY = sourceHeight;
-                    let maxX = -1;
-                    let maxY = -1;
-
-                    for (let y = 0; y < sourceHeight; y += 1) {
-                        for (let x = 0; x < sourceWidth; x += 1) {
-                            const index = (y * sourceWidth + x) * 4;
-                            const red = pixels[index];
-                            const green = pixels[index + 1];
-                            const blue = pixels[index + 2];
-
-                            const max = Math.max(red, green, blue);
-                            const min = Math.min(red, green, blue);
-                            const saturation = max - min;
-
-                            // 저채도 검정/회색 작업용 배경만 투명 처리합니다.
-                            // 흰색은 마커의 흰 배경과 자연스럽게 이어지도록 유지합니다.
-                            if (saturation < 28 && max < 235) {
-                                pixels[index + 3] = 0;
-                                continue;
-                            }
-
-                            if (pixels[index + 3] > 0) {
-                                minX = Math.min(minX, x);
-                                minY = Math.min(minY, y);
-                                maxX = Math.max(maxX, x);
-                                maxY = Math.max(maxY, y);
-                            }
-                        }
-                    }
-
-                    if (maxX < minX || maxY < minY) {
-                        return;
-                    }
-
-                    context.putImageData(imageData, 0, 0);
-
-                    const padding = Math.max(
-                        2,
-                        Math.round(Math.max(maxX - minX + 1, maxY - minY + 1) * 0.04)
-                    );
-                    const cropX = Math.max(0, minX - padding);
-                    const cropY = Math.max(0, minY - padding);
-                    const cropRight = Math.min(sourceWidth - 1, maxX + padding);
-                    const cropBottom = Math.min(sourceHeight - 1, maxY + padding);
-                    const cropWidth = cropRight - cropX + 1;
-                    const cropHeight = cropBottom - cropY + 1;
-
-                    const cropCanvas = document.createElement("canvas");
-                    const cropSize = Math.max(cropWidth, cropHeight);
-                    cropCanvas.width = cropSize;
-                    cropCanvas.height = cropSize;
-
-                    const cropContext = cropCanvas.getContext("2d");
-                    if (!cropContext) {
-                        return;
-                    }
-
-                    cropContext.drawImage(
-                        canvas,
-                        cropX,
-                        cropY,
-                        cropWidth,
-                        cropHeight,
-                        (cropSize - cropWidth) / 2,
-                        (cropSize - cropHeight) / 2,
-                        cropWidth,
-                        cropHeight
-                    );
-
-                    logoElementImage.style.transform = "none";
-                    logoElementImage.style.objectFit = "contain";
-                    logoElementImage.src = cropCanvas.toDataURL("image/png");
-                } catch {
-                    // 외부 이미지의 캔버스 접근이 차단되는 경우 원본 이미지를 그대로 사용합니다.
-                }
-            };
-
-            const logoOverlay =
-                new window.kakao.maps.CustomOverlay({
-                    position,
-                    content: logoElement,
-                    xAnchor: 0.5,
-                    yAnchor: 0.5,
-                    zIndex: selected ? 30 : 20,
+                })
+                .catch(() => {
+                    // 로고 생성에 실패해도 지도와 영화관 위치 표시에는 영향을 주지 않습니다.
                 });
-
-            logoOverlay.setMap(mapInstanceRef.current);
-            theaterOverlaysRef.current.push(logoOverlay);
 
             const distanceText =
                 theater.distance != null
@@ -1390,12 +1680,6 @@ export default function ResidencePreference({
                 }
             };
 
-            const hideOverlays = () => {
-                clearHideTimer();
-                overlay.setMap(null);
-                belowOverlay.setMap(null);
-            };
-
             const scheduleHide = () => {
                 clearHideTimer();
 
@@ -1412,7 +1696,6 @@ export default function ResidencePreference({
 
             const overlayElement =
                 overlay.getContent();
-
             const belowOverlayElement =
                 belowOverlay.getContent();
 
@@ -1420,17 +1703,14 @@ export default function ResidencePreference({
                 "mouseenter",
                 clearHideTimer
             );
-
             belowOverlayElement.addEventListener(
                 "mouseenter",
                 clearHideTimer
             );
-
             overlayElement.addEventListener(
                 "mouseleave",
                 scheduleHide
             );
-
             belowOverlayElement.addEventListener(
                 "mouseleave",
                 scheduleHide
@@ -1451,12 +1731,10 @@ export default function ResidencePreference({
 
                     const projection =
                         map.getProjection();
-
                     const point =
                         projection.containerPointFromCoords(
                             position
                         );
-
                     const showBelow =
                         point.y < 65;
 
@@ -1484,9 +1762,13 @@ export default function ResidencePreference({
                 scheduleHide
             );
 
-            theaterMarkersRef.current.push(marker);
-            theaterOverlaysRef.current.push(overlay);
-            theaterOverlaysRef.current.push(belowOverlay);
+            theaterMarkersRef.current.push(
+                marker
+            );
+            theaterOverlaysRef.current.push(
+                overlay,
+                belowOverlay
+            );
         });
     }
 
