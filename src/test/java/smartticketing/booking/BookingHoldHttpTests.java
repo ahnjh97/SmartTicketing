@@ -53,7 +53,8 @@ class BookingHoldHttpTests {
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
                         BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class,
                         BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class,
-                        BookingSmartController.class, BookingSmartService.class,
+                        BookingSmartController.class, BookingSmartService.class, BookingRecoveryService.class,
+                        smartticketing.controller.BookingRecoveryController.class, smartticketing.controller.NotificationController.class,
                         smartticketing.controller.BookingWaitingController.class, BookingWaitingService.class, BookingWaitingDispatcher.class)
                 .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true")
                 .withBean(TicketRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(TicketRepository.class))
@@ -103,6 +104,15 @@ class BookingHoldHttpTests {
                         .andExpect(jsonPath("$.totalAmount").value(18000)).andExpect(jsonPath("$.expiresAt").value("2026-10-01T09:05:00+09:00"))
                         .andReturn().getResponse().getContentAsString();
                 reservationId.set(json.readTree(held).get("id").asLong());
+                mvc.perform(get("/api/booking-groups")).andExpect(status().isUnauthorized());
+                mvc.perform(get("/api/booking-groups").with(auth)).andExpect(status().isOk())
+                        .andExpect(jsonPath("$.items[0].id").value(groupId.get())).andExpect(jsonPath("$.hasMore").value(false));
+                mvc.perform(get("/api/booking-groups").with(jwt().jwt(j -> j.subject(Long.toString(ids[5])))))
+                        .andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
+                mvc.perform(get("/api/booking-groups/" + groupId.get() + "/recovery").with(jwt().jwt(j -> j.subject(Long.toString(ids[5])))))
+                        .andExpect(status().isNotFound());
+                mvc.perform(get("/api/notifications").with(auth)).andExpect(status().isOk())
+                        .andExpect(jsonPath("$[0].groupId").value(groupId.get())).andExpect(jsonPath("$[0].reservationId").value(reservationId.get()));
                 var locks = statements.stream().filter(s -> s.contains("for update")).toList();
                 assertThat(locks).anyMatch(s -> s.contains("booking_request_groups"))
                         .anyMatch(s -> s.contains("showtimes"))
@@ -129,6 +139,16 @@ class BookingHoldHttpTests {
                 }
             });
             db.restartPersistence();
+            runner(db, Clock.offset(clock, Duration.ofMinutes(2)), validation.getValidator()).run(context -> {
+                var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+                var auth = jwt().jwt(j -> j.subject(Long.toString(ids[0])));
+                mvc.perform(get("/api/booking-groups/" + groupId.get() + "/recovery").with(auth))
+                        .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("HOLDING"))
+                        .andExpect(jsonPath("$.path").value(org.hamcrest.Matchers.containsString("reservation=" + reservationId.get())));
+                mvc.perform(get("/api/reservations/" + reservationId.get()).with(auth))
+                        .andExpect(jsonPath("$.expiresAt").value("2026-10-01T09:05:00+09:00"));
+                mvc.perform(get("/api/notifications").with(auth)).andExpect(jsonPath("$.length()").value(1));
+            });
             runner(db, Clock.offset(clock, Duration.ofMinutes(6)), validation.getValidator()).run(context -> {
                 assertThat(context).hasNotFailed();
                 context.publishEvent(new ApplicationReadyEvent(new SpringApplication(), new String[0],

@@ -122,6 +122,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
         BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
         updateAvailable(show, inventory, now);
+        NotificationService.acquired(em, reservation, source == Source.WAITING);
         return response(reservation, now);
     }
 
@@ -149,7 +150,7 @@ public class BookingHoldService {
         return groupResponse(group);
     }
 
-    private BookingRequestGroup ownedGroupForRead(Long userId, Long groupId) {
+    BookingRequestGroup ownedGroupForRead(Long userId, Long groupId) {
         try { return lockOwnedGroup(userId, groupId); }
         catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
     }

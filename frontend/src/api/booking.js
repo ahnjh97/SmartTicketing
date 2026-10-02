@@ -6,6 +6,8 @@ export const catalog = (path, query, signal) => request(`/api/${path}`, {
 });
 
 export const bookingApi = {
+    mine: (before, signal) => request('/api/booking-groups', { query: { before }, signal }),
+    recovery: (id, signal) => request(`/api/booking-groups/${id}/recovery`, { signal }),
     waiting: (id, signal) => request(`/api/booking-groups/${id}/waiting-queues`, { signal }),
     registerWaiting: (id, showtimeIds, key) => request(`/api/booking-groups/${id}/waiting-queues`, {
         method: 'POST', body: { showtimeIds }, idempotencyKey: key,

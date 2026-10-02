@@ -24,7 +24,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public List<NotificationResponse> list(Long userId, boolean unreadOnly) {
         var l = unreadOnly ? notifications.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId) : notifications.findByUserIdOrderByCreatedAtDesc(userId);
-        return l.stream().map(n -> new NotificationResponse(n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt())).toList();
+        return l.stream().map(n -> new NotificationResponse(n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt(), n.getBookingGroupId(), n.getReservationId())).toList();
     }
 
     public void read(Long userId, Long id) {
@@ -51,6 +51,24 @@ public class NotificationService {
 
     public Notification hold(Long id) {
         return create(id, NotificationType.SEAT_HOLD_STARTED, "좌석 5분 선점이 시작되었습니다. 제한 시간 내 결제를 완료해주세요.");
+    }
+
+    public static Notification link(Notification notification, Reservation reservation) {
+        if (reservation.getRequestGroup() != null) {
+            notification.setBookingGroupId(reservation.getRequestGroup().getId());
+            notification.setReservationId(reservation.getId());
+        }
+        return notification;
+    }
+
+    // Called inside the same transaction as acquisition, including waiting dispatch.
+    public static void acquired(jakarta.persistence.EntityManager em, Reservation reservation, boolean waiting) {
+        var notification = new Notification();
+        notification.setUser(reservation.getUser());
+        notification.setType(waiting ? NotificationType.QUEUE_TURN : NotificationType.SEAT_HOLD_STARTED);
+        notification.setMessage(waiting ? "대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요." : "좌석을 5분간 확보했습니다. 예약에서 남은 시간을 확인해주세요.");
+        notification.setCreatedAt(reservation.getCreatedAt());
+        em.persist(link(notification, reservation));
     }
 
     public Notification queueTurn(Long id) {

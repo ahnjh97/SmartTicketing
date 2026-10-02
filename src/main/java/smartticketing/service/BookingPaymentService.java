@@ -82,7 +82,7 @@ public class BookingPaymentService {
         payment.setUpdatedAt(now);
         if (request.simulateFailure()) {
             payment.setStatus(PaymentStatus.FAILED);
-            notifications.paymentFailed(userId);
+            NotificationService.link(notifications.paymentFailed(userId), r);
             return paymentResponse(r, payment, false);
         }
         payment.setStatus(PaymentStatus.SUCCESS);
@@ -174,7 +174,7 @@ public class BookingPaymentService {
         else BookingQueueLifecycle.cancelled(em, locked.group().getId(), now);
         if (locked.slot() != null) em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
-        notifications.cancelled(userId);
+        NotificationService.link(notifications.cancelled(userId), r);
         return holds.response(r, now);
     }
 

@@ -1,0 +1,5 @@
+.page { padding: clamp(24px, 6vw, 80px); min-height: 50vh; color: var(--booking-ink); }
+.panel { max-width: 680px; margin: auto; padding: var(--booking-space-large); border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); background: var(--booking-soft); }
+.panel p { line-height: 1.7; }
+.panel a { display: block; margin-top: var(--booking-space-large); color: var(--booking-accent); text-underline-offset: 4px; }
+.panel a:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 5px; }

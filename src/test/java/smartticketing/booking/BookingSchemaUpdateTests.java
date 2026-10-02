@@ -5,6 +5,30 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class BookingSchemaUpdateTests {
+    @Test void notificationNavigationColumnsUpgradeWithoutRewritingLegacyData() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            long id;
+            try (var em = database.open()) {
+                em.getTransaction().begin();
+                var user = new smartticketing.entity.Users(); user.setName("기존 회원"); user.setNickname("기존 회원"); em.persist(user);
+                var n = new smartticketing.entity.Notification(); n.setUser(user); n.setType(smartticketing.entity.enums.NotificationType.PAYMENT_FAILED);
+                n.setMessage("보존할 알림"); n.setRead(true); n.setCreatedAt(java.time.LocalDateTime.of(2026,1,1,12,0)); em.persist(n);
+                em.getTransaction().commit(); id = n.getId();
+                // Reproduce the pre-stage9 schema only in this owned disposable database.
+                em.getTransaction().begin();
+                em.createNativeQuery("alter table notifications drop column booking_group_id, drop column reservation_id").executeUpdate();
+                em.getTransaction().commit();
+            }
+            database.restartPersistence();
+            database.restartPersistence();
+            try (var em = database.open()) {
+                var old = em.find(smartticketing.entity.Notification.class, id);
+                assertThat(old.getMessage()).isEqualTo("보존할 알림"); assertThat(old.isRead()).isTrue();
+                assertThat(old.getCreatedAt()).isEqualTo(java.time.LocalDateTime.of(2026,1,1,12,0));
+                assertThat(old.getBookingGroupId()).isNull(); assertThat(old.getReservationId()).isNull();
+            }
+        }
+    }
     @Test void hibernateAddsNullableMetadataWithoutChangingExistingMovie() throws Exception {
         try (var database = new TemporaryMysqlDatabase("""
                 CREATE TABLE movies (
