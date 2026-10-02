@@ -1637,8 +1637,6 @@ export default function ResidencePreference({
                                             : "theater-item"
                                     }
                                 >
-                                    {selected ? (
-
                                     <button
                                         type="button"
                                         className="theater-item-main"
@@ -1678,106 +1676,7 @@ export default function ResidencePreference({
                                                 </strong>
                                                 <small>직선거리</small>
                                             </div>
-   utton
-                                        type="button"
-                                        className="theater-item-main"
-                                        onClick={() =>
-                                            toggleTheater(
-                                                Number(theater.theaterId)
-                                            )
-                                        }
-                                    >
-
-
-                                    <div className="theater-main">
-                                        <div className="theater-name-marquee">
-                                            <strong>
-                                                {
-                                                    theater.name
-                                                }
-                                            </strong>
-                                        </div>
-
-                                        <small>
-                                            {
-                                                theater.address
-                                            }
-                                        </small>
-                                    </div>
-
-                                    <div className="theater-time">
-                                        {theaterSort === "DISTANCE" && (
-                                            <div>
-                                                <strong>
-                                                    {theater.distance != null
-                                                        ? theater.distance >= 1000
-                                                            ? `${(theater.distance / 1000).toFixed(1)}km`
-                                                            : `${theater.distance}m`
-                                                        : "-"}
-                                                </strong>
-                                                <small>직선거리</small>
-                                            </div>
-                                        <div className="theater-selected-footer">
-                                        <div className="theater-selected-rank">
-                                            {(selectedTheaters.indexOf(
-                                                Number(theater.theaterId)
-                                            ) + 1) + "순위"}
-                                        </div>
-
-                                    </div>
-                                    ) : (
-
-                                    <button
-                                        type="button"
-                                        className="theater-item-main"
-                                        onClick={() =>
-                                            toggleTheater(
-                                                Number(theater.theaterId)
-                                            )
-                                        }
-                                    >
-                                    <div className={
-                                        selected
-                                            ? "theater-rank selected-priority"
-                                            : "theater-rank"
-                                    }>
-                                        {selected
-                                            ? (selectedTheaters.indexOf(
-                                                Number(theater.theaterId)
-                                              ) + 1) + "순위"
-                                            : index + 1}
-                                    </div>
-
-                                    <div className="theater-main">
-                                        <div className="theater-name-marquee">
-                                            <strong>
-                                                {
-                                                    theater.name
-                                                }
-                                            </strong>
-                                        </div>
-
-                                        <small>
-                                            {
-                                                theater.address
-                                            }
-                                        </small>
-                                    </div>
-
-                                    <div className="theater-time">
-                                        {theaterSort === "DISTANCE" && (
-                                            <div>
-                                                <strong>
-                                                    {theater.distance != null
-                                                        ? theater.distance >= 1000
-                                                            ? `${(theater.distance / 1000).toFixed(1)}km`
-                                                            : `${theater.distance}m`
-                                                        : "-"}
-                                                </strong>
-                                                <small>직선거리</small>
-                                            </div>
-    
-                                    )}
+                                        )}
 
                                         {theaterSort === "TRANSIT" && (
                                             <div>
@@ -1812,23 +1711,32 @@ export default function ResidencePreference({
                                         )}
                                     </div>
                                     </button>
-
+                                    {selected ? (
+                                        <div className="theater-selected-footer">
+                                            <div className="theater-selected-rank">
+                                                {(selectedTheaters.indexOf(
+                                                    Number(theater.theaterId)
+                                                ) + 1) + "순위"}
+                                            </div>
+                                                                                <a
+                                                                                    className="theater-route-button"
+                                                                                    href={kakaoDirectionsUrl}
+                                                                                    target="_blank"
+                                                                                    rel="noreferrer"
+                                                                                    onClick={(event) => event.stopPropagation()}
+                                                                                >
+                                                                                    "길찾기"
+                                                                                </a>
+                                        </div>
+                                    ) : (
                                     <a
-                                        className={
-                                            selected
-                                                ? "theater-route-button selected"
-                                                : "theater-route-button"
-                                        }
+                                        className="theater-route-button"
                                         href={kakaoDirectionsUrl}
                                         target="_blank"
                                         rel="noreferrer"
                                         onClick={(event) => event.stopPropagation()}
                                     >
-                                        {selected
-                                            ? (selectedTheaters.indexOf(
-                                                Number(theater.theaterId)
-                                              ) + 1) + "순위 | 길찾기"
-                                            : "길찾기"}
+                                        "길찾기"
                                     </a>
                                     )}
                                 </div>
