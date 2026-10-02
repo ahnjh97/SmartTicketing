@@ -22,7 +22,7 @@ class QueueExpirySqlFilterTests {
             """;
 
     @Test
-    void configuredFilterDropsOnlyExpiryPollingAndPreservesSqlAndErrors() throws Exception {
+    void configuredFilterDropsOnlyRoutinePollingAndPreservesSqlAndErrors() throws Exception {
         var context = new LoggerContext();
         try {
             var configuration = new JoranConfigurator();
@@ -47,6 +47,15 @@ class QueueExpirySqlFilterTests {
                     """;
             logger.debug(holdQuery);
             logger.debug(holdQuery.replace("bgh1_0", "h2_0"));
+            String waitingQuery = """
+                    select distinct wq1_0.showtime_id
+                    from waiting_queues wq1_0
+                    where wq1_0.request_group_id is not null
+                        and wq1_0.status=?
+                    order by wq1_0.showtime_id
+                    """;
+            logger.debug(waitingQuery);
+            logger.debug(waitingQuery.replace("wq1_0", "q2_0"));
             assertThat(output.list).isEmpty();
 
             logger.debug("select * from users where id=?");
@@ -67,6 +76,11 @@ class QueueExpirySqlFilterTests {
             application.setLevel(Level.DEBUG); application.setAdditive(false); application.addAppender(output);
             application.debug(QUERY);
             assertThat(output.list).hasSize(12);
+            logger.debug(waitingQuery + " for update");
+            logger.error(waitingQuery);
+            logger.debug(waitingQuery, new IllegalStateException("waiting diagnostic"));
+            application.debug(waitingQuery);
+            assertThat(output.list).hasSize(16);
         } finally { context.stop(); }
     }
 }
