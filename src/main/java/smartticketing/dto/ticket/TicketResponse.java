@@ -8,6 +8,6 @@ import java.util.List;
 public record TicketResponse(
         Long ticketId, Long reservationId, String ticketNumber, String qrCode, TicketStatus status,
         String movieTitle, String theaterName, String screenName, LocalDateTime startTime, LocalDateTime endTime,
-        List<String> seats, LocalDateTime createdAt
+        List<String> seats, LocalDateTime createdAt, Long groupId
 ) {
 }

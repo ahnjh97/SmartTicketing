@@ -180,7 +180,7 @@ class LiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / 'config'
             env_file.write_text('DB_PASSWORD=\n')
-            with patch.dict(os.environ, {}, clear=True), patch('sys.argv', ['runner', '--env-file', str(env_file)]), \
+            with patch.dict(os.environ, {}, clear=True), patch('sys.argv', ['runner', '--mode', 'live', '--env-file', str(env_file)]), \
                     patch('sys.stderr', new_callable=io.StringIO), patch('runner.prepare') as build, \
                     patch('runner.FixtureServer') as mock_api:
                 with self.assertRaises(SystemExit) as error:
@@ -223,7 +223,7 @@ class LiveTests(unittest.TestCase):
                                          valid=True, response_ms=100, candidate_signature=signature))
             report(folder, True)
             text = (folder / 'report.md').read_text()
-            self.assertEqual(text.count('% reduction'), 1)
+            self.assertEqual(text.count('% reduction'), 0) # live samples never claim stable p95 improvement
             self.assertIn('candidate sets differ', text)
 
     def test_client_records_actual_http_status(self):

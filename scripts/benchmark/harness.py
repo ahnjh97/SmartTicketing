@@ -37,14 +37,16 @@ def validate_fixtures(scenarios):
         raise ValueError("Fixtures must be a nonempty scenario array")
     names, ids = set(), set()
     for s in scenarios:
-        if s['name'] in names or not 1 <= len(s['theaters']) <= 15:
-            raise ValueError("Unique scenario names and 1..15 theaters per scenario required")
+        if s['name'] in names or not s['theaters']:
+            raise ValueError("Unique scenario names and at least one theater per scenario required")
         names.add(s['name'])
         for obj in [s] + s['theaters']:
             if not -90 <= obj['latitude'] <= 90 or not -180 <= obj['longitude'] <= 180:
                 raise ValueError("Invalid coordinates")
+        if len({str(t['id']) for t in s['theaters']}) != len(s['theaters']):
+            raise ValueError('Duplicate theater ID in scenario')
         for t in s['theaters']:
-            if str(t['id']) in ids or t['brand'] not in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
+            if t['brand'] not in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
                 raise ValueError("Unique theater IDs and supported brands required")
             ids.add(str(t['id']))
             if t['transitMinutes'] <= 0 or t['transitDistance'] < 0:
@@ -65,13 +67,43 @@ def distance(a, b):
     return round(6371000 * 2 * math.atan2(math.sqrt(x), math.sqrt(1 - x)))
 
 
+def original_candidates(scenario):
+    result = []
+    for brand in ('CGV', 'LOTTE_CINEMA', 'MEGABOX'):
+        result.extend(sorted((t for t in scenario['theaters'] if t['brand'] == brand),
+                             key=lambda t: (distance(scenario, t), str(t['id'])))[:15])
+    return result
+
+
+def catalog_fixtures(scenarios):
+    # The catalog is real; routes are deliberately synthetic, never reported as Kakao timings.
+    for s in scenarios:
+        s['theaters'] = [dict(t, transitMinutes=max(1, math.ceil(distance(s, t) / 200)),
+                              transitDistance=distance(s, t)) for t in s['theaters']]
+    return scenarios
+
+
 class FixtureServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, scenarios, route_ms=100, search_ms=50):
+    def __init__(self, scenarios, route_ms=100, search_ms=50, delay_profile='fixed', seed=2026):
         super().__init__(('127.0.0.1', 0), FixtureHandler)
         self.scenarios, self.route_ms, self.search_ms = scenarios, route_ms, search_ms
         self.lock, self.counts = threading.Lock(), Counter()
+        self.delay_profile, self.seed, self.sample = delay_profile, seed, ''
+        self.halted = ''
+
+    def begin_sample(self, label):
+        self.sample = label
+
+    def delay(self, path, query):
+        base = self.search_ms if 'search' in path else self.route_ms
+        canonical = json.dumps([self.seed, self.sample, path, sorted(query.items())], ensure_ascii=False)
+        number = int(hashlib.sha256(canonical.encode()).hexdigest()[:8], 16)
+        # Stable per route/sample: independent of branch, arrival order and concurrency.
+        factor = (4 if number % 10 == 0 else .5 + (number % 101) / 100) if self.delay_profile == 'variable' else 1
+        return base * factor / 1000
+
 
     def snapshot(self):
         with self.lock:
@@ -104,15 +136,18 @@ class FixtureHandler(BaseHTTPRequestHandler):
                 brand = {'CGV': 'CGV', '롯데시네마': 'LOTTE_CINEMA', '메가박스': 'MEGABOX'}[q['query'][0]]
                 body = {'documents': [dict(id=t['id'], place_name=t['name'], x=str(t['longitude']),
                         y=str(t['latitude']), distance=str(distance(s, t)), road_address_name=s['name'],
-                        place_url='https://example.invalid/fixture') for t in s['theaters'] if t['brand'] == brand]}
-                time.sleep(self.server.search_ms / 1000)
+                        place_url='https://example.invalid/fixture') for t in original_candidates(s) if t['brand'] == brand]}
+                time.sleep(self.server.delay(u.path, q))
             elif u.path in ('/v2/routing/publictraffic', '/v2/routing/walk'):
-                t = next(t for s in self.server.scenarios for t in s['theaters']
+                s = next(s for s in self.server.scenarios
+                         if abs(s['latitude'] - float(q['start_y'][0])) < 1e-6
+                         and abs(s['longitude'] - float(q['start_x'][0])) < 1e-6)
+                t = next(t for t in s['theaters']
                          if abs(t['latitude'] - float(q['end_y'][0])) < 1e-6
                          and abs(t['longitude'] - float(q['end_x'][0])) < 1e-6)
                 props = {'totalTime': t['transitMinutes'] * 60, 'totalDistance': t['transitDistance']}
                 body = {'status': 'OK', 'routes': [{'properties': props}], 'route': {'properties': props}}
-                time.sleep(self.server.route_ms / 1000)
+                time.sleep(self.server.delay(u.path, q))
             else:
                 status, body = 404, {'error': 'Unknown fixture path'}
         except (KeyError, StopIteration, ValueError):
@@ -145,7 +180,7 @@ class Client:
 
     def request(self, scenario):
         query = urlencode(dict(latitude=scenario['latitude'], longitude=scenario['longitude'],
-                               address=scenario['name'], radius=10000, sort='TRANSIT'))
+                               address=scenario['name'], sort=scenario.get('sort', 'TRANSIT')))
         status, body, error = 0, b'', ''
         headers = {'Authorization': 'Bearer ' + token(self.secret)}
         start = time.perf_counter_ns()
@@ -164,7 +199,51 @@ class Client:
         self.connection.close()
 
 
+def selected_theaters(scenario):
+    return [t for t in scenario['theaters'] if distance(scenario, t) <= 2000] if scenario.get('sort') == 'WALK' else scenario['theaters']
+
+
+def validate_current_response(status, body, scenario, mode):
+    if status != 200:
+        return False, f'http_{status}', 0, ''
+    try:
+        rows = json.loads(body)
+        if not isinstance(rows, list):
+            return False, 'non_array', 0, ''
+        expected = {str(t['id']): t for t in selected_theaters(scenario)}
+        ids = [str(r['kakaoPlaceId']) for r in rows]
+        if len(ids) != len(set(ids)) or set(ids) != set(expected):
+            return False, 'candidate_mismatch', len(rows), ''
+        sort = scenario['sort']
+        order = []
+        for row in rows:
+            theater = expected[str(row['kakaoPlaceId'])]
+            if row['distance'] != distance(scenario, theater):
+                return False, 'distance_mismatch', len(rows), ''
+            for kind in ('transit', 'walk'):
+                minutes, meters = row.get(kind + 'Minutes'), row.get(kind + 'Distance')
+                if sort == kind.upper():
+                    if (not isinstance(minutes, (int, float)) or isinstance(minutes, bool)
+                            or not math.isfinite(minutes) or minutes <= 0
+                            or not isinstance(meters, (int, float)) or isinstance(meters, bool)
+                            or not math.isfinite(meters) or meters < 0):
+                        return False, 'missing_or_invalid_' + kind, len(rows), ''
+                    if mode == 'stub' and (minutes != theater['transitMinutes'] or meters != theater['transitDistance']):
+                        return False, 'route_mismatch', len(rows), ''
+                elif minutes is not None or meters is not None:
+                    return False, 'unexpected_' + kind, len(rows), ''
+            order.append(row['distance'] if sort == 'DISTANCE' else row[sort.lower() + 'Minutes'])
+        if order != sorted(order):
+            return False, 'incorrect_sort', len(rows), ''
+        canonical = sorted((str(r['kakaoPlaceId']), r['distance'], r.get('transitMinutes'), r.get('walkMinutes')) for r in rows)
+        return True, '', len(rows), hashlib.sha256(json.dumps(canonical).encode()).hexdigest()
+    except (ValueError, TypeError, KeyError):
+        return False, 'invalid_payload', 0, ''
+
+
 def validate_response(status, body, scenario, mode, original=False):
+    if 'sort' in scenario:
+        return validate_current_response(status, body, scenario, mode)
     if status != 200:
         return False, f'http_{status}', 0, ''
     try:
@@ -172,7 +251,8 @@ def validate_response(status, body, scenario, mode, original=False):
         if not isinstance(rows, list) or not rows:
             return False, 'empty_or_non_array', 0, ''
         ids = [str(r['kakaoPlaceId']) for r in rows]
-        expected = {str(t['id']): t for t in scenario['theaters']}
+        expected_rows = original_candidates(scenario) if original and mode == 'stub' else scenario['theaters']
+        expected = {str(t['id']): t for t in expected_rows}
         if len(set(ids)) != len(ids):
             return False, 'duplicate_candidates', len(rows), ''
         # Original discovers places via API and caps output at 15. Record its actual
@@ -180,6 +260,13 @@ def validate_response(status, body, scenario, mode, original=False):
         if mode == 'live' and original:
             if len(rows) > 15:
                 return False, 'original_limit_exceeded', len(rows), ''
+        elif mode == 'stub' and original:
+            ranked = sorted(expected_rows, key=lambda t: t['transitMinutes'])
+            cutoff = ranked[min(15, len(ranked)) - 1]['transitMinutes']
+            required = {str(t['id']) for t in ranked if t['transitMinutes'] < cutoff}
+            allowed = {str(t['id']) for t in ranked if t['transitMinutes'] <= cutoff}
+            if len(ids) != min(15, len(ranked)) or not required <= set(ids) <= allowed:
+                return False, 'candidate_mismatch', len(rows), ''
         elif set(ids) != set(expected):
             return False, 'candidate_mismatch', len(rows), ''
         minutes = [r['transitMinutes'] for r in rows]

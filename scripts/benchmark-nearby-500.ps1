@@ -1,14 +1,24 @@
-# Compatibility entry point: all measurement logic lives in benchmark-nearby.ps1.
+# Compatibility entry point: measurement lives in benchmark-nearby.ps1.
 [CmdletBinding()]
 param(
-    [int]$Runs = 100,
-    [int]$WarmupRuns = 20,
-    [int]$Rounds = 3,
-    [ValidateSet('stub', 'live')][string]$Mode = 'live',
+    [ValidateRange(1, 100000)][int]$Runs,
+    [ValidateRange(0, 10000)][int]$WarmupRuns,
+    [ValidateRange(1, 100)][int]$Rounds,
+    [ValidateSet('plan', 'stub', 'live')][string]$Mode = 'plan',
+    [ValidateSet('current', 'parallel', 'all')][string]$Comparison = 'current',
+    [ValidateSet('flow', 'DISTANCE', 'TRANSIT', 'WALK')][string]$Sort,
     [string]$Python = '',
     [string]$EnvFile = '',
+    [string]$Catalog = '',
     [string]$Fixtures = '',
     [string]$Origins = '',
+    [ValidateSet('fixed', 'variable')][string]$DelayProfile = 'variable',
+    [ValidateRange(0, 60000)][int]$RouteMs = 100,
+    [ValidateRange(0, 60000)][int]$SearchMs = 50,
+    [int]$Seed = 2026,
+    [ValidateRange(0, 100000)][int]$BudgetSearch = 30,
+    [ValidateRange(0, 100000)][int]$BudgetTransit = 600,
+    [ValidateRange(0, 100000)][int]$BudgetWalk = 150,
     [switch]$PrepareOnly
 )
 $ErrorActionPreference = 'Stop'

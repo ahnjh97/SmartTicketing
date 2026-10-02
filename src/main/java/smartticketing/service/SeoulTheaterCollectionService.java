@@ -1,8 +1,6 @@
 package smartticketing.service;
 
-import smartticketing.entity.Theater;
 import smartticketing.entity.enums.TheaterBrand;
-import smartticketing.repository.TheaterRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
@@ -23,158 +21,114 @@ public class SeoulTheaterCollectionService {
             "용산구", "은평구", "종로구", "중구", "중랑구"
     );
 
-    private final TheaterRepository theaters;
+    private final smartticketing.repository.TheaterCollectionProgressRepository progress;
+    private final TheaterCatalogWriter writer;
     private final RestClient restClient;
     private final String restApiKey;
 
     public SeoulTheaterCollectionService(
-            TheaterRepository theaters,
-            @Value("${kakao.map.rest-api-key:}") String restApiKey
-    ) {
-        this.theaters = theaters;
+            smartticketing.repository.TheaterCollectionProgressRepository progress,
+            TheaterCatalogWriter writer,
+            @org.springframework.beans.factory.annotation.Qualifier("theaterCatalogRestClient") RestClient restClient,
+            @Value("${kakao.map.rest-api-key:}") String restApiKey) {
+        this.progress = progress;
+        this.writer = writer;
+        this.restClient = restClient;
         this.restApiKey = restApiKey;
-        this.restClient = RestClient.builder()
-                .baseUrl("https://dapi.kakao.com")
-                .build();
     }
 
-    public Map<String, Object> collectSeoulTheaters() {
+    public Map<String, Object> collectSeoulTheaters() { return collectSeoulTheaters(false); }
+
+    // Startup and manual collection share a lock in this application instance.
+    public synchronized Map<String, Object> collectSeoulTheaters(boolean refresh) {
         if (restApiKey.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "카카오 지도 REST API 키가 설정되지 않았습니다."
-            );
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "카카오 지도 REST API 키가 설정되지 않았습니다.");
         }
-
-        long startedAt = System.currentTimeMillis();
-        int apiCallCount = 0;
-        int insertedCount = 0;
-        int updatedCount = 0;
-        int duplicateCount = 0;
-
-        Map<String, TheaterPlace> places = new LinkedHashMap<>();
-        Map<String, TheaterBrand> brandQueries = new LinkedHashMap<>();
-        brandQueries.put("CGV", TheaterBrand.CGV);
-        brandQueries.put("롯데시네마", TheaterBrand.LOTTE_CINEMA);
-        brandQueries.put("메가박스", TheaterBrand.MEGABOX);
+        long start = System.nanoTime();
+        int calls = 0, inserted = 0, updated = 0, duplicates = 0, skipped = 0;
+        var seen = new HashSet<String>();
+        var brands = new LinkedHashMap<String, TheaterBrand>();
+        brands.put("CGV", TheaterBrand.CGV);
+        brands.put("롯데시네마", TheaterBrand.LOTTE_CINEMA);
+        brands.put("메가박스", TheaterBrand.MEGABOX);
+        if (refresh) writer.reset(SEOUL_DISTRICTS.stream()
+                .flatMap(d -> brands.values().stream().map(b -> key(d, b))).toList());
 
         for (String district : SEOUL_DISTRICTS) {
-            for (Map.Entry<String, TheaterBrand> entry : brandQueries.entrySet()) {
-                for (int page = 1; page <= 3; page++) {
-                    apiCallCount++;
-
-                    List<TheaterPlace> results =
-                            search(entry.getKey(), entry.getValue(), district, page);
-
-                    if (results.isEmpty()) {
-                        break;
+            for (var brand : brands.entrySet()) {
+                String key = key(district, brand.getValue());
+                var state = progress.findById(key).orElse(null);
+                if (state != null && state.isComplete()) { skipped++; continue; }
+                int page = state == null ? 1 : state.getNextPage();
+                while (true) {
+                    if (page > 45) throw new IllegalStateException("Kakao 검색 페이지 한도를 넘었습니다: " + key);
+                    calls++;
+                    SearchPage result = search(brand.getKey(), brand.getValue(), district, page);
+                    var unique = new ArrayList<TheaterPlace>();
+                    for (var place : result.places()) {
+                        if (seen.add(place.kakaoPlaceId())) unique.add(place); else duplicates++;
                     }
-
-                    for (TheaterPlace place : results) {
-                        if (places.putIfAbsent(place.kakaoPlaceId(), place) != null) {
-                            duplicateCount++;
-                        }
-                    }
-
-                    if (results.size() < 15) {
-                        break;
-                    }
+                    // Network requests run outside this short database transaction.
+                    var counts = writer.savePage(key, page, result.last(), unique);
+                    inserted += counts.inserted();
+                    updated += counts.updated();
+                    if (result.last()) break;
+                    page++;
                 }
             }
         }
-
-        for (TheaterPlace place : places.values()) {
-            Optional<Theater> existing =
-                    theaters.findByKakaoPlaceId(place.kakaoPlaceId());
-
-            Theater theater = existing.orElseGet(Theater::new);
-
-            if (existing.isPresent()) {
-                updatedCount++;
-            } else {
-                insertedCount++;
-            }
-
-            theater.setBrand(place.brand());
-            theater.setName(place.name());
-            theater.setAddress(place.address());
-            theater.setKakaoPlaceId(place.kakaoPlaceId());
-            theater.setLatitude(place.latitude());
-            theater.setLongitude(place.longitude());
-            theater.setActive(true);
-
-            theaters.save(theater);
-        }
-
-        long elapsedMs = System.currentTimeMillis() - startedAt;
-
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("districtCount", SEOUL_DISTRICTS.size());
-        result.put("apiCallCount", apiCallCount);
-        result.put("collectedTheaterCount", places.size());
-        result.put("insertedCount", insertedCount);
-        result.put("updatedCount", updatedCount);
-        result.put("duplicateCount", duplicateCount);
-        result.put("elapsedMs", elapsedMs);
+        result.put("apiCallCount", calls);
+        result.put("collectedTheaterCount", seen.size());
+        result.put("insertedCount", inserted);
+        result.put("updatedCount", updated);
+        result.put("duplicateCount", duplicates);
+        result.put("skippedQueryCount", skipped);
+        result.put("complete", true);
+        result.put("elapsedMs", (System.nanoTime() - start) / 1_000_000);
         return result;
     }
 
-    private List<TheaterPlace> search(
-            String query,
-            TheaterBrand brand,
-            String district,
-            int page
-    ) {
+    private String key(String district, TheaterBrand brand) { return "seoul-v1:" + district + ":" + brand; }
+
+    private SearchPage search(String query, TheaterBrand brand, String district, int page) {
         Map<String, Object> response = restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/v2/local/search/keyword.json")
-                        .queryParam("query", district + " " + query)
+                .uri(uriBuilder -> uriBuilder.path("/v2/local/search/keyword.json")
+                        .queryParam("query", "서울 " + district + " " + query)
                         .queryParam("category_group_code", "CT1")
-                        .queryParam("size", 15)
-                        .queryParam("page", page)
-                        .build())
+                        .queryParam("size", 15).queryParam("page", page).build())
                 .header("Authorization", "KakaoAK " + restApiKey)
-                .retrieve()
-                .body(new ParameterizedTypeReference<>() {});
-
-        if (response == null || !(response.get("documents") instanceof List<?> documents)) {
-            return List.of();
+                .retrieve().body(new ParameterizedTypeReference<>() {});
+        if (response == null || !(response.get("documents") instanceof List<?> documents)
+                || !(response.get("meta") instanceof Map<?, ?> meta)
+                || !(meta.get("is_end") instanceof Boolean last)) {
+            throw new IllegalStateException("카카오 장소 응답 형식이 올바르지 않습니다.");
         }
-
         List<TheaterPlace> result = new ArrayList<>();
-
         for (Object item : documents) {
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-
+            if (!(item instanceof Map<?, ?> map)) throw new IllegalStateException("잘못된 장소 응답입니다.");
             String name = string(map.get("place_name"));
             String placeId = string(map.get("id"));
-            String roadAddress = string(map.get("road_address_name"));
-            String address = roadAddress != null
-                    ? roadAddress
-                    : string(map.get("address_name"));
-
+            String road = string(map.get("road_address_name"));
+            String address = road != null ? road : string(map.get("address_name"));
             if (name == null || placeId == null || address == null) {
-                continue;
+                throw new IllegalStateException("장소 필수 정보가 없습니다.");
             }
-
-            if (!address.contains("서울") || !matchesBrand(name, brand)) {
-                continue;
+            if (!(address.startsWith("서울 ") || address.startsWith("서울특별시 ")) || !matchesBrand(name, brand)) continue;
+            var lat = decimal(map.get("y"));
+            var lon = decimal(map.get("x"));
+            if (lat == null || lon == null || lat.abs().compareTo(java.math.BigDecimal.valueOf(90)) > 0
+                    || lon.abs().compareTo(java.math.BigDecimal.valueOf(180)) > 0) {
+                throw new IllegalStateException("장소 좌표가 올바르지 않습니다.");
             }
-
-            result.add(new TheaterPlace(
-                    placeId,
-                    name,
-                    brand,
-                    address,
-                    decimal(map.get("y")),
-                    decimal(map.get("x"))
-            ));
+            result.add(new TheaterPlace(placeId, name, brand, address, lat, lon));
         }
-
-        return result;
+        // Filtering must never decide pagination: only upstream meta.is_end does.
+        return new SearchPage(result, last);
     }
+
+    private record SearchPage(List<TheaterPlace> places, boolean last) {}
 
     private boolean matchesBrand(String name, TheaterBrand brand) {
         return switch (brand) {
@@ -185,7 +139,7 @@ public class SeoulTheaterCollectionService {
     }
 
     private String string(Object value) {
-        return value == null ? null : String.valueOf(value);
+        return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
     }
 
     private java.math.BigDecimal decimal(Object value) {
@@ -199,7 +153,7 @@ public class SeoulTheaterCollectionService {
         }
     }
 
-    private record TheaterPlace(
+    public record TheaterPlace(
             String kakaoPlaceId,
             String name,
             TheaterBrand brand,

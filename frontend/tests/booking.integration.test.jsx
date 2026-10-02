@@ -13,6 +13,7 @@ const show = { id: 91, movieId: 41, theaterId: 71, screenName: '1관', startTime
 const member = { id: 1, nickname: '테스터', birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3, 4].map(id => ({ theaterId: id, theaterName: `선호${id}`, priority: id })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] };
 const json = data => new Response(JSON.stringify(data));
 async function baseFetch(url) {
+    if (url === '/api/main') return json({ nowShowing: [movie, { ...movie, id: 42, title: '두 번째 영화' }], comingSoon: [] });
     if (url === '/api/users/me') return json(member);
     if (url === '/api/auth/login') return json({ accessToken: 'test-token' });
     if (url.startsWith('/api/movies?')) return json({ items: [movie, { ...movie, id: 42, title: '두 번째 영화' }], page: 0, size: 20, totalElements: 2 });
@@ -26,8 +27,8 @@ async function baseFetch(url) {
 }
 function Probe() { const navigate = useNavigate(); const location = useLocation(); return <><output data-testid="url">{location.pathname}{location.search}</output><button onClick={() => navigate(-1)}>뒤로</button><button onClick={() => navigate(`/movies?movie=42&party=2&date=${seoulDate()}`)}>다른 영화</button></>; }
 function mount(path) { window.history.replaceState({}, '', path); return render(<StrictMode><MemoryRouter initialEntries={[path]}><App /><Probe /></MemoryRouter></StrictMode>); }
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T09:00:00+09:00`)); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 test('movie navigation opens a real default film while preserving incoming conditions', async () => {
     mount('/movies?party=3&from=10%3A00&until=22%3A00');
     await screen.findByRole('heading', { name: '서울의 밤' });
@@ -148,9 +149,9 @@ test('theater entry restores IDs and row panel without collecting party', async 
     expect(screen.queryByLabelText('총인원')).toBe(null);
     expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
-    await screen.findByRole('heading', { name: '선택 확인 · 예매 준비 중' });
+    await screen.findByRole('heading', { name: '나의 자리를 선택하세요' });
     expect(screen.getByTestId('url').textContent).toContain('entry=THEATER_NORMAL');
-    expect(await screen.findByText(/인원은 다음 단계에서 선택/)).toBeTruthy();
+    expect(await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/)).toBeTruthy();
 });
 test('sold out and unknown layouts have distinct button behavior', async () => {
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, layoutComplete: false }, { ...show, id: 92, availableSeats: 0 }] })) : baseFetch(url));
@@ -266,12 +267,12 @@ test('OAuth callback restores the same saved booking and strips token from addre
     expect(fetch.mock.calls.find(([url]) => url === '/api/users/me')[1].headers.Authorization).toBe('Bearer oauth-test-token');
 });
 
-test('confirmation re-queries inventory and cannot promise a newly sold-out show', async () => {
+test('guest manual entry requires login and never promises newly sold-out inventory', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
     await screen.findByText('23:00 → 익일 01:00');
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, availableSeats: 0 }] })) : baseFetch(url));
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
-    await screen.findByText(/선택을 다시 확인해주세요/);
+    await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/);
     expect(screen.queryByText(/아직 좌석 선점·결제·대기 신청은 실행되지/)).toBe(null);
 });
 
