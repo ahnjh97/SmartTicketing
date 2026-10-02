@@ -1074,6 +1074,15 @@ export default function ResidencePreference({
     }
 
 
+    useEffect(() => {
+        if (
+            theaters.length > 0 &&
+            mapInstanceRef.current &&
+            window.kakao?.maps
+        ) {
+            renderTheaterMarkers(theaters);
+        }
+    }, [selectedTheaters, theaters]);
     function renderTheaterMarkers(
         theaterList
     ) {
@@ -1113,22 +1122,56 @@ export default function ResidencePreference({
                     Number(theater.theaterId)
                 );
 
+            const brand = String(theater.brand ?? "").toUpperCase();
+
+            const logoConfig =
+                brand === "CGV"
+                    ? {
+                        text: "CGV",
+                        textSize: 10,
+                        textWeight: 900,
+                        textColor: "#e51b23",
+                    }
+                    : brand === "LOTTE_CINEMA"
+                        ? {
+                            text: "LOTTE",
+                            subText: "CINEMA",
+                            textSize: 6.5,
+                            subTextSize: 4.2,
+                            textWeight: 900,
+                            textColor: "#111",
+                        }
+                        : {
+                            text: "MEGABOX",
+                            textSize: 5.5,
+                            textWeight: 900,
+                            textColor: "#111",
+                        };
+
+            const markerSize = selected ? 38 : 34;
+            const center = markerSize / 2;
+            const radius = selected ? 15 : 14;
+            const borderColor = selected ? "#ffc426" : "#111";
+
+            const logoMarkup =
+                brand === "LOTTE_CINEMA"
+                    ? '<text x="' + center + '" y="' + (center - 1) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.textSize + '" font-weight="' + logoConfig.textWeight + '" fill="' + logoConfig.textColor + '">' + logoConfig.text + '</text>' +
+                      '<text x="' + center + '" y="' + (center + 6) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.subTextSize + '" font-weight="700" fill="' + logoConfig.textColor + '">' + logoConfig.subText + '</text>'
+                    : '<text x="' + center + '" y="' + (center + logoConfig.textSize / 3) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.textSize + '" font-weight="' + logoConfig.textWeight + '" fill="' + logoConfig.textColor + '">' + logoConfig.text + '</text>';
+
             const markerSvg =
-                selected
-                    ? '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffc426" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="#19160e"/></svg>'
-                    : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="#f5f5f5" stroke="#222" stroke-width="2"/><circle cx="10" cy="10" r="2.5" fill="#222"/></svg>';
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' + markerSize + '" height="' + markerSize + '" viewBox="0 0 ' + markerSize + ' ' + markerSize + '">' +
+                    '<circle cx="' + center + '" cy="' + center + '" r="' + radius + '" fill="#ffffff" stroke="' + borderColor + '" stroke-width="3"/>' +
+                    logoMarkup +
+                '</svg>';
 
             const markerImage =
                 new window.kakao.maps.MarkerImage(
                     "data:image/svg+xml;charset=UTF-8," +
                         encodeURIComponent(markerSvg),
-                    selected
-                        ? new window.kakao.maps.Size(24, 24)
-                        : new window.kakao.maps.Size(20, 20),
+                    new window.kakao.maps.Size(markerSize, markerSize),
                     {
-                        offset: selected
-                            ? new window.kakao.maps.Point(12, 12)
-                            : new window.kakao.maps.Point(10, 10),
+                        offset: new window.kakao.maps.Point(center, center),
                     }
                 );
 
