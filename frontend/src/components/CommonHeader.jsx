@@ -237,7 +237,7 @@ export default function CommonHeader({
 
                 <button
                     type="button"
-                    className={`common-header-ticket-trigger ${glass.button}`}
+                    className={`common-header-link ${glass.button}`}
                     aria-expanded={openPanel === "tickets"}
                     onClick={() => togglePanel("tickets")}
                     disabled={navigationDisabled}
