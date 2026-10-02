@@ -1131,13 +1131,9 @@ export default function ResidencePreference({
                         ? "LOTTE_CINEMA.png"
                         : "MEGABOX.png";
 
-            const markerSize = selected ? 42 : 38;
-            const center = markerSize / 2;
-            const borderRadius = selected ? 18 : 16;
+            const markerSize = selected ? 46 : 42;
             const borderColor = selected ? "#ffc426" : "#111";
 
-            // 외부 PNG를 data SVG 안에 다시 참조하면 카카오맵 MarkerImage에서 표시되지 않을 수 있습니다.
-            // 실제 PNG를 MarkerImage로 직접 사용하고, 선택 상태는 마커 크기로 구분합니다.
             const logoUrl =
                 "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
                 logoFile;
@@ -1188,9 +1184,128 @@ export default function ResidencePreference({
             logoElementImage.draggable = false;
             logoElementImage.style.width = "100%";
             logoElementImage.style.height = "100%";
-            logoElementImage.style.objectFit = "cover";
+            logoElementImage.style.objectFit = "contain";
             logoElementImage.style.display = "block";
+            logoElementImage.style.transform = "scale(1.45)";
+            logoElementImage.style.transformOrigin = "center";
             logoElement.appendChild(logoElementImage);
+
+            // 업로드된 PNG의 작업용 검정 원과 회색 배경을 제거하고
+            // 실제 로고 부분만 다시 잘라서 마커 안에 크게 표시합니다.
+            logoElementImage.crossOrigin = "anonymous";
+            logoElementImage.onload = () => {
+                try {
+                    const sourceWidth = logoElementImage.naturalWidth;
+                    const sourceHeight = logoElementImage.naturalHeight;
+
+                    if (!sourceWidth || !sourceHeight) {
+                        return;
+                    }
+
+                    const canvas = document.createElement("canvas");
+                    canvas.width = sourceWidth;
+                    canvas.height = sourceHeight;
+
+                    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+                    if (!context) {
+                        return;
+                    }
+
+                    context.drawImage(
+                        logoElementImage,
+                        0,
+                        0,
+                        sourceWidth,
+                        sourceHeight
+                    );
+
+                    const imageData = context.getImageData(
+                        0,
+                        0,
+                        sourceWidth,
+                        sourceHeight
+                    );
+
+                    const pixels = imageData.data;
+                    let minX = sourceWidth;
+                    let minY = sourceHeight;
+                    let maxX = -1;
+                    let maxY = -1;
+
+                    for (let y = 0; y < sourceHeight; y += 1) {
+                        for (let x = 0; x < sourceWidth; x += 1) {
+                            const index = (y * sourceWidth + x) * 4;
+                            const red = pixels[index];
+                            const green = pixels[index + 1];
+                            const blue = pixels[index + 2];
+
+                            const max = Math.max(red, green, blue);
+                            const min = Math.min(red, green, blue);
+                            const saturation = max - min;
+
+                            // 저채도 검정/회색 작업용 배경만 투명 처리합니다.
+                            // 흰색은 마커의 흰 배경과 자연스럽게 이어지도록 유지합니다.
+                            if (saturation < 28 && max < 235) {
+                                pixels[index + 3] = 0;
+                                continue;
+                            }
+
+                            if (pixels[index + 3] > 0) {
+                                minX = Math.min(minX, x);
+                                minY = Math.min(minY, y);
+                                maxX = Math.max(maxX, x);
+                                maxY = Math.max(maxY, y);
+                            }
+                        }
+                    }
+
+                    if (maxX < minX || maxY < minY) {
+                        return;
+                    }
+
+                    context.putImageData(imageData, 0, 0);
+
+                    const padding = Math.max(
+                        2,
+                        Math.round(Math.max(maxX - minX + 1, maxY - minY + 1) * 0.04)
+                    );
+                    const cropX = Math.max(0, minX - padding);
+                    const cropY = Math.max(0, minY - padding);
+                    const cropRight = Math.min(sourceWidth - 1, maxX + padding);
+                    const cropBottom = Math.min(sourceHeight - 1, maxY + padding);
+                    const cropWidth = cropRight - cropX + 1;
+                    const cropHeight = cropBottom - cropY + 1;
+
+                    const cropCanvas = document.createElement("canvas");
+                    const cropSize = Math.max(cropWidth, cropHeight);
+                    cropCanvas.width = cropSize;
+                    cropCanvas.height = cropSize;
+
+                    const cropContext = cropCanvas.getContext("2d");
+                    if (!cropContext) {
+                        return;
+                    }
+
+                    cropContext.drawImage(
+                        canvas,
+                        cropX,
+                        cropY,
+                        cropWidth,
+                        cropHeight,
+                        (cropSize - cropWidth) / 2,
+                        (cropSize - cropHeight) / 2,
+                        cropWidth,
+                        cropHeight
+                    );
+
+                    logoElementImage.style.transform = "none";
+                    logoElementImage.style.objectFit = "contain";
+                    logoElementImage.src = cropCanvas.toDataURL("image/png");
+                } catch {
+                    // 외부 이미지의 캔버스 접근이 차단되는 경우 원본 이미지를 그대로 사용합니다.
+                }
+            };
 
             const logoOverlay =
                 new window.kakao.maps.CustomOverlay({
