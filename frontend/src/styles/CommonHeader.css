@@ -148,8 +148,8 @@
 }
 
 .common-header-notification-trigger {
-    width: 42px;
-    height: 42px;
+    width: 46px;
+    height: 46px;
     padding: 8px;
 }
 
@@ -179,9 +179,9 @@
 
 .common-header-trigger-icon {
     display: inline-flex;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
 }
 
 .common-header-trigger-icon svg {
