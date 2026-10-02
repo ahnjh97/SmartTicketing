@@ -29,7 +29,7 @@ public class ShowtimeScheduleSeedService {
     private static final int AD_MINUTES = 10;             // 광고
     private static final int CLEANING_MINUTES = 20;       // 청소
     private static final LocalTime FIRST_START = LocalTime.of(8, 0);
-    private static final int PLANNED_SEATS = 108;         // 좌석 배치(9줄 × 12석) 기준
+    private static final int PLANNED_SEATS = 120;         // 좌석 배치(9줄 × 12석) 기준
     private static final int PRICE = 10_000;
 
     private final EntityManager em;
