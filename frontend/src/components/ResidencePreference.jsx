@@ -259,6 +259,10 @@ export default function ResidencePreference({
                         "--marquee-shift",
                         overflow + "px"
                     );
+                    element.classList.toggle(
+                        "is-overflowing",
+                        overflow > 1
+                    );
                 });
         };
 
