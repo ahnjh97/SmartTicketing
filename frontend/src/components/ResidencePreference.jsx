@@ -1108,10 +1108,36 @@ export default function ResidencePreference({
                     Number(theater.longitude)
                 );
 
+            const selected =
+                selectedTheaters.includes(
+                    Number(theater.theaterId)
+                );
+
+            const markerSvg =
+                selected
+                    ? '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffc426" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="#19160e"/></svg>'
+                    : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="#f5f5f5" stroke="#222" stroke-width="2"/><circle cx="10" cy="10" r="2.5" fill="#222"/></svg>';
+
+            const markerImage =
+                new window.kakao.maps.MarkerImage(
+                    "data:image/svg+xml;charset=UTF-8," +
+                        encodeURIComponent(markerSvg),
+                    selected
+                        ? new window.kakao.maps.Size(24, 24)
+                        : new window.kakao.maps.Size(20, 20),
+                    {
+                        offset: selected
+                            ? new window.kakao.maps.Point(12, 12)
+                            : new window.kakao.maps.Point(10, 10),
+                    }
+                );
+
             const marker =
                 new window.kakao.maps.Marker({
                     map: mapInstanceRef.current,
                     position,
+                    image: markerImage,
+                    zIndex: selected ? 30 : 10,
                 });
 
             const distanceText =
@@ -1133,22 +1159,22 @@ export default function ResidencePreference({
                         </div>
                     `,
                     yAnchor: 1.8,
-                    zIndex: 20,
+                    zIndex: 40,
                 });
 
             window.kakao.maps.event.addListener(
                 marker,
-                "mouseover",
-                () => overlay.setMap(mapInstanceRef.current)
-            );
-
-            window.kakao.maps.event.addListener(
-                marker,
-                "mouseout",
-                () => overlay.setMap(null)
+                "click",
+                () => {
+                    theaterOverlaysRef.current.forEach(
+                        (item) => item.setMap(null)
+                    );
+                    overlay.setMap(mapInstanceRef.current);
+                }
             );
 
             theaterMarkersRef.current.push(marker);
+            theaterOverlaysRef.current.push(overlay);
             theaterOverlaysRef.current.push(overlay);
         });
     }
