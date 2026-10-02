@@ -2267,3 +2267,10 @@ input:focus {
     text-align: center;
 }
 
+
+.theater-route-button.selected {
+    min-width: 96px;
+    padding: 7px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+}
