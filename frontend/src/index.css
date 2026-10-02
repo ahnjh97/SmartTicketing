@@ -2268,9 +2268,40 @@ input:focus {
 }
 
 
-.theater-route-button.selected {
-    min-width: 96px;
-    padding: 7px 9px;
-    font-size: 12px;
+.theater-item-main-selected {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.theater-selected-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0 10px 10px;
+}
+
+.theater-selected-rank {
+    flex: 1 1 50%;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--color-accent);
+    border-radius: 7px;
+    background: rgba(255, 196, 38, 0.12);
+    color: var(--color-accent);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.theater-selected-footer .theater-route-button {
+    flex: 0 0 50%;
+    width: 50%;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 8px;
+    font-size: 11px;
+    line-height: 1;
     white-space: nowrap;
 }
