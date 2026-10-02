@@ -34,171 +34,56 @@ export default function ProfilePage() {
         <div className="page">
             <div className="card profile-card">
                 <div className="profile-header">
-                    <div>
-                        <span className="profile-eyebrow">MY PAGE</span>
-                        <h1>회원정보</h1>
-                        <p className="profile-description">
-                            내 계정 정보와 영화관 · 좌석 선호 설정을 한눈에 확인하세요.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        disabled={pending}
-                        className="logout-button"
-                        onClick={logout}
-                    >
+                    <div><h1>회원정보</h1></div>
+                    <button type="button" disabled={pending} className="logout-button" onClick={logout}>
                         로그아웃
                     </button>
                 </div>
 
-                <div className="profile-overview">
-                    <div className="profile-overview-main">
-                        <div className="profile-avatar">
-                            {(user.name ?? "?").charAt(0)}
-                        </div>
-                        <div>
-                            <span className="profile-overview-label">ACCOUNT</span>
-                            <strong>{user.name ?? "회원"}</strong>
-                            <p>{user.loginId ?? "소셜 로그인 계정"}</p>
-                        </div>
-                    </div>
-
-                    <div className="profile-overview-meta">
-                        <div>
-                            <span>로그인 방식</span>
-                            <strong>
-                                {user.linkedProviders?.length
-                                    ? user.linkedProviders.join(", ")
-                                    : "일반 회원"}
-                            </strong>
-                        </div>
-                        <div>
-                            <span>생년월일</span>
-                            <strong>{user.birthDate ?? "미등록"}</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="profile-section-heading">
-                    <div>
-                        <span>ACCOUNT INFO</span>
-                        <h2>기본 정보</h2>
-                    </div>
-                </div>
-
-                <div className="user-info profile-basic-info">
-                    <div>
-                        <span>이름</span>
-                        <strong>{user.name ?? "미등록"}</strong>
-                    </div>
-                    <div>
-                        <span>아이디</span>
-                        <strong>{user.loginId ?? "소셜 로그인"}</strong>
-                    </div>
-                    <div>
-                        <span>생년월일</span>
-                        <strong>{user.birthDate ?? "미등록"}</strong>
-                    </div>
+                <div className="user-info">
+                    <div><span>이름</span><strong>{user.name}</strong></div>
+                    <div><span>아이디</span><strong>{user.loginId ?? "소셜 로그인"}</strong></div>
+                    <div><span>생년월일</span><strong>{user.birthDate ?? "미등록"}</strong></div>
                     <div>
                         <span>로그인 연동</span>
-                        <strong>
-                            {user.linkedProviders?.length
-                                ? user.linkedProviders.join(", ")
-                                : "일반 회원"}
-                        </strong>
+                        <strong>{user.linkedProviders?.length ? user.linkedProviders.join(", ") : "일반 회원"}</strong>
+                    </div>
+                    <div>
+                        <span>선호 영화관</span>
+                        <div>
+                            {user.preferredTheaters?.length ? user.preferredTheaters.map((theater) => (
+                                <div key={theater.theaterId} style={{ marginBottom: "6px" }}>
+                                    <strong>{theater.priority}위</strong>{" "}
+                                    {theater.theaterName} ({theater.brand})
+                                </div>
+                            )) : <span>미설정</span>}
+                        </div>
+                    </div>
+                    <div>
+                        <span>선호 좌석</span>
+                        <div>
+                            {user.preferredSeats?.length ? user.preferredSeats.map((seat, index) => {
+                                const position = typeof seat === "string" ? seat : seat.position;
+                                const priority = typeof seat === "string" ? index + 1 : seat.priority ?? index + 1;
+                                return (
+                                    <div key={`${position}-${priority}-${index}`} style={{ marginBottom: "6px" }}>
+                                        <strong>{priority}위</strong>{" "}{getSeatLabel(position)}
+                                    </div>
+                                );
+                            }) : <span>미설정</span>}
+                        </div>
                     </div>
                 </div>
 
-                <div className="profile-preference-grid">
-                    <section className="profile-info-panel">
-                        <div className="profile-section-heading">
-                            <div>
-                                <span>PREFERRED THEATERS</span>
-                                <h2>선호 영화관</h2>
-                            </div>
-                            <em>{user.preferredTheaters?.length ?? 0}곳</em>
-                        </div>
-
-                        <div className="profile-preference-list">
-                            {user.preferredTheaters?.length ? (
-                                user.preferredTheaters.map((theater) => (
-                                    <div className="profile-preference-item" key={theater.theaterId}>
-                                        <b>{theater.priority}위</b>
-                                        <div>
-                                            <strong>{theater.theaterName}</strong>
-                                            <span>{theater.brand}</span>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="profile-empty">선호 영화관이 아직 설정되지 않았습니다.</div>
-                            )}
-                        </div>
-                    </section>
-
-                    <section className="profile-info-panel">
-                        <div className="profile-section-heading">
-                            <div>
-                                <span>PREFERRED SEATS</span>
-                                <h2>선호 좌석</h2>
-                            </div>
-                            <em>{user.preferredSeats?.length ?? 0}개</em>
-                        </div>
-
-                        <div className="profile-preference-list">
-                            {user.preferredSeats?.length ? (
-                                user.preferredSeats.map((seat, index) => {
-                                    const position =
-                                        typeof seat === "string"
-                                            ? seat
-                                            : seat.position;
-
-                                    const priority =
-                                        typeof seat === "string"
-                                            ? index + 1
-                                            : seat.priority ?? index + 1;
-
-                                    return (
-                                        <div
-                                            className="profile-preference-item"
-                                            key={`${position}-${priority}-${index}`}
-                                        >
-                                            <b>{priority}위</b>
-                                            <div>
-                                                <strong>{getSeatLabel(position)}</strong>
-                                                <span>추천 좌석 위치</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="profile-empty">선호 좌석이 아직 설정되지 않았습니다.</div>
-                            )}
-                        </div>
-                    </section>
-                </div>
-
-                <div className="profile-action-area profile-page-actions">
-                    <button
-                        type="button"
-                        disabled={pending}
-                        className="primary-button"
-                        onClick={() => {
-                            navigate("preferences");
-                            setError("");
-                            setMessage("");
-                        }}
-                    >
+                <div className="profile-action-area">
+                    <button type="button" disabled={pending} className="primary-button" onClick={() => {
+                        navigate("preferences");
+                        setError("");
+                        setMessage("");
+                    }}>
                         회원정보 수정
                     </button>
-
-                    <button
-                        type="button"
-                        disabled={pending}
-                        className="withdraw-button"
-                        onClick={withdraw}
-                    >
+                    <button type="button" disabled={pending} className="withdraw-button" onClick={withdraw}>
                         회원 탈퇴
                     </button>
                 </div>
