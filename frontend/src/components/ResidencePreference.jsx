@@ -1158,7 +1158,7 @@ export default function ResidencePreference({
                                 : ""}
                         </div>
                     `,
-                    yAnchor: 1.15,
+                    yAnchor: 1,
                     zIndex: 40,
                 });
 
