@@ -14,6 +14,7 @@ import PreferencesPage from "./pages/PreferencesPage.jsx";
 import PreferenceSetupPage from "./pages/PreferenceSetupPage.jsx";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage.jsx";
 import TicketsPage from "./pages/TicketsPage.jsx";
+import NotificationsPage from "./pages/NotificationsPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
                         <Route path={PAGE_PATHS.movies} element={<BookingPage key="movies" mode="movie" />} />
                         <Route path={PAGE_PATHS.theaters} element={<BookingPage key="theaters" mode="theater" />} />
                         <Route path={PAGE_PATHS.tickets} element={<TicketsPage />} />
+                        <Route path={PAGE_PATHS.notifications} element={<NotificationsPage />} />
                         <Route path={PAGE_PATHS.profile} element={<ProfilePage />} />
                         <Route path={PAGE_PATHS.preferences} element={<PreferencesPage />} />
                         <Route path={PAGE_PATHS.preferenceSetup} element={<PreferenceSetupPage />} />
