@@ -159,10 +159,13 @@ export default function CommonHeader({
     async function markNotificationRead(id) {
         try {
             await notificationApi.read(id);
-            setNotifications((items) =>
-                items.map((item) => item.id === id ? { ...item, read: true } : item)
-            );
-            setUnreadCount((count) => Math.max(0, count - 1));
+            setNotifications((items) => {
+                const target = items.find((item) => item.id === id);
+                if (target && !target.read) {
+                    setUnreadCount((count) => Math.max(0, count - 1));
+                }
+                return items.map((item) => item.id === id ? { ...item, read: true } : item);
+            });
         } catch {
             // 목록 UI는 유지하고 다음 갱신에서 다시 확인한다.
         }
@@ -181,8 +184,13 @@ export default function CommonHeader({
     async function removeNotification(id) {
         try {
             await notificationApi.delete(id);
-            setNotifications((items) => items.filter((item) => item.id !== id));
-            setUnreadCount((count) => Math.max(0, count - 1));
+            setNotifications((items) => {
+                const target = items.find((item) => item.id === id);
+                if (target && !target.read) {
+                    setUnreadCount((count) => Math.max(0, count - 1));
+                }
+                return items.filter((item) => item.id !== id);
+            });
         } catch {
             // 삭제 실패 시 현재 목록을 유지한다.
         }
@@ -331,7 +339,7 @@ export default function CommonHeader({
                 </>}
             </div>
 
-            {user && !compact && (
+            {user && (
                 <>
                     <div className={`common-header-popover common-header-notification-popover${openPanel === "notifications" ? " is-open" : ""}`}>
                         <div className="common-header-popover-header">
