@@ -1164,7 +1164,7 @@ export default function ResidencePreference({
 
             window.kakao.maps.event.addListener(
                 marker,
-                "click",
+                "mouseover",
                 () => {
                     theaterOverlaysRef.current.forEach(
                         (item) => item.setMap(null)
@@ -1173,8 +1173,15 @@ export default function ResidencePreference({
                 }
             );
 
+            window.kakao.maps.event.addListener(
+                marker,
+                "mouseout",
+                () => {
+                    overlay.setMap(null);
+                }
+            );
+
             theaterMarkersRef.current.push(marker);
-            theaterOverlaysRef.current.push(overlay);
             theaterOverlaysRef.current.push(overlay);
         });
     }
