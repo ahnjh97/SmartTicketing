@@ -245,9 +245,11 @@ export default function CommonHeader({
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4V7Z" />
-                            <path d="M12 7v10" />
-                            <path d="M8 10h1M15 14h1" />
+                            <path d="M4 7h16v10H4z" />
+                            <path d="M4 10a2 2 0 0 0 0 4" />
+                            <path d="M20 10a2 2 0 0 1 0 4" />
+                            <path d="M9 10h6" />
+                            <path d="M9 14h6" />
                         </svg>
                     </span>
                 </button>
