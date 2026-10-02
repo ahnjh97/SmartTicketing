@@ -52,6 +52,8 @@ beforeEach(() => {
         if (url === "/api/auth/logout") return new Response(null, { status: 204 });
         if (url === "/api/users/me") return new Response(JSON.stringify(completedUser));
         if (url === "/api/tickets") return new Response('[]');
+        if (url === '/api/booking-groups') return new Response('{"items":[],"hasMore":false}');
+        if (url.startsWith('/api/notifications')) return new Response('[]');
         throw new Error(`Unexpected API: ${url}`);
     }));
 });
@@ -97,6 +99,24 @@ test("guest direct access to a member page reaches login", async () => {
     await screen.findByLabelText("아이디");
     await at("/login");
     expect(fetch).not.toHaveBeenCalled();
+});
+
+test('notification deep link survives login and resolves only through the owned recovery API', async () => {
+    const original = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+        if (url === '/api/booking-groups/42/recovery') return new Response(JSON.stringify({ path: '/theaters?entry=THEATER_NORMAL&group=42&reservation=73' }));
+        if (url === '/api/booking-groups/42') return new Response(JSON.stringify({ id: 42, activeReservationId: 73 }));
+        if (url === '/api/reservations/73/payment') return new Response(JSON.stringify({ reservation: { id: 73, groupId: 42, status: 'CANCELLED', seatLabels: [], totalAmount: 10000 } }));
+        if (url === '/api/booking-groups/42/waiting-queues') return new Response(JSON.stringify({ groupId: 42, items: [], choices: [] }));
+        return original(url, options);
+    }));
+    mount('/booking/restore?group=42');
+    await at('/login');
+    expect(sessionStorage.getItem('booking.return')).toBe('/booking/restore?group=42');
+    fireEvent.change(screen.getByLabelText('아이디'), { target: { value: 'member' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인', exact: true }));
+    await at('/theaters?entry=THEATER_NORMAL&group=42&reservation=73');
 });
 
 test('all public pages reuse the home header without route-specific appearance', async () => {

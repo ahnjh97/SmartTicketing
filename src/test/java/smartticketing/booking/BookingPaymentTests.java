@@ -88,7 +88,10 @@ class BookingPaymentTests {
             if (payment == null) assertThat(ps).isEmpty(); else assertThat(ps).containsExactly(payment);
             var ts = em.createQuery("select t.status from Ticket t where t.reservation.id=:id",TicketStatus.class).setParameter("id",f.reservation).getResultList();
             if (ticket == null) assertThat(ts).isEmpty(); else assertThat(ts).containsExactly(ticket);
-            assertThat(em.createQuery("select count(n) from Notification n where n.user.id=:id",Long.class).setParameter("id",f.user).getSingleResult()).isEqualTo(notifications);
+            // Acquisition now emits exactly one notification in addition to payment events.
+            assertThat(em.createQuery("select count(n) from Notification n where n.user.id=:id",Long.class).setParameter("id",f.user).getSingleResult()).isEqualTo(notifications + 1);
+            assertThat(em.createQuery("from Notification n where n.user.id=:id",Notification.class).setParameter("id",f.user).getResultList())
+                    .allSatisfy(n -> { assertThat(n.getBookingGroupId()).isEqualTo(f.group); assertThat(n.getReservationId()).isEqualTo(f.reservation); });
             if (reservation != ReservationStatus.PENDING) assertThat(em.find(BookingGroupHold.class,f.group)).isNull();
             assertThat(em.find(Showtime.class,f.show).getAvailableSeats()).isEqualTo(seats == SeatStatus.AVAILABLE ? 2 : 0);
             return null;
@@ -107,6 +110,48 @@ class BookingPaymentTests {
         assertThat(pay(f,successKey,true,CLOCK).status()).isEqualTo(409);
         assertThat(pay(f,key(),false,CLOCK).status()).isEqualTo(201);
         assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,2);
+    }
+
+    @Test void recoveryDiscoversConfirmedReservationAfterRestartAndPreservesLegacyNotifications() {
+        var f = fixture();
+        long legacy = tx(em -> notifications(em).create(f.user, NotificationType.PAYMENT_FAILED, "기존 알림 보존").getId());
+        pay(f, key(), false, CLOCK);
+        db.restartPersistence();
+        tx(em -> {
+            var recovery = new BookingRecoveryService(em, new BookingHoldService(em, new BookingIdempotency(em), CLOCK));
+            var page = recovery.list(f.user, null);
+            assertThat(page.items()).hasSize(1);
+            assertThat(page.items().getFirst().path()).contains("group=" + f.group, "reservation=" + f.reservation, "entry=THEATER_NORMAL");
+            assertThat(recovery.list(f.other, null).items()).isEmpty();
+            assertThat(recovery.one(f.user, f.group).status()).isEqualTo(BookingGroupStatus.COMPLETED);
+            var old = notifications(em).list(f.user, false).stream().filter(n -> n.id().equals(legacy)).findFirst().orElseThrow();
+            assertThat(old.message()).isEqualTo("기존 알림 보존");
+            assertThat(old.groupId()).isNull(); assertThat(old.reservationId()).isNull();
+            return null;
+        });
+    }
+
+    @Test void recoveryCursorDoesNotLoseOlderGroupsOrIncludeAnotherUser() {
+        var f = fixture();
+        tx(em -> {
+            var source = em.find(BookingRequestGroup.class, f.group);
+            for (int i = 0; i < 22; i++) {
+                var g = new BookingRequestGroup(); g.setUser(source.getUser()); g.setMovie(source.getMovie());
+                g.setEntryPoint(BookingEntryPoint.MOVIE_SMART); g.setViewingDate(source.getViewingDate());
+                g.setStartTimeFrom(LocalTime.of(22,0)); g.setStartTimeTo(LocalTime.of(2,0));
+                g.setPartySize(2); g.setCreatedAt(LocalDateTime.now(CLOCK)); g.setUpdatedAt(LocalDateTime.now(CLOCK)); em.persist(g);
+            }
+            return null;
+        });
+        tx(em -> {
+            var recovery = new BookingRecoveryService(em, new BookingHoldService(em, new BookingIdempotency(em), CLOCK));
+            var first = recovery.list(f.user, null); assertThat(first.items()).hasSize(20); assertThat(first.hasMore()).isTrue();
+            assertThat(first.items().getFirst().path()).contains("/movies?entry=MOVIE_SMART", "from=22:00", "until=02:00");
+            var second = recovery.list(f.user, first.items().getLast().id());
+            assertThat(second.items()).hasSize(3); assertThat(second.hasMore()).isFalse();
+            assertThat(second.items().stream().map(BookingRecoveryService.Item::id)).doesNotContainAnyElementsOf(first.items().stream().map(BookingRecoveryService.Item::id).toList());
+            return null;
+        });
     }
     @Test void wholeCancellationRefundsAndReplaysWithoutDuplicateReleaseOrNotification() {
         var f = fixture(); pay(f,key(),false,CLOCK); var key = key();

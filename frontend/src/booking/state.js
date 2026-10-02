@@ -27,12 +27,12 @@ export function availability(show, party) {
     return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 · 인원 선택 후 확인`;
 }
 export function rememberBooking(url) {
-    if (!/^\/(movies|theaters)(\?|$)/.test(url)) return;
+    if (!/^\/(movies|theaters|booking\/restore)(\?|$)/.test(url)) return;
     try { sessionStorage.setItem('booking.return', url); } catch { /* URL remains usable without storage. */ }
 }
 export function bookingReturn() {
     try {
         const url = sessionStorage.getItem('booking.return');
-        return /^\/(movies|theaters)(\?|$)/.test(url ?? '') ? url : null;
+        return /^\/(movies|theaters|booking\/restore)(\?|$)/.test(url ?? '') ? url : null;
     } catch { return null; }
 }
