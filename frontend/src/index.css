@@ -783,10 +783,11 @@ input:focus {
 .theater-main strong,
 .theater-main small {
     display: block;
-    overflow: visible;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
     text-overflow: clip;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
     word-break: keep-all;
 }
 
@@ -800,6 +801,25 @@ input:focus {
     color: #777;
     font-size: 9px;
     line-height: 1.35;
+}
+
+/* 긴 영화관 이름은 카드 구조를 늘리지 않고 한 줄에서 좌우로 표시 */
+.theater-main strong {
+    position: relative;
+}
+
+.theater-main strong:hover {
+    overflow: visible;
+    animation: theater-name-marquee 5s ease-in-out infinite alternate;
+}
+
+@keyframes theater-name-marquee {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(var(--theater-name-shift, -30px));
+    }
 }
 
 .theater-time {
