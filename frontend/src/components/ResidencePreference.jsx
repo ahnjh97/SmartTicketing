@@ -1136,32 +1136,15 @@ export default function ResidencePreference({
             const borderRadius = selected ? 18 : 16;
             const borderColor = selected ? "#ffc426" : "#111";
 
-            // PNG 안의 검정 원은 작업용 가이드이므로 SVG 필터에서 투명하게 제거합니다.
-            // 실제 지도에는 PNG 내부의 영화관 로고만 보이고, 선택 여부는 바깥 테두리로 표시합니다.
+            // 외부 PNG를 data SVG 안에 다시 참조하면 카카오맵 MarkerImage에서 표시되지 않을 수 있습니다.
+            // 실제 PNG를 MarkerImage로 직접 사용하고, 선택 상태는 마커 크기로 구분합니다.
             const logoUrl =
                 "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
                 logoFile;
 
-            const markerSvg =
-                '<svg xmlns="http://www.w3.org/2000/svg" width="' + markerSize + '" height="' + markerSize + '" viewBox="0 0 ' + markerSize + ' ' + markerSize + '">' +
-                    '<defs>' +
-                        '<filter id="remove-black" x="-20%" y="-20%" width="140%" height="140%">' +
-                            '<feColorMatrix type="matrix" values="' +
-                                '1 0 0 0 0 ' +
-                                '0 1 0 0 0 ' +
-                                '0 0 1 0 0 ' +
-                                '0.333 0.333 0.333 0 0' +
-                            '"/>' +
-                        '</filter>' +
-                    '</defs>' +
-                    '<circle cx="' + center + '" cy="' + center + '" r="' + borderRadius + '" fill="transparent" stroke="' + borderColor + '" stroke-width="3"/>' +
-                    '<image href="' + logoUrl + '" x="4" y="4" width="' + (markerSize - 8) + '" height="' + (markerSize - 8) + '" preserveAspectRatio="xMidYMid meet" filter="url(#remove-black)"/>' +
-                '</svg>';
-
             const markerImage =
                 new window.kakao.maps.MarkerImage(
-                    "data:image/svg+xml;charset=UTF-8," +
-                        encodeURIComponent(markerSvg),
+                    logoUrl,
                     new window.kakao.maps.Size(markerSize, markerSize),
                     {
                         offset: new window.kakao.maps.Point(center, center),
