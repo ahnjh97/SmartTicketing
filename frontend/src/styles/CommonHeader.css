@@ -148,8 +148,8 @@
 }
 
 .common-header-notification-trigger {
-    width: 46px;
-    height: 46px;
+    width: 48px;
+    height: 48px;
     padding: 8px;
 }
 
@@ -163,8 +163,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     padding: 8px;
     border: 0;
     border-radius: 0;
@@ -179,9 +179,9 @@
 
 .common-header-trigger-icon {
     display: inline-flex;
-    width: 21px;
-    height: 21px;
-    flex: 0 0 21px;
+    width: 23px;
+    height: 23px;
+    flex: 0 0 23px;
 }
 
 .common-header-trigger-icon svg {
