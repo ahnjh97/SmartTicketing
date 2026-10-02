@@ -172,8 +172,6 @@ export default function SignupPage() {
                 .replace(/\D/g, "")
                 .slice(0, 4);
 
-        setBirthYear(value);
-
         if (value.length === 4) {
             const year = Number(value);
             const currentYear = new Date().getFullYear();
@@ -185,11 +183,16 @@ export default function SignupPage() {
                 return;
             }
 
+            setBirthYear(value);
             setError("");
 
             birthMonthRef.current?.focus();
             birthMonthRef.current?.select();
+            return;
         }
+
+        setBirthYear(value);
+        setError("");
     }
 
     function handleBirthMonthChange(event) {
