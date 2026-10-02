@@ -1524,13 +1524,13 @@ export default function ResidencePreference({
                                 theater.latitude != null &&
                                 theater.longitude != null
                                     ? "https://map.kakao.com/link/by/car/" +
-                                      encodeURIComponent(address || "선택한 위치") +
+                                      (address || "선택한 위치") +
                                       "," +
                                       location.latitude +
                                       "," +
                                       location.longitude +
                                       "/to/" +
-                                      encodeURIComponent(theater.name) +
+                                      theater.name +
                                       "," +
                                       theater.latitude +
                                       "," +
