@@ -143,6 +143,10 @@ export default function ResidencePreference({
     const mapRef =
         useRef(null);
 
+    const birthYearRef = useRef(null);
+    const birthMonthRef = useRef(null);
+    const birthDayRef = useRef(null);
+
     const mapInstanceRef =
         useRef(null);
 
@@ -164,10 +168,17 @@ export default function ResidencePreference({
     const isMapSelectionModeRef =
         useRef(false);
 
-    const [birthDate, setBirthDate] =
-        useState(
-            user.birthDate ?? ""
-        );
+    const initialBirthDate = user.birthDate ?? "";
+    const initialBirthParts = initialBirthDate.split("-");
+
+    const [birthYear, setBirthYear] = useState(initialBirthParts[0] ?? "");
+    const [birthMonth, setBirthMonth] = useState(initialBirthParts[1] ?? "");
+    const [birthDay, setBirthDay] = useState(initialBirthParts[2] ?? "");
+
+    const birthDate =
+        birthYear.length === 4 && birthMonth.length === 2 && birthDay.length === 2
+            ? birthYear + "-" + birthMonth + "-" + birthDay
+            : "";
 
     const [address, setAddress] =
         useState(
@@ -1004,6 +1015,16 @@ export default function ResidencePreference({
 
             setTheaters(normalized);
             renderTheaterMarkers(normalized);
+
+            // 영화관 마커를 그린 뒤 조회 기준점(현재 위치)도 다시 표시합니다.
+            if (mapInstanceRef.current && window.kakao?.maps) {
+                currentMarkerRef.current?.setMap(null);
+                currentMarkerRef.current = new window.kakao.maps.Marker({
+                    map: mapInstanceRef.current,
+                    position: new window.kakao.maps.LatLng(latitude, longitude),
+                    title: locationSource === "MAP" ? "선택한 위치" : "현재 위치",
+                });
+            }
         } catch (e) {
             setError(
                 e.message ??
@@ -1198,6 +1219,28 @@ export default function ResidencePreference({
             .filter((theaterId) => Number.isFinite(theaterId));
     }
 
+    function handleBirthYearChange(event) {
+        const value = event.target.value.replace(/\D/g, "").slice(0, 4);
+        setBirthYear(value);
+        if (value.length === 4) {
+            birthMonthRef.current?.focus();
+            birthMonthRef.current?.select();
+        }
+    }
+
+    function handleBirthMonthChange(event) {
+        const value = event.target.value.replace(/\D/g, "").slice(0, 2);
+        setBirthMonth(value);
+        if (value.length === 2) {
+            birthDayRef.current?.focus();
+            birthDayRef.current?.select();
+        }
+    }
+
+    function handleBirthDayChange(event) {
+        setBirthDay(event.target.value.replace(/\D/g, "").slice(0, 2));
+    }
+
     async function save() {
         setError("");
         setMessage("");
@@ -1321,20 +1364,13 @@ export default function ResidencePreference({
                         생년월일
                     </label>
 
-                    <input
-                        type="date"
-                        value={
-                            birthDate
-                        }
-                        onChange={(
-                            e
-                        ) =>
-                            setBirthDate(
-                                e.target.value
-                            )
-                        }
-                        required
-                    />
+                    <div className="birth-date-input-row">
+                        <input ref={birthYearRef} type="text" inputMode="numeric" value={birthYear} onChange={handleBirthYearChange} placeholder="YYYY" maxLength={4} aria-label="생년월일 년도" required />
+                        <span>-</span>
+                        <input ref={birthMonthRef} type="text" inputMode="numeric" value={birthMonth} onChange={handleBirthMonthChange} placeholder="MM" maxLength={2} aria-label="생년월일 월" required />
+                        <span>-</span>
+                        <input ref={birthDayRef} type="text" inputMode="numeric" value={birthDay} onChange={handleBirthDayChange} placeholder="DD" maxLength={2} aria-label="생년월일 일" required />
+                    </div>
                 </section>
             )}
 
@@ -1507,7 +1543,7 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    선택한 위치를 기준으로 가까운 영화관 20개를 표시합니다.
+                    선택한 위치를 기준으로 가까운 영화관 12개를 표시합니다.
                 </p>
 
                 {theaterLoading && (
@@ -1526,8 +1562,24 @@ export default function ResidencePreference({
                         </p>
                     )}
 
+                {selectedTheaters.length > 0 && (
+                    <div className="theater-priority-list">
+                        {selectedTheaters.map((theaterId, index) => {
+                            const theater = theaters.find((item) => Number(item.theaterId) === Number(theaterId));
+                            if (!theater) return null;
+                            return (
+                                <div key={theater.theaterId} className="theater-priority-item">
+                                    <strong>{index + 1}순위</strong>
+                                    <span>{theater.name}<small>{theater.brand ? " · " + theater.brand : ""}</small></span>
+                                    <button type="button" onClick={() => toggleTheater(Number(theater.theaterId))} aria-label={(index + 1) + "순위 " + theater.name + " 선택 해제"}>×</button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
                 <div className="theater-list">
-                    {theaters.map(
+                    {theaters.slice(0, 12).map(
                         (
                             theater,
                             index
