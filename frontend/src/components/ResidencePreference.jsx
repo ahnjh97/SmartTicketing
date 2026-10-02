@@ -1637,6 +1637,118 @@ export default function ResidencePreference({
                                             : "theater-item"
                                     }
                                 >
+                                    {selected ? (
+                                        <>
+                                    <button
+                                        type="button"
+                                        className="theater-item-main theater-item-main-selected"
+                                        onClick={() =>
+                                            toggleTheater(
+                                                Number(theater.theaterId)
+                                            )
+                                        }
+                                    >
+
+
+                                    <div className="theater-main">
+                                        <div className="theater-name-marquee">
+                                            <strong>
+                                                {
+                                                    theater.name
+                                                }
+                                            </strong>
+                                        </div>
+
+                                        <small>
+                                            {
+                                                theater.address
+                                            }
+                                        </small>
+                                    </div>
+
+                                    <div className="theater-time">
+                                        {theaterSort === "DISTANCE" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.distance != null
+                                                        ? theater.distance >= 1000
+                                                            ? `${(theater.distance / 1000).toFixed(1)}km`
+                                                            : `${theater.distance}m`
+                                                        : "-"}
+                                                </strong>
+                                                <small>직선거리</small>
+                                            </div>
+                                        )}
+
+                                        {theaterSort === "TRANSIT" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.transitMinutes != null
+                                                        ? `${theater.transitMinutes}분`
+                                                        : "-"}
+                                                </strong>
+                                                <small>대중교통</small>
+                                                {theater.transitDistance != null && (
+                                                    <small>
+                                                        {(theater.transitDistance / 1000).toFixed(1)}km
+                                                    </small>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {theaterSort === "WALK" && (
+                                            <div>
+                                                <strong>
+                                                    {theater.walkMinutes != null
+                                                        ? `${theater.walkMinutes}분`
+                                                        : "-"}
+                                                </strong>
+                                                <small>도보</small>
+                                                {theater.walkDistance != null && (
+                                                    <small>
+                                                        {(theater.walkDistance / 1000).toFixed(1)}km
+                                                    </small>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    </button>
+
+                                    <a
+                                        className={
+                                            selected
+                                                ? "theater-route-button selected"
+                                                : "theater-route-button"
+                                        }
+                                        href={kakaoDirectionsUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        {selected
+                                            ? (selectedTheaters.indexOf(
+                                                Number(theater.theaterId)
+                                              ) + 1) + "순위 | 길찾기"
+                                            : "길찾기"}
+                                    </a>
+                                            <div className="theater-selected-footer">
+                                                <div className="theater-selected-rank">
+                                                    {(selectedTheaters.indexOf(
+                                                        Number(theater.theaterId)
+                                                    ) + 1) + "순위"}
+                                                </div>
+                                    <a
+                                        className="theater-route-button"
+                                        href={kakaoDirectionsUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        "길찾기"
+                                    </a>
+                                            </div>
+                                        </>
+                                    ) : (
                                     <button
                                         type="button"
                                         className="theater-item-main"
@@ -1739,6 +1851,7 @@ export default function ResidencePreference({
                                               ) + 1) + "순위 | 길찾기"
                                             : "길찾기"}
                                     </a>
+                                    )}
                                 </div>
                             );
                         }
