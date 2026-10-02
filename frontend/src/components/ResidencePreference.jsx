@@ -1151,6 +1151,15 @@ export default function ResidencePreference({
                     }
                 );
 
+            const marker =
+                new window.kakao.maps.Marker({
+                    map: mapInstanceRef.current,
+                    position,
+                    image: markerImage,
+                    title: theater.name,
+                    zIndex: selected ? 30 : 20,
+                });
+
             const distanceText =
                 theater.distance != null
                     ? theater.distance >= 1000
