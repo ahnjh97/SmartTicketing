@@ -175,6 +175,18 @@ export default function SignupPage() {
         setBirthYear(value);
 
         if (value.length === 4) {
+            const year = Number(value);
+            const currentYear = new Date().getFullYear();
+
+            if (year < 1900 || year > currentYear) {
+                setError(
+                    "생년월일의 년도는 1900년부터 현재 년도까지 입력해주세요."
+                );
+                return;
+            }
+
+            setError("");
+
             birthMonthRef.current?.focus();
             birthMonthRef.current?.select();
         }
@@ -224,6 +236,26 @@ export default function SignupPage() {
 
     function handleSubmit(event) {
         event.preventDefault();
+
+        const year = Number(birthYear);
+        const month = Number(birthMonth);
+        const day = Number(birthDay);
+        const currentYear = new Date().getFullYear();
+
+        if (
+            birthYear.length !== 4 ||
+            year < 1900 ||
+            year > currentYear ||
+            birthMonth.length !== 2 ||
+            month < 1 ||
+            month > 12 ||
+            birthDay.length !== 2 ||
+            day < 1 ||
+            day > new Date(year, month, 0).getDate()
+        ) {
+            setError("올바른 생년월일을 입력해주세요.");
+            return;
+        }
 
         if (
             loginIdCheckStatus !==
