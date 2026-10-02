@@ -1397,10 +1397,6 @@ export default function ResidencePreference({
         return promise;
     }
 
-    // 원형 마커 크기와 별개로 로고만 확대/축소합니다.
-    // 1.0 = 현재 크기, 1.15 = 15% 확대, 0.9 = 10% 축소
-    const THEATER_LOGO_SCALE = 1.15;
-
     async function getTheaterMarkerImage(
         brand,
         selected,
@@ -1500,15 +1496,13 @@ export default function ResidencePreference({
                 }
             );
 
-        const logoPadding =
-            Math.round(pixelSize * 0.12);
-        const baseLogoSize =
-            pixelSize - logoPadding * 2;
+        // 가공된 PNG는 실제 로고 영역만 남겨진 정사각형 이미지이므로
+        // 마커 안쪽을 최대한 채우도록 배치합니다.
+        // 검정색 작업용 원/회색 배경은 loadTheaterLogoData()에서 제거됩니다.
+        const innerSize =
+            pixelSize - borderWidth * 2;
         const logoSize =
-            Math.min(
-                pixelSize - borderWidth,
-                baseLogoSize * THEATER_LOGO_SCALE
-            );
+            innerSize * 0.94;
 
         context.drawImage(
             logoImage,
