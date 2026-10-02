@@ -801,7 +801,7 @@ input:focus {
 }
 
 .theater-name-marquee strong {
-    animation: theater-name-marquee 1s ease-in-out infinite alternate;
+    animation: theater-name-marquee 1.5s ease-in-out infinite alternate;
 }
 
 .theater-main small {
