@@ -2200,9 +2200,11 @@ input:focus {
 .profile-card .primary-button,
 .profile-card .withdraw-button {
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(32, 32, 32, 0.52);
+    background: rgba(32, 32, 32, 0.46);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+    -webkit-appearance: none;
+    appearance: none;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         0 5px 16px rgba(0, 0, 0, 0.12);
@@ -2212,7 +2214,7 @@ input:focus {
 .profile-card .primary-button:hover:not(:disabled),
 .profile-card .withdraw-button:hover:not(:disabled) {
     border-color: rgba(255, 204, 0, 0.3);
-    background: rgba(55, 55, 55, 0.58);
+    background: rgba(55, 55, 55, 0.46);
 }
 
 @media (max-width: 700px) {
