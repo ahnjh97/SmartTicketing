@@ -71,7 +71,7 @@ export default function SmartBooking({ booking }) {
                             : `${booking.theater.data?.name || '선택한 극장'} · ${booking.selectedShow?.startTime.slice(11,16) || '회차 확인 중'}`}</p></div>
                     <AudienceFields {...audience} onChange={changeAudience} disabled={flow.busy || Boolean(flow.group)}/>
                     {movieMode && party !== Number(flow.group?.partySize || booking.party) && <p className={styles.error}>선택한 총 {flow.group?.partySize || booking.party}명에 맞춰 성인·청소년 인원을 나눠주세요.</p>}
-                    <p className={styles.hint}>2명 이상은 전원 같은 행·같은 통로 구간의 연속좌석만 선택합니다.</p>
+                    <p className={styles.hint}>전체 연석 우선. 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2·3+3·2+4로 다른 행·통로에도 나눠 앉을 수 있습니다.</p>
                     {!ready && <><QueryStatus query={movieMode ? booking.detail : booking.shows}/>{!choiceLoading && <p role="alert">영화·날짜·시간 또는 회차를 다시 선택해주세요.</p>}</>}
                 </section>
                 <aside className={styles.plan} aria-label="자동 선택 기준" aria-busy={flow.busy}>

@@ -6,9 +6,9 @@ import smartticketing.entity.enums.SeatStatus;
 
 import java.util.*;
 
-/** Pure selection: one entire contiguous block, with no inventory mutation. */
+/** Pure selection: full contiguous seating first, then permitted disjoint blocks. */
 final class SmartSeatCandidates {
-    record Block(List<Long> seatIds, int preferenceRank, String row, String segment, int firstPosition) {}
+    record Block(List<Long> seatIds, int preferenceRank, String row, String segment, int firstPosition, boolean split) {}
     record Analysis(boolean layoutComplete, int available, List<Block> blocks) {}
     private record Position(String row, String segment, Integer offset) {}
 
@@ -46,9 +46,55 @@ final class SmartSeatCandidates {
                 ids.add(seat.getId());
             }
             if (ids.size() == party) blocks.add(new Block(ids.stream().sorted().toList(), rank,
-                    first.getSeatRow(), first.getAdjacencySegment(), first.getPositionInSegment()));
+                    first.getSeatRow(), first.getAdjacencySegment(), first.getPositionInSegment(), false));
+        }
+        // 전체 연석이 있으면 해당 회차의 분할 후보는 만들 필요가 없다.
+        if (blocks.isEmpty()) {
+            for (var pattern : SeatPartyRules.patterns(party)) {
+                if (pattern.size() == 1) continue;
+                for (int rank = 0; rank <= preferences.size(); rank++) {
+                    var selected = split(sorted, pattern, preferences, rank, 0, 0, new HashSet<>());
+                    if (selected == null) continue;
+                    var first = selected.getFirst().getSeat();
+                    blocks.add(new Block(selected.stream().map(i -> i.getSeat().getId()).sorted().toList(), rank,
+                            first.getSeatRow(), first.getAdjacencySegment(), first.getPositionInSegment(), true));
+                    break;
+                }
+            }
         }
         return new Analysis(true, available, List.copyOf(blocks));
+    }
+
+    // index×묶음 사용 비트마스크를 메모해 좌석 조합의 전수 열거를 피한다.
+    private static List<ShowtimeSeat> split(List<ShowtimeSeat> seats, List<Integer> pattern,
+            List<SeatPosition> preferences, int rank, int index, int used, Set<Integer> failed) {
+        if (used == (1 << pattern.size()) - 1) return List.of();
+        if (index >= seats.size()) return null;
+        int key = index * 8 + used;
+        if (failed.contains(key)) return null;
+        var first = seats.get(index).getSeat();
+        var triedSizes = new HashSet<Integer>();
+        for (int part = 0; part < pattern.size(); part++) {
+            int size = pattern.get(part);
+            if ((used & (1 << part)) != 0 || !triedSizes.add(size) || index + size > seats.size()) continue;
+            boolean valid = true;
+            for (int offset = 0; offset < size; offset++) {
+                var item = seats.get(index + offset); var seat = item.getSeat();
+                int preference = preferences.indexOf(seat.getSeatPosition());
+                if (!available(item) || !seat.getSeatRow().equals(first.getSeatRow())
+                        || !seat.getAdjacencySegment().equals(first.getAdjacencySegment())
+                        || seat.getPositionInSegment() != first.getPositionInSegment() + offset
+                        || (preference < 0 ? preferences.size() : preference) > rank) { valid = false; break; }
+            }
+            if (!valid) continue;
+            var tail = split(seats, pattern, preferences, rank, index + size, used | (1 << part), failed);
+            if (tail != null) {
+                var result = new ArrayList<>(seats.subList(index, index + size)); result.addAll(tail); return result;
+            }
+        }
+        var skipped = split(seats, pattern, preferences, rank, index + 1, used, failed);
+        if (skipped == null) failed.add(key);
+        return skipped;
     }
 
     private static boolean available(ShowtimeSeat s) {

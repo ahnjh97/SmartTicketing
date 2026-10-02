@@ -13,6 +13,21 @@ import java.util.function.Function;
 import static org.assertj.core.api.Assertions.*;
 
 class BookingWaitingTests {
+    @Test void dispatcherAllocatesAllPermittedSplitPatternsAtomically() {
+        for (int[] parts : List.of(new int[]{2,2}, new int[]{2,3}, new int[]{2,2,2}, new int[]{3,3}, new int[]{2,4})) {
+            int party = Arrays.stream(parts).sum(); var f = fixture(party,party);
+            tx(em -> { BookingSmartTests.partition(BookingSmartTests.inventory(em,f.shows.getFirst()),parts); return null; });
+            register(f);
+            assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+            statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+            tx(em -> {
+                var rows = BookingSmartTests.inventory(em,f.shows.getFirst());
+                assertThat(rows).hasSize(party).allMatch(i -> i.getStatus() == SeatStatus.HOLDING);
+                assertThat(rows.stream().map(i -> i.getReservation().getId()).distinct()).hasSize(1);
+                return null;
+            });
+        }
+    }
     static TemporaryMysqlDatabase db;
     static final Clock CLOCK = BookingSmartTests.CLOCK;
     static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
@@ -235,9 +250,9 @@ class BookingWaitingTests {
         assertThat(dispatcher(CLOCK).dispatch(second.shows.getFirst())).isZero(); assertThat(state(second).activeReservationId()).isNull();
     }
 
-    @Test void waitingRejectsSplitSeatsAndTerminatedOpportunityCannotBeReacquiredViaSmartPrimitive() {
+    @Test void waitingRejectsSingletonSplitAndTerminatedOpportunityCannotBeReacquiredViaSmartPrimitive() {
         var f=fixture(4,4); register(f);
-        tx(em -> { var rows=inventory(em,f.shows.getFirst()); rows.get(2).getSeat().setAdjacencySegment("other"); rows.get(3).getSeat().setAdjacencySegment("other"); return null; });
+        tx(em -> { var rows=inventory(em,f.shows.getFirst()); rows.get(3).getSeat().setAdjacencySegment("other"); return null; });
         assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
         dispatcher(CLOCK).dispatch(f.shows.getLast());
         var later=Clock.offset(CLOCK,Duration.ofMinutes(5)); tx(em -> holds(em,later).expire(f.group));

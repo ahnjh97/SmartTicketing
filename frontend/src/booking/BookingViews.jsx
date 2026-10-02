@@ -100,7 +100,7 @@ export function MovieBooking({ booking }) {
                 {from && until && rangeValid && until < from && <p>종료 범위는 다음 날 {until} 미만입니다.</p>}
                 {!rangeValid && <p role="alert">시작·종료 시간을 30분 단위로 선택해주세요.</p>}
                 {!validParty(party) && <p>총인원을 1~6명으로 선택해주세요.</p>}
-                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 2명 이상은 전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉습니다. 다른 행이나 통로 건너편으로 나누거나 일부 인원만 선점하지 않습니다.</p></details>
+                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 스마트예매는 전체 연석을 우선하며, 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2·3+3·2+4로 나눠 앉을 수 있습니다. 각 묶음은 연석이며 서로 다른 행·통로 구간도 가능합니다. 같은 회차에서 전원 좌석을 한 번에 확보합니다.</p></details>
                 <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
                 {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차·좌석 상태 {items.length}개</summary>
                     <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} label={availability(show, validParty(party) ? Number(party) : null)} />)}</div>

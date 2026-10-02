@@ -27,7 +27,7 @@ export default function WaitingPanel({ flow }) {
         {!data && !queue.error && <div className={styles.loading} role="status">대기 가능한 회차와 현재 상태를 확인하고 있습니다…</div>}
         {queue.error && <div className={styles.error} role="alert"><h4 ref={heading} tabIndex={-1}>대기 상태를 확인해주세요</h4><p>{queue.error.message}</p><GlassButton onClick={queue.retry} disabled={busy}>다시 확인</GlassButton></div>}
         {data && <>
-            <div className={styles.rules}><span><b>01</b> 전원 연속좌석</span><span><b>02</b> 선점 후 5분 결제</span><span><b>03</b> 만료 시 다른 회차 재개</span></div>
+            <div className={styles.rules}><span><b>01</b> 연석 우선·허용 조합 분할</span><span><b>02</b> 선점 후 5분 결제</span><span><b>03</b> 만료 시 다른 회차 재개</span></div>
             {data.items.length > 0 && <ul className={styles.queues} aria-label="신청한 회차">{data.items.map(item => <li key={item.id} className={styles.card} data-state={item.status}>
                 <div className={styles.number}><span>발급 번호</span><strong>{String(item.queueNumber).padStart(2,'0')}</strong></div>
                 <div className={styles.details}><h4>{item.theaterName} · {item.screenName}</h4><p>{time(item.startTime)}</p><strong className={styles.status}>{labels[item.status] || item.status}</strong>

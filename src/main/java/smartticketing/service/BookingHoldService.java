@@ -269,8 +269,7 @@ public class BookingHoldService {
             sizes.add(size);
         }
         sizes.sort(Integer::compareTo);
-        boolean valid = sizes.size() == 1;
-        if (!valid) reject(409, "전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉을 수 없습니다.");
+        if (!SeatPartyRules.allows(sizes)) reject(409, "전체 연석 또는 인원별 허용된 분할 연석 조합이 필요합니다.");
     }
 
     private static List<Long> normalizeSeats(List<Long> seats) {

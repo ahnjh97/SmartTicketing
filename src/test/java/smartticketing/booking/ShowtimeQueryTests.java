@@ -12,6 +12,18 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 class ShowtimeQueryTests {
+    @Test void availabilityRecognizesThreePairsButDoesNotClaimFivePeopleCanFit() {
+        var show = showtime("normal");
+        var rows = em.createQuery("from ShowtimeSeat where showtime.id=:id", ShowtimeSeat.class)
+                .setParameter("id", show.getId()).getResultList();
+        rows.forEach(i -> i.setStatus(List.of("A","B","C").contains(i.getSeat().getSeatRow())
+                && i.getSeat().getSeatNumber() <= 2 ? SeatStatus.AVAILABLE : SeatStatus.BLOCKED));
+        em.flush(); em.clear();
+        var item = query.showtimes(movieId,null,LocalDate.of(2026,10,1),null,null).items().stream()
+                .filter(i -> i.id().equals(show.getId())).findFirst().orElseThrow();
+        assertThat(item.maxContiguousSeats()).isEqualTo(2);
+        assertThat(item.bookablePartySizes()).containsExactly(1,2,4,6);
+    }
     private static TemporaryMysqlDatabase database;
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-01T00:00:00Z"), ZoneOffset.UTC);
     private EntityManager em;

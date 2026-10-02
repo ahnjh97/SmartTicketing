@@ -68,7 +68,8 @@ public class BookingWaitingDispatcher {
                 catch (BookingRejection mismatch) { continue; }
                 var inventory = holds.lockInventory(showId);
                 var best = SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences())
-                        .blocks().stream().min(Comparator.comparingInt(SmartSeatCandidates.Block::preferenceRank)
+                        .blocks().stream().min(Comparator.comparing(SmartSeatCandidates.Block::split)
+                                .thenComparingInt(SmartSeatCandidates.Block::preferenceRank)
                                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // An unsatisfiable earlier party must not block a later party.

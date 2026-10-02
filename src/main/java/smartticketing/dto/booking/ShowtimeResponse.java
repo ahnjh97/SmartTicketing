@@ -12,7 +12,8 @@ public final class ShowtimeResponse {
     public record MovieItem(Long movieId, String title, String posterUrl, Integer runningTime, String rating) {}
     public record ShowtimeItem(Long id, Long movieId, Long theaterId, Long screenId, String screenName,
             OffsetDateTime startTime, OffsetDateTime endTime, boolean endsNextDay, Integer pricePerPerson,
-            long totalSeats, long availableSeats, int maxContiguousSeats, boolean layoutComplete, ShowtimeStatus status) {}
+            long totalSeats, long availableSeats, int maxContiguousSeats, boolean layoutComplete, ShowtimeStatus status,
+            List<Integer> bookablePartySizes) {}
     /** id는 물리 좌석 ID. 선점 소유자/예약 ID/만료 시각은 공개하지 않는다. */
     public record SeatItem(Long id, String row, Integer number, String segment, Integer positionInSegment,
             SeatPosition position, SeatStatus status) {}
