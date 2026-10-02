@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './MovieHero.module.css';
 import { movieImage } from './images.js';
+import { formatRating } from './format.js';
 
 function trailerSource(movie) {
     try {
@@ -49,8 +50,19 @@ export default function MovieHero({ movie, home = false }) {
                 <h1 className={logo ? styles.logoTitle : undefined}>{home
                     ? <Link className={styles.titleLink} to={href}>{title}</Link>
                     : title}</h1>
-                {!home && <p className={styles.meta}>{movie.rating || '등급 미확인'} · {movie.runningTime ? `${movie.runningTime}분` : '상영시간 미확인'}</p>}
+                {!home && <p className={styles.meta}>
+                    {[
+                        formatRating(movie.rating),
+                        movie.runningTime ? `${movie.runningTime}분` : '상영시간 미확인',
+                        movie.releaseDate && `${movie.releaseDate.replaceAll('-', '.')} 개봉`,
+                    ].filter(Boolean).join(' · ')}
+                    {movie.genres && <><br />{movie.genres}</>}
+                </p>}
                 {!home && <p className={styles.synopsis}>{movie.description || '등록된 줄거리가 없습니다.'}</p>}
+                {!home && (movie.director || movie.castNames) && <dl className={styles.credits}>
+                    {movie.director && <><dt>감독</dt><dd>{movie.director}</dd></>}
+                    {movie.castNames && <><dt>출연</dt><dd>{movie.castNames}</dd></>}
+                </dl>}
                 {!home && video && <GlassButton className={styles.play} onClick={() => setPlaying(true)} aria-label={`${movie.title} 예고편 재생`} title="예고편 보기">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7Z" /></svg>
                 </GlassButton>}
