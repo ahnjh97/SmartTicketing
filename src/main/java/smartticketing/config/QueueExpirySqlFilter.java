@@ -8,7 +8,7 @@ import org.slf4j.Marker;
 
 import java.util.regex.Pattern;
 
-/** Hide only routine queue/hold expiry polling SELECTs; keep other SQL and diagnostics. */
+/** Hide only routine queue/hold polling SELECTs; keep other SQL and diagnostics. */
 public class QueueExpirySqlFilter extends TurboFilter {
     private static final Pattern ALIAS = Pattern.compile("\\b[a-zA-Z_][a-zA-Z0-9_]*\\.");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
@@ -19,6 +19,9 @@ public class QueueExpirySqlFilter extends TurboFilter {
     private static final Pattern HOLD_EXPIRY_QUERY = Pattern.compile(
             "select group_id from booking_group_holds(?: [a-zA-Z_][a-zA-Z0-9_]*)?"
             + " where expires_at<=\\? order by expires_at,group_id limit \\?");
+    private static final Pattern WAITING_SHOWTIME_QUERY = Pattern.compile(
+            "select distinct showtime_id from waiting_queues(?: [a-zA-Z_][a-zA-Z0-9_]*)?"
+            + " where request_group_id is not null and status=\\? order by showtime_id");
 
     @Override
     public FilterReply decide(Marker marker, Logger logger, Level level, String format,
@@ -28,6 +31,7 @@ public class QueueExpirySqlFilter extends TurboFilter {
         String sql = WHITESPACE.matcher(ALIAS.matcher(format).replaceAll("")).replaceAll(" ").trim();
         sql = sql.replaceAll("\\s*,\\s*", ",");
         return EXPIRY_QUERY.matcher(sql).matches() || HOLD_EXPIRY_QUERY.matcher(sql).matches()
+                || WAITING_SHOWTIME_QUERY.matcher(sql).matches()
                 ? FilterReply.DENY : FilterReply.NEUTRAL;
     }
 }
