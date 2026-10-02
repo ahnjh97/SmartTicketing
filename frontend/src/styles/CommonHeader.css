@@ -154,18 +154,6 @@
     padding: 8px;
 }
 
-.common-header-ticket-trigger {
-    min-height: 48px;
-    padding: 12px 16px;
-    border-radius: 16px;
-    font-size: 15px;
-    font-weight: 600;
-    background: var(--glass-background);
-}
-
-.common-header-ticket-trigger:hover:not(:disabled) {
-    background: var(--glass-hover);
-}
 
 .common-header-trigger-icon {
     display: inline-flex;
