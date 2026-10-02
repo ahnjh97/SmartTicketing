@@ -23,7 +23,10 @@ export default function ProfilePage() {
         setMessage("");
         run(async () => {
             await withdrawSession();
-            routeNavigate(PAGE_PATHS.login, { replace: true, state: { message: "회원 탈퇴가 완료되었습니다." } });
+            routeNavigate(PAGE_PATHS.login, {
+                replace: true,
+                state: { message: "회원 탈퇴가 완료되었습니다." },
+            });
         });
     }
 
@@ -32,7 +35,11 @@ export default function ProfilePage() {
             <div className="card profile-card">
                 <div className="profile-header">
                     <div>
+                        <span className="profile-eyebrow">MY PAGE</span>
                         <h1>회원정보</h1>
+                        <p className="profile-description">
+                            내 계정 정보와 영화관 · 좌석 선호 설정을 한눈에 확인하세요.
+                        </p>
                     </div>
 
                     <button
@@ -45,22 +52,54 @@ export default function ProfilePage() {
                     </button>
                 </div>
 
-                <div className="user-info">
-                    <div>
-                        <span>이름</span>
-                        <strong>{user.name}</strong>
+                <div className="profile-overview">
+                    <div className="profile-overview-main">
+                        <div className="profile-avatar">
+                            {(user.name ?? "?").charAt(0)}
+                        </div>
+                        <div>
+                            <span className="profile-overview-label">ACCOUNT</span>
+                            <strong>{user.name ?? "회원"}</strong>
+                            <p>{user.loginId ?? "소셜 로그인 계정"}</p>
+                        </div>
                     </div>
 
+                    <div className="profile-overview-meta">
+                        <div>
+                            <span>로그인 방식</span>
+                            <strong>
+                                {user.linkedProviders?.length
+                                    ? user.linkedProviders.join(", ")
+                                    : "일반 회원"}
+                            </strong>
+                        </div>
+                        <div>
+                            <span>생년월일</span>
+                            <strong>{user.birthDate ?? "미등록"}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="profile-section-heading">
+                    <div>
+                        <span>ACCOUNT INFO</span>
+                        <h2>기본 정보</h2>
+                    </div>
+                </div>
+
+                <div className="user-info profile-basic-info">
+                    <div>
+                        <span>이름</span>
+                        <strong>{user.name ?? "미등록"}</strong>
+                    </div>
                     <div>
                         <span>아이디</span>
                         <strong>{user.loginId ?? "소셜 로그인"}</strong>
                     </div>
-
                     <div>
                         <span>생년월일</span>
                         <strong>{user.birthDate ?? "미등록"}</strong>
                     </div>
-
                     <div>
                         <span>로그인 연동</span>
                         <strong>
@@ -69,29 +108,45 @@ export default function ProfilePage() {
                                 : "일반 회원"}
                         </strong>
                     </div>
+                </div>
 
-                    <div>
-                        <span>선호 영화관</span>
-                        <div>
+                <div className="profile-preference-grid">
+                    <section className="profile-info-panel">
+                        <div className="profile-section-heading">
+                            <div>
+                                <span>PREFERRED THEATERS</span>
+                                <h2>선호 영화관</h2>
+                            </div>
+                            <em>{user.preferredTheaters?.length ?? 0}곳</em>
+                        </div>
+
+                        <div className="profile-preference-list">
                             {user.preferredTheaters?.length ? (
                                 user.preferredTheaters.map((theater) => (
-                                    <div
-                                        key={theater.theaterId}
-                                        style={{ marginBottom: "6px" }}
-                                    >
-                                        <strong>{theater.priority}위</strong>{" "}
-                                        {theater.theaterName} ({theater.brand})
+                                    <div className="profile-preference-item" key={theater.theaterId}>
+                                        <b>{theater.priority}위</b>
+                                        <div>
+                                            <strong>{theater.theaterName}</strong>
+                                            <span>{theater.brand}</span>
+                                        </div>
                                     </div>
                                 ))
                             ) : (
-                                <span>미설정</span>
+                                <div className="profile-empty">선호 영화관이 아직 설정되지 않았습니다.</div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    <div>
-                        <span>선호 좌석</span>
-                        <div>
+                    <section className="profile-info-panel">
+                        <div className="profile-section-heading">
+                            <div>
+                                <span>PREFERRED SEATS</span>
+                                <h2>선호 좌석</h2>
+                            </div>
+                            <em>{user.preferredSeats?.length ?? 0}개</em>
+                        </div>
+
+                        <div className="profile-preference-list">
                             {user.preferredSeats?.length ? (
                                 user.preferredSeats.map((seat, index) => {
                                     const position =
@@ -106,38 +161,29 @@ export default function ProfilePage() {
 
                                     return (
                                         <div
+                                            className="profile-preference-item"
                                             key={`${position}-${priority}-${index}`}
-                                            style={{ marginBottom: "6px" }}
                                         >
-                                            <strong>{priority}위</strong>{" "}
-                                            {getSeatLabel(position)}
+                                            <b>{priority}위</b>
+                                            <div>
+                                                <strong>{getSeatLabel(position)}</strong>
+                                                <span>추천 좌석 위치</span>
+                                            </div>
                                         </div>
                                     );
                                 })
                             ) : (
-                                <span>미설정</span>
+                                <div className="profile-empty">선호 좌석이 아직 설정되지 않았습니다.</div>
                             )}
                         </div>
-                    </div>
+                    </section>
                 </div>
 
-                <div
-                    style={{
-                        display: "flex",
-                        gap: "10px",
-                        marginTop: "20px",
-                        flexWrap: "wrap",
-                    }}
-                >
+                <div className="profile-action-area profile-page-actions">
                     <button
                         type="button"
                         disabled={pending}
                         className="primary-button"
-                        style={{
-                            width: "auto",
-                            marginTop: 0,
-                            flex: 1,
-                        }}
                         onClick={() => {
                             navigate("preferences");
                             setError("");
@@ -150,11 +196,7 @@ export default function ProfilePage() {
                     <button
                         type="button"
                         disabled={pending}
-                        className="logout-button"
-                        style={{
-                            flex: 1,
-                            minHeight: "46px",
-                        }}
+                        className="withdraw-button"
                         onClick={withdraw}
                     >
                         회원 탈퇴
