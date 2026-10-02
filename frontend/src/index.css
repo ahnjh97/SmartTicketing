@@ -2305,3 +2305,8 @@ input:focus {
     line-height: 1;
     white-space: nowrap;
 }
+
+/* 선택된 영화관은 상단 순위 칸을 제거한 만큼 영화관 이름 영역을 넓게 사용합니다. */
+.theater-item.selected .theater-item-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
