@@ -3,6 +3,7 @@ export const PAGE_PATHS = {
     movies: "/movies",
     theaters: "/theaters",
     tickets: "/tickets",
+    bookingRestore: "/booking/restore",
     login: "/login",
     signup: "/signup",
     findAccount: "/find-account",
@@ -14,6 +15,7 @@ export const PAGE_PATHS = {
 };
 
 const PROTECTED_PAGES = new Set([
+    "bookingRestore",
     "tickets",
     "profile",
     "preferences",

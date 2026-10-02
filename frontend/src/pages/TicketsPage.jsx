@@ -2,12 +2,16 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import { Link } from 'react-router-dom';
 import glass from '../components/GlassButton.module.css';
+import RecoveryInbox from '../booking/RecoveryInbox.jsx';
+import useAuth from '../hooks/useAuth.js';
+import styles from './TicketsPage.module.css';
 
 function formatDate(value) {
     return value ? new Date(value).toLocaleString("ko-KR") : "-";
 }
 
 export default function TicketsPage() {
+    const { user } = useAuth();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -29,19 +33,18 @@ export default function TicketsPage() {
         };
     }, []);
 
-    if (loading) return <section className="page"><div className="card">티켓을 불러오는 중입니다.</div></section>;
-    if (error) return <section className="page"><div className="card"><p className="error-message">{error}</p></div></section>;
-
     return (
-        <section className="page">
-            <div className="card">
-                <h1>내 티켓</h1>
-                {tickets.length === 0 ? (
+        <section className={styles.page}>
+            <h1>내 티켓</h1>
+            <div className={styles.panel}><RecoveryInbox key={user?.id}/></div>
+            <div className={styles.panel}>
+                <h2>발급된 티켓</h2>
+                {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
-                    <div style={{ display: "grid", gap: 16 }}>
+                    <div className={styles.tickets}>
                         {tickets.map((ticket) => (
-                            <article key={ticket.ticketId} className="card">
+                            <article key={ticket.ticketId} className={styles.ticket}>
                                 <h2>{ticket.movieTitle}</h2>
                                 <p>{ticket.theaterName} · {ticket.screenName}</p>
                                 <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
@@ -49,7 +52,7 @@ export default function TicketsPage() {
                                 <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
                                 <p>QR: {ticket.qrCode}</p>
                                 <p>상태: {ticket.status}</p>
-                                {ticket.groupId && <Link className={glass.button} to={`/theaters?entry=THEATER_NORMAL&group=${ticket.groupId}&reservation=${ticket.reservationId}`}>예약 상세·전체 취소</Link>}
+                                {ticket.groupId && <Link className={glass.button} to={`/booking/restore?group=${ticket.groupId}`}>예약 상세·전체 취소</Link>}
                             </article>
                         ))}
                     </div>

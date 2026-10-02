@@ -11,7 +11,7 @@ import java.sql.*;
 import java.util.UUID;
 
 /** 새 MySQL 테스트 DB만 소유한다. 생성 실패 시 기존 이름의 DB를 삭제하지 않는다. */
-final class TemporaryMysqlDatabase implements AutoCloseable {
+public final class TemporaryMysqlDatabase implements AutoCloseable {
     private final String name = "booking_test_" + UUID.randomUUID().toString().replace("-", "");
     private Connection admin;
     private boolean created;
@@ -19,7 +19,7 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
     private Configuration configuration;
     private java.util.function.Consumer<String> sqlObserver;
 
-    TemporaryMysqlDatabase(String... legacySetup) throws Exception {
+    public TemporaryMysqlDatabase(String... legacySetup) throws Exception {
         this(null, legacySetup);
     }
 
@@ -64,7 +64,7 @@ final class TemporaryMysqlDatabase implements AutoCloseable {
     EntityManager open() { return factory.createEntityManager(); }
 
     SessionFactory factory() { return factory; }
-    String jdbcUrl() { return "jdbc:mysql://127.0.0.1:3306/" + name; }
+    public String jdbcUrl() { return "jdbc:mysql://127.0.0.1:3306/" + name; }
 
     /** DB 내용은 보존하고 앱의 ORM 연결/캐시만 재시작한다. */
     void restartPersistence() {

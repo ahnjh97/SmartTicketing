@@ -14,7 +14,7 @@ export default function RouteGuard() {
         preferenceSetupRequired,
     });
     useEffect(() => {
-        if (target === 'preferenceSetup') rememberBooking(location.pathname + location.search);
+        if (target === 'preferenceSetup' || target === 'login') rememberBooking(location.pathname + location.search);
     }, [target, location.pathname, location.search]);
     if (loading) return <LoadingPage />;
     if (target) return <Navigate to={target === 'profile' ? bookingReturn() || PAGE_PATHS.profile : PAGE_PATHS[target]} replace />;

@@ -41,7 +41,7 @@ public class TicketService {
         t.setCreatedAt(LocalDateTime.now());
         t.setUpdatedAt(LocalDateTime.now());
         Ticket saved = tickets.save(t);
-        notifications.completed(userId);
+        NotificationService.link(notifications.completed(userId), r);
         return to(saved);
     }
 

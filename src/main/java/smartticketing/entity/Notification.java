@@ -36,6 +36,10 @@ public class Notification {
     @Column(nullable = false, length = 500)
     private String message;
 
+    // Optional for legacy notifications; navigation never grants access to a reservation.
+    private Long bookingGroupId;
+    private Long reservationId;
+
     @Column(name = "is_read", nullable = false)
     private boolean read = false;
 

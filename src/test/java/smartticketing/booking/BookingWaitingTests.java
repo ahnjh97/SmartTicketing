@@ -161,6 +161,24 @@ class BookingWaitingTests {
         var d=dispatcher(CLOCK); assertThat(d.pendingShows()).containsAll(f.shows);
         assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
+
+    @Test void restartAndRepeatedDispatchRetainOneLinkedOpportunityNotification() {
+        var f = fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst());
+        long reservation = state(f).activeReservationId();
+        db.restartPersistence();
+        dispatcher(CLOCK).dispatch(f.shows.getFirst()); dispatcher(CLOCK).dispatch(f.shows.getLast());
+        tx(em -> {
+            var list = BookingPaymentTests.notifications(em).list(f.user, false);
+            assertThat(list).hasSize(1);
+            assertThat(list.getFirst().type()).isEqualTo(NotificationType.QUEUE_TURN);
+            assertThat(list.getFirst().groupId()).isEqualTo(f.group);
+            assertThat(list.getFirst().reservationId()).isEqualTo(reservation);
+            var recovery = new BookingRecoveryService(em, holds(em, CLOCK));
+            assertThat(recovery.one(f.user, f.group).path()).contains("entry=MOVIE_SMART", "reservation=" + reservation);
+            return null;
+        });
+        statuses(f, QueueStatus.HOLDING, QueueStatus.PAUSED);
+    }
     @Test void regularSmartHoldAlsoUpdatesMatchingWaitingOpportunityAndExpiryResumesOthers() {
         var f=fixture(2,2); register(f);
         tx(em -> { var ids=inventory(em,f.shows.getFirst()).stream().map(i -> i.getSeat().getId()).toList();

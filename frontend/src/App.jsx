@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AuthProvider from "./auth/AuthProvider.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
-import EmptyPage from "./pages/EmptyPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import BookingPage from "./pages/BookingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -14,6 +13,7 @@ import PreferencesPage from "./pages/PreferencesPage.jsx";
 import PreferenceSetupPage from "./pages/PreferenceSetupPage.jsx";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage.jsx";
 import TicketsPage from "./pages/TicketsPage.jsx";
+import BookingRestorePage from './pages/BookingRestorePage.jsx';
 import { PAGE_PATHS } from "./navigation.js";
 
 export default function App() {
@@ -32,6 +32,7 @@ export default function App() {
                         <Route path={PAGE_PATHS.movies} element={<BookingPage key="movies" mode="movie" />} />
                         <Route path={PAGE_PATHS.theaters} element={<BookingPage key="theaters" mode="theater" />} />
                         <Route path={PAGE_PATHS.tickets} element={<TicketsPage />} />
+                        <Route path={PAGE_PATHS.bookingRestore} element={<BookingRestorePage />} />
                         <Route path={PAGE_PATHS.profile} element={<ProfilePage />} />
                         <Route path={PAGE_PATHS.preferences} element={<PreferencesPage />} />
                         <Route path={PAGE_PATHS.preferenceSetup} element={<PreferenceSetupPage />} />

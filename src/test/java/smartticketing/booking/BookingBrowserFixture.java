@@ -15,6 +15,8 @@ public class BookingBrowserFixture {
         if (!"true".equals(System.getenv("BOOKING_BROWSER_TEST"))) throw new IllegalStateException("Browser test opt-in required");
         String run = System.getenv().getOrDefault("BOOKING_BROWSER_RUN", "stage6");
         if (!run.matches("stage[0-9]+")) throw new IllegalArgumentException("Invalid browser run name");
+        boolean waitingRun = run.equals("stage8") || run.equals("stage9");
+        Path restart = Path.of(".gradle/" + run + "-browser.restart");
         Path stop = Path.of(".gradle/" + run + "-browser.stop");
         if (Files.exists(stop)) throw new IllegalStateException("Remove the previous browser stop marker before launch");
         try (var db = new TemporaryMysqlDatabase()) {
@@ -27,7 +29,7 @@ public class BookingBrowserFixture {
                 for (int i=1;i<=3;i++) {
                     var theater = new Theater(); theater.setName("[격리 검증] 시네마 "+i); theater.setAddress("서울 테스트 주소"); theater.setKakaoPlaceId("browser-"+i); theater.setBrand(TheaterBrand.CGV); em.persist(theater);
                     var preference = new UserPreferredTheater(); preference.setUser(user); preference.setTheater(theater); preference.setPriority(i); em.persist(preference);
-                    if (i!=1 && !run.equals("stage7") && !run.equals("stage8")) continue;
+                    if (i!=1 && !run.equals("stage7") && !waitingRun) continue;
                     var screen = new Screen(); screen.setName("PREMIUM 1관"); screen.setTheater(theater); em.persist(screen);
                     var show = new Showtime(); show.setMovie(movie); show.setScreen(screen); show.setStartTime(now.plusHours(2)); show.setEndTime(now.plusHours(4));
                     show.setPricePerPerson(10000); show.setTotalSeats(72); show.setAvailableSeats(70); show.setCreatedAt(now); show.setUpdatedAt(now); em.persist(show);
@@ -36,10 +38,10 @@ public class BookingBrowserFixture {
                         var seat = new Seat(); seat.setScreen(screen); seat.setSeatRow(String.valueOf((char)('A'+row))); seat.setSeatNumber(number); seat.setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
                         int segment = number<=3?0:number<=9?1:2; seat.setAdjacencySegment("block-"+segment); seat.setPositionInSegment(number-(segment==0?0:segment==1?3:9)); em.persist(seat);
                         var inventory = new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat);
-                        if(run.equals("stage8") || row==2&&number<=2 || i==2 || i==3 && number%2==0) inventory.setStatus(SeatStatus.BLOCKED); em.persist(inventory);
+                        if(waitingRun || row==2&&number<=2 || i==2 || i==3 && number%2==0) inventory.setStatus(SeatStatus.BLOCKED); em.persist(inventory);
                     }
                     System.out.println("BROWSER_PATH=/theaters?theater="+theater.getId()+"&movie="+movie.getId()+"&showtime="+show.getId()+"&date="+show.getStartTime().toLocalDate()+"&entry=THEATER_NORMAL");
-                    if ((run.equals("stage7") || run.equals("stage8")) && i==1) {
+                    if ((run.equals("stage7") || waitingRun) && i==1) {
                         var from = show.getStartTime().minusMinutes(30).withMinute(0).withSecond(0).withNano(0);
                         System.out.println("BROWSER_SMART_MOVIE_PATH=/movies?movie="+movie.getId()+"&date="+from.toLocalDate()+"&from="+from.toLocalTime()+"&until="+from.plusHours(3).toLocalTime()+"&party=2&entry=MOVIE_SMART");
                     }
@@ -48,18 +50,21 @@ public class BookingBrowserFixture {
                 em.getTransaction().commit();
             }
             List<String> properties = new ArrayList<>(List.of("--server.port=8081", "--spring.profiles.active=test", "--tmdb.auto-import=false", "--kakao.catalog.auto-import=false",
-                    "--booking.seed.enabled=false", "--booking.mock-payment.allow-failure=true", "--spring.jpa.show-sql=false", "--spring.jpa.properties.hibernate.format_sql=false",
+                    "--booking.seed.enabled=false", "--showtime.seed.enabled=false", "--booking.mock-payment.allow-failure=true", "--spring.jpa.show-sql=false", "--spring.jpa.properties.hibernate.format_sql=false",
                     "--spring.datasource.url="+db.jdbcUrl(), "--spring.datasource.username="+System.getenv("BOOKING_TEST_MYSQL_USER"),
                     "--spring.datasource.password="+System.getenv("BOOKING_TEST_MYSQL_PASSWORD"), "--JWT_SECRET=browser-test-only-not-a-production-key-2026-123456", "--TMDB_ACCESS_TOKEN=test", "--ADMIN_KEY=test"));
             for (String provider : List.of("GOOGLE","NAVER","KAKAO")) { properties.add("--"+provider+"_CLIENT_ID=test"); properties.add("--"+provider+"_CLIENT_SECRET=test"); }
+            boolean restartRequested;
+            do {
+            restartRequested = false;
             try (var context = SpringApplication.run(SmartTicketingApplication.class, properties.toArray(String[]::new))) {
                 System.out.println("BOOKING_BROWSER_READY");
                 long deadline = System.nanoTime()+Duration.ofMinutes(35).toNanos();
                 var released = new HashSet<Integer>();
-                while(!Files.exists(stop) && System.nanoTime()<deadline) {
+                while(!Files.exists(stop) && !Files.exists(restart) && System.nanoTime()<deadline) {
                     // Explicit test-only inventory release, limited to this harness's owned UUID DB.
-                    if (run.equals("stage8")) for (int i=0;i<browserShows.size();i++) {
-                        if (!released.contains(i) && Files.exists(Path.of(".gradle/stage8-release-"+(i+1)))) {
+                    if (waitingRun) for (int i=0;i<browserShows.size();i++) {
+                        if (!released.contains(i) && Files.exists(Path.of(".gradle/"+run+"-release-"+(i+1)))) {
                             try (var em=db.open()) {
                                 em.getTransaction().begin();
                                 em.find(Showtime.class,browserShows.get(i),jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
@@ -73,7 +78,9 @@ public class BookingBrowserFixture {
                     }
                     Thread.sleep(500);
                 }
+                if (Files.exists(restart)) { Files.delete(restart); restartRequested = true; }
             }
+            } while (restartRequested && !Files.exists(stop));
         }
         System.out.println("BOOKING_BROWSER_CLEANED");
     }
