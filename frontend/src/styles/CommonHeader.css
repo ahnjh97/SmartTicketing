@@ -155,6 +155,10 @@
 
 
 
+.common-header-ticket-trigger {
+    border-radius: 999px;
+}
+
 .common-header-trigger-icon {
     display: inline-flex;
     width: 18px;
