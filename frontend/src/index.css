@@ -515,10 +515,13 @@ input:focus {
 
 .preference-container section {
     margin-top: 34px;
-
     padding-top: 30px;
+}
 
-    border-top: 1px solid #303030;
+.preference-container section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
 }
 
 .section-title {
