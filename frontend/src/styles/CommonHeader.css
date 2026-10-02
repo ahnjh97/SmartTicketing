@@ -159,6 +159,24 @@
     background: var(--glass-hover);
 }
 
+.common-header-icon-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+}
+
+.common-header-icon-trigger:hover:not(:disabled) {
+    color: rgb(255 255 255 / 90%);
+}
+
 .common-header-trigger-icon {
     display: inline-flex;
     width: 18px;
