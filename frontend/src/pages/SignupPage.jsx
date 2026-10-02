@@ -172,27 +172,13 @@ export default function SignupPage() {
                 .replace(/\D/g, "")
                 .slice(0, 4);
 
-        if (value.length === 4) {
-            const year = Number(value);
-            const currentYear = new Date().getFullYear();
-
-            if (year < 1900 || year > currentYear) {
-                setError(
-                    "생년월일의 년도는 1900년부터 현재 년도까지 입력해주세요."
-                );
-                return;
-            }
-
-            setBirthYear(value);
-            setError("");
-
-            birthMonthRef.current?.focus();
-            birthMonthRef.current?.select();
-            return;
-        }
-
         setBirthYear(value);
         setError("");
+
+        if (value.length === 4) {
+            birthMonthRef.current?.focus();
+            birthMonthRef.current?.select();
+        }
     }
 
     function handleBirthMonthChange(event) {
