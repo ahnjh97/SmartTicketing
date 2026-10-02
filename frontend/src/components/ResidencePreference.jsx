@@ -492,6 +492,32 @@ export default function ResidencePreference({
         );
     }
 
+    function createCurrentLocationMarker(position, title = "현재 위치") {
+        const kakao = window.kakao;
+
+        const svg =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="38" height="48" viewBox="0 0 38 48">' +
+            '<path d="M19 1C9.06 1 1 9.06 1 19c0 13.2 18 28 18 28s18-14.8 18-28C37 9.06 28.94 1 19 1z" fill="#e53935" stroke="#ffffff" stroke-width="3"/>' +
+            '<circle cx="19" cy="19" r="7" fill="#ffffff"/>' +
+            '</svg>';
+
+        const image = new kakao.maps.MarkerImage(
+            "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+            new kakao.maps.Size(38, 48),
+            {
+                offset: new kakao.maps.Point(19, 48),
+            }
+        );
+
+        return new kakao.maps.Marker({
+            map: mapInstanceRef.current,
+            position,
+            title,
+            image,
+            zIndex: 1000,
+        });
+    }
+
     async function applyCurrentLocation(
         latitude,
         longitude
@@ -537,11 +563,9 @@ export default function ResidencePreference({
         showSelectionPin(false);
 
         currentMarkerRef.current =
-            new kakao.maps.Marker({
-                map: mapInstanceRef.current,
-                position,
-                title: "현재 위치",
-            });
+            createCurrentLocationMarker(
+                position
+            );
 
         const geocoder =
             new kakao.maps.services.Geocoder();
@@ -611,7 +635,8 @@ export default function ResidencePreference({
         await loadNearbyTheaters(
             latitude,
             longitude,
-            resolvedAddress
+            resolvedAddress,
+            true
         );
     }
 
@@ -982,7 +1007,8 @@ export default function ResidencePreference({
     async function loadNearbyTheaters(
         latitude,
         longitude,
-        resolvedAddress
+        resolvedAddress,
+        showCurrentLocationMarker = false
     ) {
         setSelectedTheaters([]);
         setTheaterLoading(true);
@@ -1016,14 +1042,20 @@ export default function ResidencePreference({
             setTheaters(normalized);
             renderTheaterMarkers(normalized);
 
-            // 영화관 마커를 그린 뒤 조회 기준점(현재 위치)도 다시 표시합니다.
-            if (mapInstanceRef.current && window.kakao?.maps) {
+            // 영화관 마커를 그린 뒤에도 현재 위치 마커를 유지합니다.
+            if (
+                showCurrentLocationMarker &&
+                mapInstanceRef.current &&
+                window.kakao?.maps
+            ) {
                 currentMarkerRef.current?.setMap(null);
-                currentMarkerRef.current = new window.kakao.maps.Marker({
-                    map: mapInstanceRef.current,
-                    position: new window.kakao.maps.LatLng(latitude, longitude),
-                    title: locationSource === "MAP" ? "선택한 위치" : "현재 위치",
-                });
+                currentMarkerRef.current =
+                    createCurrentLocationMarker(
+                        new window.kakao.maps.LatLng(
+                            latitude,
+                            longitude
+                        )
+                    );
             }
         } catch (e) {
             setError(
@@ -1562,22 +1594,6 @@ export default function ResidencePreference({
                         </p>
                     )}
 
-                {selectedTheaters.length > 0 && (
-                    <div className="theater-priority-list">
-                        {selectedTheaters.map((theaterId, index) => {
-                            const theater = theaters.find((item) => Number(item.theaterId) === Number(theaterId));
-                            if (!theater) return null;
-                            return (
-                                <div key={theater.theaterId} className="theater-priority-item">
-                                    <strong>{index + 1}순위</strong>
-                                    <span>{theater.name}<small>{theater.brand ? " · " + theater.brand : ""}</small></span>
-                                    <button type="button" onClick={() => toggleTheater(Number(theater.theaterId))} aria-label={(index + 1) + "순위 " + theater.name + " 선택 해제"}>×</button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
                 <div className="theater-list">
                     {theaters.slice(0, 12).map(
                         (
@@ -1630,8 +1646,16 @@ export default function ResidencePreference({
                                             )
                                         }
                                     >
-                                    <div className="theater-rank">
-                                        {index + 1}
+                                    <div className={
+                                        selected
+                                            ? "theater-rank selected-priority"
+                                            : "theater-rank"
+                                    }>
+                                        {selected
+                                            ? (selectedTheaters.indexOf(
+                                                Number(theater.theaterId)
+                                              ) + 1) + "순위"
+                                            : index + 1}
                                     </div>
 
                                     <div className="theater-main">
