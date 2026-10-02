@@ -780,37 +780,42 @@ input:focus {
     min-width: 0;
 }
 
-.theater-main strong,
-.theater-main small {
-    display: block;
+.theater-main {
+    min-width: 0;
+}
+
+.theater-name-marquee {
     width: 100%;
     min-width: 0;
     overflow: hidden;
-    text-overflow: clip;
+    white-space: nowrap;
+}
+
+.theater-name-marquee strong {
+    display: inline-block;
+    max-width: none;
+    font-size: 13px;
+    line-height: 1.35;
     white-space: nowrap;
     word-break: keep-all;
 }
 
-.theater-main strong {
-    font-size: 13px;
-    line-height: 1.35;
+.theater-name-marquee:hover strong {
+    animation: theater-name-marquee 7s ease-in-out infinite alternate;
 }
 
 .theater-main small {
+    display: block;
+    width: 100%;
+    min-width: 0;
     margin-top: 4px;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    word-break: keep-all;
     color: #777;
     font-size: 9px;
     line-height: 1.35;
-}
-
-/* 긴 영화관 이름은 카드 구조를 늘리지 않고 한 줄에서 좌우로 표시 */
-.theater-main strong {
-    position: relative;
-}
-
-.theater-main strong:hover {
-    overflow: visible;
-    animation: theater-name-marquee 5s ease-in-out infinite alternate;
 }
 
 @keyframes theater-name-marquee {
@@ -818,7 +823,7 @@ input:focus {
         transform: translateX(0);
     }
     to {
-        transform: translateX(var(--theater-name-shift, -30px));
+        transform: translateX(-40px);
     }
 }
 
