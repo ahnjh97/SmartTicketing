@@ -237,31 +237,52 @@ export default function CommonHeader({
 
                 <button
                     type="button"
-                    className={`common-header-link ${glass.button}`}
+                    className="common-header-icon-trigger"
+                    aria-label={openPanel === "tickets" ? "내 티켓 닫기" : "내 티켓 열기"}
                     aria-expanded={openPanel === "tickets"}
                     onClick={() => togglePanel("tickets")}
                     disabled={navigationDisabled}
                 >
-                    내 티켓
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="6" width="18" height="13" rx="2" />
+                            <path d="M3 10h18" />
+                            <path d="M8 6V4h8v2" />
+                            <path d="M7 15h4" />
+                        </svg>
+                    </span>
                 </button>
 
                 <button
                     type="button"
-                    className={`common-header-link ${glass.button}`}
+                    className="common-header-icon-trigger"
+                    aria-label="로그아웃"
                     disabled={disabled}
                     onClick={handleLogout}
                 >
-                    로그아웃
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M10 17l5-5-5-5" />
+                            <path d="M15 12H3" />
+                            <path d="M13 5V3h7v18h-7v-2" />
+                        </svg>
+                    </span>
                 </button>
 
                 <NavLink
                     to={PAGE_PATHS.profile}
-                    className={`common-header-link ${glass.button}`}
+                    className="common-header-icon-trigger"
+                    aria-label="마이페이지"
                     aria-disabled={navigationDisabled || undefined}
                     tabIndex={navigationDisabled ? -1 : undefined}
                     onClick={handleNavigation}
                 >
-                    마이페이지
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="8" r="3.2" />
+                            <path d="M5.5 20c.8-3.3 3.1-5 6.5-5s5.7 1.7 6.5 5" />
+                        </svg>
+                    </span>
                 </NavLink>
             </>
         );
