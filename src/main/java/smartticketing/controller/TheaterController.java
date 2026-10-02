@@ -29,8 +29,7 @@ public class TheaterController {
                 kakaoMapService.findNearbyTheaters(
                         address,
                         latitude,
-                        longitude,
-                        address
+                        longitude
                 )
         );
     }
