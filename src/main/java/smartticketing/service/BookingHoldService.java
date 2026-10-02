@@ -126,8 +126,14 @@ public class BookingHoldService {
                 .setParameter("id", reservationId).setParameter("user", userId).getResultList();
         if (refs.isEmpty() || refs.getFirst() == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "예매를 찾을 수 없습니다.");
         var group = ownedGroupForRead(userId, refs.getFirst());
-        expireLockedGroup(group);
-        return response(em.find(Reservation.class, reservationId), now());
+        var slot = group.getStatus() == BookingGroupStatus.HOLDING
+                ? em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE) : null;
+        // Old reservations must not acquire another active reservation's show out of order.
+        if (slot != null && slot.getReservation().getId().equals(reservationId)) expireLockedGroup(group);
+        var showId = em.createQuery("select r.showtime.id from Reservation r where r.id=:id", Long.class)
+                .setParameter("id", reservationId).getSingleResult();
+        em.find(Showtime.class, showId, LockModeType.PESSIMISTIC_WRITE);
+        return response(em.find(Reservation.class, reservationId, LockModeType.PESSIMISTIC_WRITE), now());
     }
 
     public BookingGroupResponse group(Long userId, Long groupId) {
@@ -159,7 +165,7 @@ public class BookingHoldService {
                 .setParameter("now", now()).setMaxResults(limit).getResultList();
     }
 
-    private boolean expireLockedGroup(BookingRequestGroup group) {
+    boolean expireLockedGroup(BookingRequestGroup group) {
         if (group.getStatus() != BookingGroupStatus.HOLDING) return false;
         var slot = em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE);
         if (slot == null) throw new IllegalStateException("활성 선점 슬롯이 없어 자동 복구를 중단합니다.");
@@ -195,7 +201,7 @@ public class BookingHoldService {
         return true;
     }
 
-    private List<ShowtimeSeat> lockInventory(Long showId) {
+    List<ShowtimeSeat> lockInventory(Long showId) {
         // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
         return em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
                 .setParameter("id", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
@@ -287,7 +293,7 @@ public class BookingHoldService {
                 g.getStatus(), slot == null ? null : slot.getReservation().getId(), BookingAudiencePolicy.audience(g), g.getRatingSnapshot());
     }
 
-    private ReservationResponse response(Reservation r, LocalDateTime now) {
+    ReservationResponse response(Reservation r, LocalDateTime now) {
         var show = r.getShowtime(); var screen = show.getScreen();
         var seats = em.createQuery("select s from ReservationSeat s join fetch s.seat where s.reservation.id=:id order by s.seat.id", ReservationSeat.class)
                 .setParameter("id", r.getId()).getResultList();
@@ -300,7 +306,7 @@ public class BookingHoldService {
                 seats.stream().map(s -> new ReservationResponse.SeatPrice(s.getSeat().getId(), s.getAudienceType(), s.getPrice())).toList());
     }
 
-    private static void updateAvailable(Showtime show, List<ShowtimeSeat> inventory, LocalDateTime now) {
+    static void updateAvailable(Showtime show, List<ShowtimeSeat> inventory, LocalDateTime now) {
         show.setAvailableSeats((int) inventory.stream().filter(s -> s.getSeat().isActive()
                 && s.getSeat().getScreen().getId().equals(show.getScreen().getId()) && s.getStatus() == SeatStatus.AVAILABLE).count());
         show.setUpdatedAt(now);

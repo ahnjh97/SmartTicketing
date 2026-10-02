@@ -54,6 +54,7 @@ public class MovieImportService {
                 .map(String::trim)
                 .filter(id -> !id.isEmpty())
                 .map(Long::valueOf)
+                .distinct()
                 .toList();
 
         this.ratingOverrides = Arrays.stream(ratingOverrides.split(","))
@@ -73,10 +74,11 @@ public class MovieImportService {
         return importConfiguredMovies(false);
     }
 
-    public MovieImportResult importConfiguredMovies(boolean refresh) {
+    public synchronized MovieImportResult importConfiguredMovies(boolean refresh) {
         int savedCount = 0;
         int skippedCount = 0;
         int updatedCount = 0;
+        boolean upstreamUnavailable = false;
         List<Long> failedIds = new ArrayList<>();
 
         for (Long tmdbId : movieIds) {
@@ -87,16 +89,28 @@ public class MovieImportService {
                 continue;
             }
 
+            if (upstreamUnavailable) {
+                failedIds.add(tmdbId); // Incomplete, but no further upstream request is attempted.
+                continue;
+            }
+
             try {
                 importOne(tmdbId);
                 if (existing.isPresent()) updatedCount++; else savedCount++;
             } catch (Exception e) {
                 log.warn("TMDB 영화 가져오기 실패 - tmdbId: {}, 유형: {}", tmdbId, e.getClass().getSimpleName());
                 failedIds.add(tmdbId);
+                // An invalid credential/quota cannot recover by requesting the next movie.
+                if (e instanceof org.springframework.web.client.ResourceAccessException
+                        || e instanceof org.springframework.web.client.RestClientResponseException http
+                        && (http.getStatusCode().value() == 401 || http.getStatusCode().value() == 403
+                            || http.getStatusCode().value() == 429)) {
+                    upstreamUnavailable = true;
+                }
             }
         }
 
-        int filledCount = applyConfiguredDefaults();
+        applyConfiguredDefaults();
 
         log.info("영화 가져오기 완료 - 저장 {}건, 건너뜀 {}건, 실패 {}건",
                 savedCount, skippedCount, failedIds.size());
@@ -148,7 +162,7 @@ public class MovieImportService {
     }
 
     /** 3단계 조회 서비스에서 사용. DB에 있는 영화는 외부 API 없이 즉시 반환한다. */
-    public Movie getOrImportMovie(Long tmdbId) {
+    public synchronized Movie getOrImportMovie(Long tmdbId) {
         if (tmdbId == null || tmdbId <= 0) throw new IllegalArgumentException("TMDB ID는 양수여야 합니다.");
         return movieRepository.findByTmdbMovieId(tmdbId).orElseGet(() -> importOne(tmdbId));
     }

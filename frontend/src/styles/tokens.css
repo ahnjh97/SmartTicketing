@@ -1,4 +1,9 @@
 :root {
+ --booking-screen-glow: rgb(255 255 255 / 9%);
+ --booking-selection-glow: 0 6px 24px rgb(255 196 38 / 22%);
+ --booking-success: #8ae5bb;
+ --booking-danger: #ffb2a7;
+ --booking-card-shadow: 0 24px 64px rgb(0 0 0 / 28%);
  --glass-background: rgb(70 73 80 / 52%);
  --glass-hover: rgb(100 103 110 / 62%);
  --glass-pressed: rgb(48 51 58 / 70%);

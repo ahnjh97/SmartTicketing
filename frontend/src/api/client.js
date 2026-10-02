@@ -30,12 +30,14 @@ export async function request(path, {
     authenticated = true,
     token = getAccessToken(),
     signal,
+    idempotencyKey,
 } = {}) {
     if (authenticated && !token) {
         throw new ApiError("로그인 정보가 없습니다.", 401);
     }
 
     const headers = { Accept: "application/json" };
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     if (authenticated) headers.Authorization = `Bearer ${token}`;
     if (body !== undefined) headers["Content-Type"] = "application/json";
 

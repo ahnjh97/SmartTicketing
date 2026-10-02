@@ -26,10 +26,12 @@ public class TicketService {
     }
 
     public TicketResponse issue(Long userId, Long reservationId) {
-        Reservation r = reservations.findById(reservationId).orElseThrow(() -> new IllegalArgumentException("예매를 찾을 수 없습니다."));
+        // 기존 티켓 API도 결제/취소와 같은 예약 행에서 직렬화한다.
+        // 이 경로는 상위 그룹/회차 잠금을 요청하지 않아 역순 잠금이 없다.
+        Reservation r = reservations.findLockedById(reservationId).orElseThrow(() -> new IllegalArgumentException("예매를 찾을 수 없습니다."));
         if (!r.getUser().getId().equals(userId)) throw new IllegalStateException("본인의 예매만 티켓으로 발급할 수 있습니다.");
         if (r.getStatus() != ReservationStatus.CONFIRMED) throw new IllegalStateException("결제 완료된 예매만 티켓을 발급할 수 있습니다.");
-        var old = tickets.findByReservationId(reservationId);
+        var old = tickets.findLockedByReservationId(reservationId);
         if (old.isPresent()) return to(old.get());
         Ticket t = new Ticket();
         t.setReservation(r);
@@ -60,6 +62,6 @@ public class TicketService {
         Reservation r = t.getReservation();
         var sh = r.getShowtime();
         var ss = seats.findByReservationId(r.getId()).stream().sorted(java.util.Comparator.comparing((ReservationSeat x) -> x.getSeat().getSeatRow()).thenComparing(x -> x.getSeat().getSeatNumber())).map(x -> x.getSeat().getSeatRow() + x.getSeat().getSeatNumber()).toList();
-        return new TicketResponse(t.getId(), r.getId(), t.getTicketNumber(), t.getQrCode(), t.getStatus(), sh.getMovie().getTitle(), sh.getScreen().getTheater().getName(), sh.getScreen().getName(), sh.getStartTime(), sh.getEndTime(), ss, t.getCreatedAt());
+        return new TicketResponse(t.getId(), r.getId(), t.getTicketNumber(), t.getQrCode(), t.getStatus(), sh.getMovie().getTitle(), sh.getScreen().getTheater().getName(), sh.getScreen().getName(), sh.getStartTime(), sh.getEndTime(), ss, t.getCreatedAt(), r.getRequestGroup() == null ? null : r.getRequestGroup().getId());
     }
 }

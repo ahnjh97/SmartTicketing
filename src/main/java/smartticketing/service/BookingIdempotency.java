@@ -32,6 +32,11 @@ public class BookingIdempotency {
 
     public BookingResult execute(Long userId, BookingOperationType type, String key, Object canonical,
                                  LocalDateTime now, Supplier<Object> action) {
+        return execute(userId, type, key, canonical, now, 201, action);
+    }
+
+    public BookingResult execute(Long userId, BookingOperationType type, String key, Object canonical,
+                                 LocalDateTime now, int successStatus, Supplier<Object> action) {
         key(key);
         String hash = hash(json.writeValueAsString(canonical));
         // UNIQUE key 획득을 같은 트랜잭션에서 기다린다. PROCESSING 단독 커밋은 없다.
@@ -55,7 +60,7 @@ public class BookingIdempotency {
 
         BookingResult result;
         try {
-            result = new BookingResult(201, json.writeValueAsString(action.get()));
+            result = new BookingResult(successStatus, json.writeValueAsString(action.get()));
         } catch (BookingRejection rejected) {
             result = error(rejected.status, rejected.getMessage(), now);
         }

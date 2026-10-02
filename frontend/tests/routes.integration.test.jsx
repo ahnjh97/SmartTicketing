@@ -51,6 +51,7 @@ beforeEach(() => {
         if (url === "/api/auth/signup") return new Response(JSON.stringify(completedUser));
         if (url === "/api/auth/logout") return new Response(null, { status: 204 });
         if (url === "/api/users/me") return new Response(JSON.stringify(completedUser));
+        if (url === "/api/tickets") return new Response('[]');
         throw new Error(`Unexpected API: ${url}`);
     }));
 });
@@ -138,7 +139,7 @@ test("social signup retains its direct route and loads provider information", as
     expect(screen.queryByLabelText("닉네임")).toBe(null);
 });
 
-test("tickets remain empty for members and redirect guests to login", async () => {
+test("tickets load the existing API for members and redirect guests to login", async () => {
     mount("/tickets");
     await screen.findByLabelText("아이디");
     await at("/login");
@@ -148,7 +149,7 @@ test("tickets remain empty for members and redirect guests to login", async () =
     mount("/tickets");
     await screen.findByRole("link", { name: "내 티켓" });
     await at("/tickets");
-    expect(screen.getByRole("main").textContent).toBe("");
+    expect(await screen.findByText('발급된 티켓이 없습니다.')).toBeTruthy();
 });
 
 test("signup accepts a non-email login ID and opens preference setup with its issued token", async () => {

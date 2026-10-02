@@ -20,6 +20,10 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import smartticketing.auth.*;
 import smartticketing.config.SecurityConfig;
 import smartticketing.controller.BookingHoldController;
+import smartticketing.controller.BookingPaymentController;
+import smartticketing.controller.TicketController;
+import smartticketing.repository.*;
+import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
 import smartticketing.exception.ApiExceptionHandler;
@@ -46,7 +50,14 @@ class BookingHoldHttpTests {
     private WebApplicationContextRunner runner(TemporaryMysqlDatabase db, Clock clock, Validator validator) {
         return new WebApplicationContextRunner()
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
-                        BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class)
+                        BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class,
+                        BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class)
+                .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true")
+                .withBean(TicketRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(TicketRepository.class))
+                .withBean(ReservationRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationRepository.class))
+                .withBean(ReservationSeatRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationSeatRepository.class))
+                .withBean(NotificationRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(NotificationRepository.class))
+                .withBean(UsersRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(UsersRepository.class))
                 .withBean(CustomOAuth2UserService.class, () -> mock(CustomOAuth2UserService.class))
                 .withBean(OAuth2SuccessHandler.class, () -> mock(OAuth2SuccessHandler.class))
                 .withBean(JwtDecoder.class, () -> mock(JwtDecoder.class))
@@ -132,6 +143,49 @@ class BookingHoldHttpTests {
     private int lockIndex(List<String> locks, String table) {
         for (int n = 0; n < locks.size(); n++) if (locks.get(n).contains("from " + table + " ")) return n;
         throw new AssertionError("Missing lock: " + table);
+    }
+
+    @Test void paymentHttpOwnershipIdempotencyTicketCompatibilityAndCancellation() throws Exception {
+        try (var db = new TemporaryMysqlDatabase(); var validation = Validation.buildDefaultValidatorFactory()) {
+            var ids = seed(db);
+            runner(db, clock, validation.getValidator()).run(context -> {
+                var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+                var auth = jwt().jwt(j -> j.subject(Long.toString(ids[0])));
+                var other = jwt().jwt(j -> j.subject(Long.toString(ids[5])));
+                var request = """
+                    {"entryPoint":"THEATER_NORMAL","movieId":%d,"viewingDate":"2026-10-01","partySize":2,"selectedShowtimeId":%d,
+                    "audience":{"adultCount":1,"youthCount":1,"companionsEligible":true,"guardianAccompanying":true}}
+                    """.formatted(ids[1],ids[2]);
+                var created = mvc.perform(post("/api/booking-groups").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content(request)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                var group = json.readTree(created).get("id").asLong();
+                var held = mvc.perform(post("/api/booking-groups/"+group+"/manual-hold").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content("{\"seatIds\":["+ids[3]+","+ids[4]+"]}"))
+                        .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                long reservation = json.readTree(held).get("id").asLong();
+                var path = "/api/reservations/"+reservation;
+                mvc.perform(post(path+"/mock-payments").contentType("application/json").content("{}" )).andExpect(status().isUnauthorized());
+                mvc.perform(get(path+"/payment").with(other)).andExpect(status().isNotFound());
+                mvc.perform(post(path+"/mock-payments").with(other).header("Idempotency-Key",UUID.randomUUID()).contentType("application/json")
+                        .content("{\"paymentMethod\":\"MOCK\"}")).andExpect(status().isNotFound());
+                mvc.perform(post(path+"/cancel").with(other).header("Idempotency-Key",UUID.randomUUID())).andExpect(status().isNotFound());
+                var key = UUID.randomUUID();
+                var paid = mvc.perform(post(path+"/mock-payments").with(auth).header("Idempotency-Key",key).contentType("application/json")
+                        .content("{\"paymentMethod\":\"MOCK\",\"amount\":1}"))
+                        .andExpect(status().isCreated()).andExpect(jsonPath("$.amount").value(18000))
+                        .andExpect(jsonPath("$.ticket.status").value("VALID")).andReturn().getResponse().getContentAsString();
+                mvc.perform(post(path+"/mock-payments").with(auth).header("Idempotency-Key",key).contentType("application/json")
+                        .content("{\"paymentMethod\":\"MOCK\"}")).andExpect(content().json(paid));
+                long ticket = json.readTree(paid).get("ticket").get("ticketId").asLong();
+                mvc.perform(get("/api/tickets/"+ticket).with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.reservationId").value(reservation));
+                mvc.perform(post("/api/tickets/reservations/"+reservation).with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.ticketId").value(ticket));
+                mvc.perform(post(path+"/cancel").with(auth).header("Idempotency-Key",UUID.randomUUID())
+                        .contentType("application/json").content("{\"seatIds\":[1]}")).andExpect(status().isBadRequest());
+                mvc.perform(post(path+"/cancel").with(auth).header("Idempotency-Key",UUID.randomUUID())).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+                mvc.perform(get(path+"/payment").with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+                mvc.perform(get("/api/tickets/"+ticket).with(auth)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+            });
+        }
     }
 
     private long[] seed(TemporaryMysqlDatabase db) {
