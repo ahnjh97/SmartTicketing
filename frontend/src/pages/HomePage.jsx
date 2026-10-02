@@ -19,8 +19,10 @@ function HomeMovieCard({ movie, isUpcoming }) {
         {movie.posterUrl && !failed ? <img {...movieImage(movie.posterUrl, { sizes: '(max-width: 599px) 42vw, (max-width: 999px) 32vw, 230px' })} alt={`${movie.title} 포스터`} loading="lazy" decoding="async" onError={() => setFailed(true)} /> : <div className={styles.placeholder}>이미지 준비 중</div>}
         <strong>{movie.title}</strong>
         <small>{formatRating(movie.rating)} · {movie.runningTime ? `${movie.runningTime}분` : '시간 미확인'}</small>
-        {/* 상영예정작이 아닐 때만 누적관객수 및 예매율 표시 */}
-        {!isUpcoming && (
+        {/* 상영예정작이면 개봉일 표시, 상영작이면 누적관객수 및 예매율 표시 */}
+        {isUpcoming ? (
+            <small>{movie.releaseDate ? `${movie.releaseDate} 개봉` : '개봉일 미정'}</small>
+        ) : (
             <small>누적 {(movie.audienceCount ?? 0).toLocaleString()} · 예매율 {movie.bookingRate ?? 0}%</small>
         )}
     </Link>;
@@ -28,7 +30,7 @@ function HomeMovieCard({ movie, isUpcoming }) {
 
 function MovieSection({ title, movies, loaded, isUpcoming }) {
     return <section className={styles.catalog} aria-label={title}>
-        <h2>{title} <span aria-hidden="true">›</span></h2>
+        <h2>{title}</h2>
         {loaded && !movies.length && <p role="status">표시할 영화가 없습니다.</p>}
         {movies.length > 0 && <HorizontalRail label={title} className={styles.rail}>
             {movies.map(movie => <HomeMovieCard key={movie.id} movie={movie} isUpcoming={isUpcoming} />)}

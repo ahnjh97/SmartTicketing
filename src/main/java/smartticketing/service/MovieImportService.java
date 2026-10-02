@@ -140,6 +140,24 @@ public class MovieImportService {
                 filledCount++;
             }
         }
+
+        // =========================================================================
+        // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작(10/11 ~ 10/17)으로 지정
+        // =========================================================================
+        List<Movie> upcomingMovies = movieRepository.findAll().stream()
+                .filter(m -> m.getReleaseDate() != null)
+                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()) // 1. 가장 미래 개봉일 순 정렬
+                .limit(10) // 2. 가장 최신/미래 영화 딱 10개 추출
+                .sorted(Comparator.comparing(Movie::getReleaseDate)) // 3. 다시 오름차순 정렬
+                .toList();
+
+        for (int i = 0; i < upcomingMovies.size(); i++) {
+            Movie upcomingMovie = upcomingMovies.get(i);
+            LocalDate adjustedDate = LocalDate.of(2026, 10, 11).plusDays(i % 7);
+            upcomingMovie.setReleaseDate(adjustedDate);
+            movieRepository.save(upcomingMovie);
+        }
+
         return filledCount;
     }
 

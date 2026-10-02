@@ -235,6 +235,31 @@ export default function ResidencePreference({
         useState("");
 
     useEffect(() => {
+        const updateTheaterMarqueeWidths = () => {
+            document
+                .querySelectorAll(".theater-list .theater-name-marquee")
+                .forEach((element) => {
+                    const overflow = Math.max(
+                        0,
+                        element.scrollWidth - element.clientWidth
+                    );
+
+                    element.style.setProperty(
+                        "--marquee-shift",
+                        overflow + "px"
+                    );
+                });
+        };
+
+        updateTheaterMarqueeWidths();
+        window.addEventListener("resize", updateTheaterMarqueeWidths);
+
+        return () => {
+            window.removeEventListener("resize", updateTheaterMarqueeWidths);
+        };
+    }, [theaters]);
+
+    useEffect(() => {
         let active = true;
         let script;
 
@@ -505,19 +530,6 @@ export default function ResidencePreference({
                 map: mapInstanceRef.current,
                 position,
                 title: "현재 위치",
-            });
-
-        currentCircleRef.current =
-            new kakao.maps.Circle({
-                map: mapInstanceRef.current,
-                center: position,
-                radius: 10000,
-                strokeWeight: 2,
-                strokeColor: "#222222",
-                strokeOpacity: 0.7,
-                strokeStyle: "solid",
-                fillColor: "#555555",
-                fillOpacity: 0.08,
             });
 
         const geocoder =
@@ -959,22 +971,20 @@ export default function ResidencePreference({
     async function loadNearbyTheaters(
         latitude,
         longitude,
-        resolvedAddress,
-        sort = "DISTANCE"
+        resolvedAddress
     ) {
         setSelectedTheaters([]);
         setTheaterLoading(true);
         clearMapSearchVisuals();
         setError("");
-        setTheaterSort(sort);
+        setTheaterSort("DISTANCE");
 
         try {
             const data = await theaterApi.nearby({
                 address: resolvedAddress,
                 latitude,
                 longitude,
-                radius: 10000,
-                sort,
+                sort: "DISTANCE",
             });
 
             if (!Array.isArray(data)) {
@@ -1006,22 +1016,6 @@ export default function ResidencePreference({
         }
     }
 
-    async function changeTheaterSort(sort) {
-        if (!location) {
-            return;
-        }
-
-        await loadNearbyTheaters(
-            location.latitude,
-            location.longitude,
-            address,
-            sort
-        );
-
-        if (sort === "WALK") {
-            setMessage("");
-        }
-    }
 
     function renderTheaterMarkers(
         theaterList
@@ -1520,30 +1514,8 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    현재 위치 기준 10km 이내의 영화관을 조회합니다.
+                    선택한 위치를 기준으로 가까운 영화관 20개를 표시합니다.
                 </p>
-
-                <div className="theater-sort-tabs">
-                    {[
-                        ["DISTANCE", "가까운순(직선거리)"],
-                        ["TRANSIT", "대중교통 거리순"],
-                        ["WALK", "도보 거리순"],
-                    ].map(([sort, label]) => (
-                        <button
-                            key={sort}
-                            type="button"
-                            className={
-                                theaterSort === sort
-                                    ? "theater-sort-tab active"
-                                    : "theater-sort-tab"
-                            }
-                            onClick={() => changeTheaterSort(sort)}
-                            disabled={theaterLoading || !location}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
 
                 {theaterLoading && (
                     <p className="help">
@@ -1572,39 +1544,59 @@ export default function ResidencePreference({
                                     Number(theater.theaterId)
                                 );
 
+                            const kakaoDirectionsUrl =
+                                location &&
+                                theater.latitude != null &&
+                                theater.longitude != null
+                                    ? "https://map.kakao.com/link/from/" +
+                                      (address || "선택한 위치") +
+                                      "," +
+                                      location.latitude +
+                                      "," +
+                                      location.longitude +
+                                      "/to/" +
+                                      theater.name +
+                                      "," +
+                                      theater.latitude +
+                                      "," +
+                                      theater.longitude
+                                    : "https://map.kakao.com/link/to/" +
+                                      theater.name +
+                                      "," +
+                                      theater.latitude +
+                                      "," +
+                                      theater.longitude;
+
                             return (
-                                <button
-                                    type="button"
-                                    key={
-                                        theater.theaterId
-                                    }
+                                <div
+                                    key={theater.theaterId}
                                     className={
                                         selected
                                             ? "theater-item selected"
                                             : "theater-item"
                                     }
-                                    onClick={() =>
-                                        toggleTheater(
-                                            Number(theater.theaterId)
-                                        )
-                                    }
                                 >
+                                    <button
+                                        type="button"
+                                        className="theater-item-main"
+                                        onClick={() =>
+                                            toggleTheater(
+                                                Number(theater.theaterId)
+                                            )
+                                        }
+                                    >
                                     <div className="theater-rank">
                                         {index + 1}
                                     </div>
 
                                     <div className="theater-main">
-                                        <strong>
-                                            {
-                                                theater.name
-                                            }
-                                        </strong>
-
-                                        <span>
-                                            {
-                                                theater.brand
-                                            }
-                                        </span>
+                                        <div className="theater-name-marquee">
+                                            <strong>
+                                                {
+                                                    theater.name
+                                                }
+                                            </strong>
+                                        </div>
 
                                         <small>
                                             {
@@ -1659,7 +1651,18 @@ export default function ResidencePreference({
                                             </div>
                                         )}
                                     </div>
-                                </button>
+                                    </button>
+
+                                    <a
+                                        className="theater-route-button"
+                                        href={kakaoDirectionsUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        길찾기
+                                    </a>
+                                </div>
                             );
                         }
                     )}
