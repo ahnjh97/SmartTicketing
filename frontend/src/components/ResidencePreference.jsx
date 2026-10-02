@@ -1502,7 +1502,7 @@ export default function ResidencePreference({
         const innerSize =
             pixelSize - borderWidth * 2;
         const logoSize =
-            innerSize * 0.94;
+            innerSize * 1.35;
 
         context.drawImage(
             logoImage,
