@@ -1646,14 +1646,6 @@ export default function ResidencePreference({
                                             )
                                         }
                                     >
-                                    {!selected && (
-                                        <div className={
-                                            "theater-rank"
-                                        }>
-                                            {index + 1}
-                                        </div>
-                                    )}
-
                                     <div className="theater-main">
                                         <div className="theater-name-marquee">
                                             <strong>
