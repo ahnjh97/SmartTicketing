@@ -800,8 +800,8 @@ input:focus {
     word-break: keep-all;
 }
 
-.theater-name-marquee:hover strong {
-    animation: theater-name-marquee 3s ease-in-out infinite alternate;
+.theater-name-marquee strong {
+    animation: theater-name-marquee 1s ease-in-out infinite alternate;
 }
 
 .theater-main small {
