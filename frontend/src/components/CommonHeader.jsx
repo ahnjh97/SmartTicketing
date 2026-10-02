@@ -3,6 +3,7 @@ import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
 import { Link, matchPath, NavLink, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+import { notificationApi } from "../api/notifications.js";
 
 export default function CommonHeader({
     user, disabled, setupRequired, onLogout,
@@ -16,15 +17,37 @@ export default function CommonHeader({
     const toggleRef = useRef(null);
     const [compact, setCompact] = useState(false);
     const [openLocation, setOpenLocation] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
     const menuOpen = compact && openLocation === locationKey;
     const activeMenu = pathname === PAGE_PATHS.home || matchPath(`${PAGE_PATHS.movies}/*`, pathname)
         ? "movies"
         : matchPath(`${PAGE_PATHS.theaters}/*`, pathname) ? "theaters" : null;
     const accountItems = user
-        ? [{ view: "tickets", label: "내 티켓" }, { view: "logout", label: "로그아웃" }, { view: "profile", label: "마이페이지" }]
+        ? [{ view: "notifications", label: "알림" }, { view: "tickets", label: "내 티켓" }, { view: "logout", label: "로그아웃" }, { view: "profile", label: "마이페이지" }]
         : [{ view: "login", label: "로그인" }, { view: "signup", label: "회원가입" }];
 
     const navigationDisabled = disabled || Boolean(user && setupRequired);
+
+    useEffect(() => {
+        if (!user || disabled) {
+            setUnreadCount(0);
+            return;
+        }
+        let mounted = true;
+        const loadUnread = () => notificationApi.list(true)
+            .then((items) => {
+                if (mounted) setUnreadCount(Array.isArray(items) ? items.length : 0);
+            })
+            .catch(() => {
+                if (mounted) setUnreadCount(0);
+            });
+        loadUnread();
+        const timer = window.setInterval(loadUnread, 30000);
+        return () => {
+            mounted = false;
+            window.clearInterval(timer);
+        };
+    }, [user, disabled]);
 
     useEffect(() => {
         if (typeof ResizeObserver === "undefined") return;
