@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { notificationApi } from "../api/notifications.js";
+import "./NotificationsPage.css";
 
 const TYPE_LABELS = {
     SEAT_HOLD_STARTED: "좌석 선점",
