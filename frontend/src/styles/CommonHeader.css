@@ -136,9 +136,35 @@
     background: var(--glass-hover);
 }
 
-.common-header-panel-trigger {
-    gap: 7px;
+.common-header-notification-trigger,
+.common-header-ticket-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: #fff;
     cursor: pointer;
+}
+
+.common-header-notification-trigger {
+    width: 42px;
+    height: 42px;
+    padding: 8px;
+}
+
+.common-header-ticket-trigger {
+    min-height: 48px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    background: var(--glass-background);
+}
+
+.common-header-ticket-trigger:hover:not(:disabled) {
+    background: var(--glass-hover);
 }
 
 .common-header-trigger-icon {
@@ -200,8 +226,50 @@
     transform: translateY(0);
 }
 
-.common-header-ticket-popover {
-    width: min(440px, calc(100vw - 32px));
+.common-header-notification-popover {
+    right: 24px;
+}
+
+.common-header-ticket-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 90;
+    max-height: min(70vh, 620px);
+    overflow: hidden;
+    border-bottom: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 0 0 22px 22px;
+    background: rgb(24 24 24 / 97%);
+    box-shadow: 0 20px 60px rgb(0 0 0 / 42%);
+    backdrop-filter: blur(22px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-100%);
+    transition: opacity 280ms ease, transform 320ms cubic-bezier(.22, 1, .36, 1), visibility 320ms ease;
+}
+
+.common-header-ticket-drawer.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.common-header-ticket-drawer .common-header-popover-header {
+    width: min(1100px, calc(100% - 48px));
+    margin: 0 auto;
+}
+
+.common-header-ticket-drawer .common-header-popover-body {
+    width: min(1100px, calc(100% - 48px));
+    margin: 0 auto;
+    max-height: min(55vh, 500px);
+}
+
+.common-header-ticket-item {
+    padding: 16px 4px;
 }
 
 .common-header-popover-header {
@@ -424,6 +492,11 @@
     .common-header-popover {
         right: 12px;
         width: min(400px, calc(100vw - 24px));
+    }
+
+    .common-header-ticket-drawer .common-header-popover-header,
+    .common-header-ticket-drawer .common-header-popover-body {
+        width: calc(100% - 24px);
     }
 }
 
