@@ -61,6 +61,14 @@ public class KakaoMapService {
     public List<NearbyTheaterResponse> findNearbyTheaters(
             String address,
             double latitude,
+            double longitude
+    ) {
+        return findNearbyTheaters(address, latitude, longitude, 0, "DISTANCE");
+    }
+
+    public List<NearbyTheaterResponse> findNearbyTheaters(
+            String address,
+            double latitude,
             double longitude,
             int radius
     ) {
