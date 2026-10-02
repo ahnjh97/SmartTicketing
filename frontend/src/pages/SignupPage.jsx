@@ -229,12 +229,8 @@ export default function SignupPage() {
         const year = Number(birthYear);
         const month = Number(birthMonth);
         const day = Number(birthDay);
-        const currentYear = new Date().getFullYear();
-
         if (
             birthYear.length !== 4 ||
-            year < 1900 ||
-            year > currentYear ||
             birthMonth.length !== 2 ||
             month < 1 ||
             month > 12 ||
