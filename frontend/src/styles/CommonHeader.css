@@ -136,8 +136,7 @@
     background: var(--glass-hover);
 }
 
-.common-header-notification-trigger,
-.common-header-ticket-trigger {
+.common-header-notification-trigger {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -154,12 +153,6 @@
     padding: 8px;
 }
 
-.common-header-ticket-trigger {
-    min-height: 48px;
-    border-radius: 16px;
-    font-size: 15px;
-    font-weight: 600;
-}
 
 
 .common-header-trigger-icon {
