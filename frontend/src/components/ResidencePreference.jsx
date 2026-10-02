@@ -1158,7 +1158,7 @@ export default function ResidencePreference({
                                 : ""}
                         </div>
                     `,
-                    yAnchor: 1.8,
+                    yAnchor: 1.15,
                     zIndex: 40,
                 });
 
@@ -1166,10 +1166,58 @@ export default function ResidencePreference({
                 marker,
                 "mouseover",
                 () => {
+                    const map =
+                        mapInstanceRef.current;
+
+                    if (!map) {
+                        return;
+                    }
+
                     theaterOverlaysRef.current.forEach(
                         (item) => item.setMap(null)
                     );
-                    overlay.setMap(mapInstanceRef.current);
+
+                    const projection =
+                        map.getProjection();
+
+                    const point =
+                        projection.containerPointFromCoords(
+                            position
+                        );
+
+                    const mapSize =
+                        map.getSize();
+
+                    const showBelow =
+                        point.y < 65;
+
+                    const element =
+                        document.createElement("div");
+
+                    element.className =
+                        showBelow
+                            ? "map-theater-info below"
+                            : "map-theater-info";
+
+                    element.innerHTML =
+                        `<strong>${theater.name}</strong>` +
+                        (distanceText
+                            ? `<span>${distanceText}</span>`
+                            : "");
+
+                    overlay.setContent(
+                        element
+                    );
+                    overlay.setPosition(
+                        position
+                    );
+                    overlay.setMap(map);
+
+                    // 지도 상단 경계에 가까우면
+                    // 오버레이를 마커 아래로 뒤집습니다.
+                    overlay.setZIndex(40);
+
+                    void mapSize;
                 }
             );
 
