@@ -366,7 +366,7 @@ export default function CommonHeader({
                         </div>
                     </div>
 
-                    <div className={`common-header-ticket-drawer${openPanel === "tickets" ? " is-open" : ""}`}>
+                    <div className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}>
                         <div className="common-header-popover-header">
                             <div>
                                 <strong>내 티켓</strong>
