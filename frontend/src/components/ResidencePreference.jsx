@@ -507,19 +507,6 @@ export default function ResidencePreference({
                 title: "현재 위치",
             });
 
-        currentCircleRef.current =
-            new kakao.maps.Circle({
-                map: mapInstanceRef.current,
-                center: position,
-                radius: 10000,
-                strokeWeight: 2,
-                strokeColor: "#222222",
-                strokeOpacity: 0.7,
-                strokeStyle: "solid",
-                fillColor: "#555555",
-                fillOpacity: 0.08,
-            });
-
         const geocoder =
             new kakao.maps.services.Geocoder();
 
