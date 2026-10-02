@@ -235,6 +235,31 @@ export default function ResidencePreference({
         useState("");
 
     useEffect(() => {
+        const updateTheaterMarqueeWidths = () => {
+            document
+                .querySelectorAll(".theater-list .theater-name-marquee")
+                .forEach((element) => {
+                    const overflow = Math.max(
+                        0,
+                        element.scrollWidth - element.clientWidth
+                    );
+
+                    element.style.setProperty(
+                        "--marquee-shift",
+                        overflow + "px"
+                    );
+                });
+        };
+
+        updateTheaterMarqueeWidths();
+        window.addEventListener("resize", updateTheaterMarqueeWidths);
+
+        return () => {
+            window.removeEventListener("resize", updateTheaterMarqueeWidths);
+        };
+    }, [theaters]);
+
+    useEffect(() => {
         let active = true;
         let script;
 
