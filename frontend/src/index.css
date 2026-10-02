@@ -913,7 +913,7 @@ input:focus {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
     white-space: nowrap;
     pointer-events: none;
-    transform: translateY(-12px);
+    transform: translateY(-7px);
     backdrop-filter: blur(6px);
 }
 
@@ -931,7 +931,7 @@ input:focus {
 }
 
 .map-theater-info.below {
-    transform: translateY(12px);
+    transform: translateY(calc(100% + 7px));
 }
 
 .map-theater-info.below::after {
