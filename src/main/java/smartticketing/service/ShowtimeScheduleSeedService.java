@@ -25,11 +25,12 @@ import java.util.Set;
 public class ShowtimeScheduleSeedService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final int ROUNDS = 7;                  // 상영관마다 하루 7회
-    private static final int LINEUP_SIZE = 10;            // 그날 상영하는 영화 수
-    private static final int AD_MINUTES = 10;             // 광고
-    private static final int CLEANING_MINUTES = 20;       // 청소
+    private static final int ROUNDS = 7;
+    private static final int LINEUP_SIZE = 10;
+    private static final int AD_MINUTES = 10;
+    private static final int CLEANING_MINUTES = 20;
     private static final LocalTime FIRST_START = LocalTime.of(8, 0);
+    private static final LocalTime LAST_END = LocalTime.of(3, 30); // 다음 날 마지막 상영 종료 시각
     private static final int PRICE = 10_000;
 
     private final EntityManager em;
@@ -58,9 +59,7 @@ public class ShowtimeScheduleSeedService {
         List<Movie> movies = em.createQuery(
                         "select m from Movie m where m.active = true and m.releaseDate is not null and m.runningTime > 0",
                         Movie.class)
-                .getResultList().stream()
-                .filter(m -> fitsSevenRounds(m.getRunningTime()))
-                .toList();
+                .getResultList();
         if (movies.isEmpty()) return new Result(0, 0);
 
         LocalDateTime now = LocalDateTime.now(SEOUL);
@@ -103,8 +102,10 @@ public class ShowtimeScheduleSeedService {
                 Movie movie = lineup.get((base + screenNo - 1) % lineup.size());
 
                 LocalDateTime start = date.atTime(FIRST_START).plusMinutes(startOffset);
+                LocalDateTime lastEnd = date.plusDays(1).atTime(LAST_END);
                 for (int round = 0; round < ROUNDS; round++) {
                     LocalDateTime end = start.plusMinutes(movie.getRunningTime() + AD_MINUTES);
+                    if (end.isAfter(lastEnd)) break;   // 새벽 3시 30분 넘게 끝나면 그날 상영 종료
                     if (start.isAfter(now) && !existingStarts.contains(start)) {
                         pending.add(new NewShowtime(screen.getId(), movie.getId(), start, end));
                     }
@@ -128,16 +129,6 @@ public class ShowtimeScheduleSeedService {
                 .limit(LINEUP_SIZE)
                 .sorted(Comparator.comparing(Movie::getTmdbMovieId))
                 .toList();
-    }
-
-    private boolean fitsSevenRounds(int runningTime) {
-        int interval = roundUpTo5Minutes(runningTime + AD_MINUTES + CLEANING_MINUTES);
-        int lastEnd = interval * (ROUNDS - 1) + runningTime + AD_MINUTES;
-        return lastEnd + CLEANING_MINUTES <= 24 * 60;
-    }
-
-    private int roundUpTo5Minutes(int minutes) {
-        return (minutes + 4) / 5 * 5;
     }
 
     private LocalDateTime roundUpTo5(LocalDateTime time) {

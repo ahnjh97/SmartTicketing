@@ -8,11 +8,7 @@ import HorizontalRail from '../components/HorizontalRail.jsx';
 import { QueryStatus } from '../booking/BookingComponents.jsx';
 import ui from '../booking/BookingComponents.module.css';
 import styles from './HomePage.module.css';
-
-function formatRating(rating) {
-    if (!rating) return '등급 미확인';
-    return /^\d+$/.test(rating) ? `${rating}세` : rating;
-}
+import { formatRating } from '../booking/format.js';
 
 function HomeMovieCard({ movie, isUpcoming }) {
     const [failed, setFailed] = useState(false);

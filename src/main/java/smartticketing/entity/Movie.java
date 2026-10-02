@@ -60,4 +60,13 @@ public class Movie {
 
     @Column(name = "audience_count", nullable = false)
     private long audienceCount = 0;
+
+    @Column(length = 255)
+    private String genres;
+
+    @Column(length = 100)
+    private String director;
+
+    @Column(name = "cast_names", length = 500)
+    private String castNames;
 }

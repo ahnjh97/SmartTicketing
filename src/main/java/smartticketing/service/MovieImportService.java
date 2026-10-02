@@ -33,6 +33,8 @@ public class MovieImportService {
     private final List<Long> movieIds;
     private final Map<Long, String> ratingOverrides;
     private final Map<Long, Long> audienceSeeds;
+    private final Map<String, String> nameOverrides;
+    private final Map<Long, LocalDate> releaseDateOverrides;
 
     public MovieImportService(
             @Qualifier("tmdbRestClient") RestClient tmdbRestClient,
@@ -42,7 +44,9 @@ public class MovieImportService {
             @Value("${tmdb.backdrop-base-url:https://image.tmdb.org/t/p/w1280}") String backdropBaseUrl,
             @Value("${tmdb.movie-ids}") String movieIds,
             @Value("${tmdb.rating-overrides:}") String ratingOverrides,
-            @Value("${tmdb.audience-seeds:}") String audienceSeeds) {
+            @Value("${tmdb.audience-seeds:}") String audienceSeeds,
+            @Value("${tmdb.name-overrides:}") String nameOverrides,
+            @Value("${tmdb.release-date-overrides:}") String releaseDateOverrides) {
 
         this.tmdbRestClient = tmdbRestClient;
         this.movieRepository = movieRepository;
@@ -68,6 +72,18 @@ public class MovieImportService {
                 .filter(entry -> entry.contains(":"))
                 .map(entry -> entry.split(":"))
                 .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> Long.valueOf(pair[1].trim())));
+
+        this.nameOverrides = Arrays.stream(nameOverrides.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> pair[0].trim(), pair -> pair[1].trim()));
+
+        this.releaseDateOverrides = Arrays.stream(releaseDateOverrides.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> LocalDate.parse(pair[1].trim())));
     }
 
     public MovieImportResult importConfiguredMovies() {
@@ -85,7 +101,7 @@ public class MovieImportService {
         for (Long tmdbId : movieIds) {
             var existing = movieRepository.findByTmdbMovieId(tmdbId);
             if (!refresh && existing.isPresent() && existing.get().getMetadataFetchedAt() != null
-                    && existing.get().getImageMetadataFetchedAt() != null) {
+                    && existing.get().getImageMetadataFetchedAt() != null && existing.get().getGenres() != null){
                 skippedCount++;
                 continue;
             }
@@ -121,7 +137,9 @@ public class MovieImportService {
 
     private int applyConfiguredDefaults() {
         var changedIds = new java.util.HashSet<Long>();
-        for (Movie movie : movieRepository.findByTmdbMovieIdIn(movieIds)) {
+        var configuredIds = new java.util.HashSet<>(movieIds);
+        configuredIds.addAll(releaseDateOverrides.keySet());
+        for (Movie movie : movieRepository.findByTmdbMovieIdIn(configuredIds.stream().sorted().toList())) {
             Long tmdbId = movie.getTmdbMovieId();
             boolean changed = false;
 
@@ -134,17 +152,26 @@ public class MovieImportService {
                 changed = true;
             }
 
+            LocalDate releaseDate = releaseDateOverrides.get(tmdbId);
+            if (releaseDate != null && !releaseDate.equals(movie.getReleaseDate())) {
+                movie.setReleaseDate(releaseDate);
+                changed = true;
+            }
             if (changed) {
                 movieRepository.save(movie);
                 changedIds.add(movie.getId());
             }
         }
 
+
         // =========================================================================
         // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작(10/11 ~ 10/17)으로 지정
         // =========================================================================
-        List<Movie> upcomingMovies = movieRepository.findTop10ByReleaseDateIsNotNullOrderByReleaseDateDesc().stream()
-                .sorted(Comparator.comparing(Movie::getReleaseDate)) // 3. 다시 오름차순 정렬
+        List<Movie> upcomingMovies = (releaseDateOverrides.isEmpty()
+                ? movieRepository.findTop10ByReleaseDateIsNotNullOrderByReleaseDateDescTmdbMovieIdAsc()
+                : movieRepository.findTop10ByReleaseDateIsNotNullAndTmdbMovieIdNotInOrderByReleaseDateDescTmdbMovieIdAsc(
+                        releaseDateOverrides.keySet().stream().sorted().toList())).stream()
+                .sorted(Comparator.comparing(Movie::getTmdbMovieId))
                 .toList();
 
         for (int i = 0; i < upcomingMovies.size(); i++) {
@@ -184,7 +211,7 @@ public class MovieImportService {
                 .uri(uriBuilder -> uriBuilder
                         .path("/movie/{id}")
                         .queryParam("language", "ko-KR")
-                        .queryParam("append_to_response", "release_dates,videos,images")
+                        .queryParam("append_to_response", "release_dates,videos,images,credits")
                         .queryParam("include_image_language", "ko,en,null")
                         .build(tmdbId))
                 .retrieve()
@@ -197,6 +224,7 @@ public class MovieImportService {
         movie.setTitle(response.title());
         movie.setDescription(response.overview());
         movie.setRunningTime(response.runtime() != null && response.runtime() > 0 ? response.runtime() : null);
+
         // TMDB에 한국 등급이 없으면 설정 파일에 적어둔 등급 사용
         String rating = findKoreanRating(response);
         movie.setRating(rating != null ? rating : ratingOverrides.get(response.id()));
@@ -209,6 +237,9 @@ public class MovieImportService {
         movie.setImageMetadataFetchedAt(movie.getMetadataFetchedAt());
         movie.setActive(true);
         movie.setAudienceCount(audienceSeeds.getOrDefault(response.id(), 0L));
+        movie.setGenres(joinGenres(response));
+        movie.setDirector(findDirector(response));
+        movie.setCastNames(joinCast(response));
         return movie;
     }
 
@@ -247,6 +278,41 @@ public class MovieImportService {
                 .sorted(Comparator.comparing(TmdbMovieDetailResponse.Video::official).reversed()
                         .thenComparing(TmdbMovieDetailResponse.Video::key))
                 .map(v -> "https://www.youtube.com/watch?v=" + v.key()).findFirst().orElse(null);
+    }
+
+    // 장르를 "모험, 액션, 판타지"로 연결 (없으면 빈 문자열: 다시 가져오지 않도록 null 대신 사용)
+    private String joinGenres(TmdbMovieDetailResponse response) {
+        if (response.genres() == null) return "";
+        return response.genres().stream()
+                .map(TmdbMovieDetailResponse.Genre::name)
+                .filter(name -> name != null && !name.isBlank())
+                .collect(Collectors.joining(", "));
+    }
+
+    private String findDirector(TmdbMovieDetailResponse response) {
+        if (response.credits() == null || response.credits().crew() == null) return null;
+        String directors = response.credits().crew().stream()
+                .filter(crew -> "Director".equals(crew.job()))
+                .map(TmdbMovieDetailResponse.CrewMember::name)
+                .map(name -> nameOverrides.getOrDefault(name, name))
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .limit(2)
+                .collect(Collectors.joining(", "));
+        return directors.isBlank() ? null : directors;
+    }
+
+    private String joinCast(TmdbMovieDetailResponse response) {
+        if (response.credits() == null || response.credits().cast() == null) return null;
+        String cast = response.credits().cast().stream()
+                .filter(member -> member.name() != null && !member.name().isBlank())
+                .sorted(Comparator.comparing(TmdbMovieDetailResponse.CastMember::order,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(5)
+                .map(TmdbMovieDetailResponse.CastMember::name)
+                .map(name -> nameOverrides.getOrDefault(name, name))
+                .collect(Collectors.joining(", "));
+        return cast.isBlank() ? null : cast;
     }
 
     private String findKoreanRating(TmdbMovieDetailResponse response) {
