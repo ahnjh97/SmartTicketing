@@ -1646,7 +1646,13 @@ export default function ResidencePreference({
                                             )
                                         }
                                     >
-
+                                    {!selected && (
+                                        <div className={
+                                            "theater-rank"
+                                        }>
+                                            {index + 1}
+                                        </div>
+                                    )}
 
                                     <div className="theater-main">
                                         <div className="theater-name-marquee">
@@ -1725,8 +1731,8 @@ export default function ResidencePreference({
                                                                                     rel="noreferrer"
                                                                                     onClick={(event) => event.stopPropagation()}
                                                                                 >
-                                                                                    "길찾기"
-                                                                                </a>
+                                        길찾기
+                                    </a>
                                         </div>
                                     ) : (
                                     <a
@@ -1736,7 +1742,7 @@ export default function ResidencePreference({
                                         rel="noreferrer"
                                         onClick={(event) => event.stopPropagation()}
                                     >
-                                        "길찾기"
+                                        길찾기
                                     </a>
                                     )}
                                 </div>
