@@ -24,7 +24,6 @@ import java.util.concurrent.Executors;
 @Transactional
 public class KakaoMapService {
 
-    private static final int SEARCH_RADIUS_METERS = 10_000;
     private static final int WALK_RADIUS_METERS = 2_000;
 
     private final TheaterRepository theaters;
@@ -102,7 +101,8 @@ public class KakaoMapService {
             );
         }
 
-        // DB에서 좌표가 있는 활성 영화관을 가져온 뒤 직선거리로 10km 이내를 필터링한다.
+        // DB에 저장된 활성 영화관 전체를 거리순으로 정렬한 뒤 가까운 20개만 사용한다.
+        // 더 이상 10km 반경으로 결과를 잘라내지 않는다.
         List<Theater> theaterList = performance.measureDbQuery(
                 theaters::findByActiveTrueAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByNameAsc
         );
@@ -117,10 +117,11 @@ public class KakaoMapService {
                                 theater.getLongitude()
                         )
                 ))
-                .filter(item -> item.distanceMeters() <= SEARCH_RADIUS_METERS)
+                .sorted(Comparator.comparingInt(TheaterDistance::distanceMeters))
+                .limit(20)
                 .toList();
 
-        // 도보 정렬은 직선거리 2km 이내 영화관만 대상으로 한다.
+        // 기존 WALK 호출과의 호환성을 유지하되 후보는 항상 가까운 20개로 제한한다.
         List<TheaterDistance> selectedCandidates = "WALK".equals(normalizedSort)
                 ? candidates.stream()
                         .filter(item -> item.distanceMeters() <= WALK_RADIUS_METERS)
