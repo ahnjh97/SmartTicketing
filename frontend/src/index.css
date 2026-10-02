@@ -781,29 +781,25 @@ input:focus {
 }
 
 .theater-main strong,
-.theater-main span,
 .theater-main small {
     display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
 }
 
 .theater-main strong {
     font-size: 13px;
-    line-height: 1.2;
-}
-
-.theater-main span {
-    margin-top: 2px;
-    color: #aaa;
-    font-size: 10px;
+    line-height: 1.35;
 }
 
 .theater-main small {
-    margin-top: 3px;
+    margin-top: 4px;
     color: #777;
     font-size: 9px;
+    line-height: 1.35;
 }
 
 .theater-time {
