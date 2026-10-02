@@ -27,6 +27,9 @@ public class MovieMetadataWriter {
         if (blank(target.getLogoUrl())) target.setLogoUrl(incoming.getLogoUrl());
         if (blank(target.getTrailerUrl())) target.setTrailerUrl(incoming.getTrailerUrl());
         target.setMetadataFetchedAt(incoming.getMetadataFetchedAt());
+        if (blank(target.getGenres())) target.setGenres(incoming.getGenres());
+        if (blank(target.getDirector())) target.setDirector(incoming.getDirector());
+        if (blank(target.getCastNames())) target.setCastNames(incoming.getCastNames());
         if (incoming.getImageMetadataFetchedAt() != null) {
             target.setImageMetadataFetchedAt(incoming.getImageMetadataFetchedAt());
         }

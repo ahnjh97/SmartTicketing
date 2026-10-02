@@ -16,8 +16,21 @@ public record TmdbMovieDetailResponse (
         @JsonProperty("backdrop_path") String backdropPath,
         @JsonProperty("release_dates") ReleaseDates releaseDates,
         Videos videos,
-        Images images
+        Images images,
+        List<Genre> genres,
+        Credits credits
 ) {
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Genre(String name) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Credits(List<CastMember> cast, List<CrewMember> crew) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CastMember(String name, Integer order) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CrewMember(String name, String job) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Images(List<Logo> logos, List<Backdrop> backdrops) {}
