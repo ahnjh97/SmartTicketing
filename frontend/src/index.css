@@ -823,7 +823,7 @@ input:focus {
         transform: translateX(0);
     }
     to {
-        transform: translateX(-20px);
+        transform: translateX(calc(-1 * var(--marquee-shift, 0px)));
     }
 }
 
