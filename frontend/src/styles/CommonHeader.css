@@ -154,6 +154,13 @@
     padding: 8px;
 }
 
+.common-header-ticket-trigger {
+    min-height: 48px;
+    border-radius: 16px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
 
 .common-header-trigger-icon {
     display: inline-flex;
