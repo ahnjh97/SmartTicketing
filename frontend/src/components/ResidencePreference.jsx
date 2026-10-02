@@ -1548,7 +1548,7 @@ export default function ResidencePreference({
                                 location &&
                                 theater.latitude != null &&
                                 theater.longitude != null
-                                    ? "https://map.kakao.com/link/by/car/" +
+                                    ? "https://map.kakao.com/link/from/" +
                                       (address || "선택한 위치") +
                                       "," +
                                       location.latitude +
@@ -1561,7 +1561,7 @@ export default function ResidencePreference({
                                       "," +
                                       theater.longitude
                                     : "https://map.kakao.com/link/to/" +
-                                      encodeURIComponent(theater.name) +
+                                      theater.name +
                                       "," +
                                       theater.latitude +
                                       "," +
