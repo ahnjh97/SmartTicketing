@@ -1888,3 +1888,93 @@ input:focus {
         border-radius: 10px;
     }
 }
+
+/* My Page - existing frontend style enhancement only */
+.profile-card {
+    max-width: 900px;
+}
+
+.profile-header {
+    padding-bottom: 18px;
+    border-bottom: 1px solid #303030;
+}
+
+.profile-header h1 {
+    margin-bottom: 0;
+}
+
+.user-info {
+    gap: 14px;
+}
+
+.user-info > div {
+    min-height: 82px;
+    padding: 17px 18px;
+    background: linear-gradient(145deg, #202020, #1c1c1c);
+    border-color: #353535;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.user-info > div:hover {
+    border-color: #505050;
+    transform: translateY(-1px);
+}
+
+.user-info > div:nth-child(5),
+.user-info > div:nth-child(6) {
+    min-height: 130px;
+}
+
+.user-info span {
+    margin-bottom: 9px;
+    color: #8d8d8d;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.user-info strong {
+    font-size: 16px;
+}
+
+.user-info > div:nth-child(5) > div,
+.user-info > div:nth-child(6) > div {
+    margin-top: 8px;
+    color: #ddd;
+    line-height: 1.5;
+}
+
+.user-info > div:nth-child(5) > div > div,
+.user-info > div:nth-child(6) > div > div {
+    padding: 7px 9px;
+    margin-bottom: 5px !important;
+    border-radius: 7px;
+    background: #292929;
+}
+
+.user-info > div:nth-child(5) > div > div strong,
+.user-info > div:nth-child(6) > div > div strong {
+    color: #ffcc00;
+    font-size: 12px;
+}
+
+.profile-action-area {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #303030;
+}
+
+.profile-action-area .primary-button,
+.profile-action-area .withdraw-button {
+    flex: 1;
+}
+
+@media (max-width: 700px) {
+    .profile-card {
+        max-width: 100%;
+    }
+
+    .user-info > div:nth-child(5),
+    .user-info > div:nth-child(6) {
+        min-height: 0;
+    }
+}
