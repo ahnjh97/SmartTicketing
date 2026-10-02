@@ -931,7 +931,7 @@ input:focus {
 }
 
 .map-theater-info.below {
-    transform: translateY(calc(100% + 7px));
+    transform: translateY(7px);
 }
 
 .map-theater-info.below::after {
