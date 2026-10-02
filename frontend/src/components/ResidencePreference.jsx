@@ -186,6 +186,9 @@ export default function ResidencePreference({
     const [theaters, setTheaters] =
         useState([]);
 
+    const [theaterSort, setTheaterSort] =
+        useState("DISTANCE");
+
     const [selectedTheaters, setSelectedTheaters] =
         useState(
             (user.preferredTheaters ?? [])
