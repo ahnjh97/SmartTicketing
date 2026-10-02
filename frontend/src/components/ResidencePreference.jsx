@@ -1565,12 +1565,13 @@ export default function ResidencePreference({
                                     </div>
 
                                     <div className="theater-main">
-                                        <strong>
-                                            {
-                                                theater.name
-                                            }
-                                        </strong>
-
+                                        <div className="theater-name-marquee">
+                                            <strong>
+                                                {
+                                                    theater.name
+                                                }
+                                            </strong>
+                                        </div>
 
                                         <small>
                                             {
