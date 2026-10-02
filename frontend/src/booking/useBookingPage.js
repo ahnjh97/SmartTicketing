@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.js';
 import useCatalog from './useCatalog.js';
-import { availability, dates, positive, rememberBooking, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
+import { dates, positive, rememberBooking, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
 
 export default function useBookingPage(mode) {
     const theaterMode = mode === 'theater';
@@ -58,9 +58,9 @@ export default function useBookingPage(mode) {
     const selectedMovie = theaterMode ? movies.data?.items.find(m => String(m.movieId) === movieId) : detail.data;
     const preferences = [...(user?.preferredTheaters || [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     const valid = Boolean(dateValid && selectedMovieExists && !shows.loading && !shows.error && (theaterMode
-        ? selectedShow && selectedShow.availableSeats > 0
-        : validParty(party) && rangeFuture && items.some(s => ['조회상 선택 가능', '분할 좌석 확인 필요'].includes(availability(s, Number(party))))));
-    const smartReady = theaterMode ? selectedShow?.layoutComplete : true;
+        ? selectedShow
+        : validParty(party) && rangeFuture));
+    const smartReady = theaterMode ? Boolean(selectedShow) : true;
     const enter = kind => {
         if (!valid || (kind === 'THEATER_SMART' && !smartReady)) return;
         if (theaterMode ? Date.parse(selectedShow.startTime) <= Date.now() : !futureRange(date, from, until, Date.now())) return;

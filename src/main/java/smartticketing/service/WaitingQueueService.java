@@ -34,7 +34,7 @@ public class WaitingQueueService {
         WaitingQueue queue = queues.findById(queueId)
                 .orElseThrow(() -> new IllegalArgumentException("대기열을 찾을 수 없습니다."));
 
-        if (queue.getStatus() != QueueStatus.WAITING) {
+        if (queue.getRequestGroup() != null || queue.getStatus() != QueueStatus.WAITING) {
             return queue;
         }
 
@@ -56,6 +56,7 @@ public class WaitingQueueService {
         var expired = em.createQuery("""
                 select q from WaitingQueue q
                 where q.status = :status
+                  and q.requestGroup is null
                   and q.opportunityExpiresAt is not null
                   and q.opportunityExpiresAt <= :now
                 """, WaitingQueue.class)

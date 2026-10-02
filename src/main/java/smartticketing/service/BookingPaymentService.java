@@ -89,6 +89,7 @@ public class BookingPaymentService {
         owned.forEach(seat -> { seat.setStatus(SeatStatus.RESERVED); seat.setHoldExpiredAt(null); });
         r.setStatus(ReservationStatus.CONFIRMED); r.setUpdatedAt(now);
         locked.group().setStatus(BookingGroupStatus.COMPLETED); locked.group().setUpdatedAt(now);
+        BookingQueueLifecycle.completed(em, locked.group().getId(), now);
         em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
         return paymentResponse(r, payment, true);
@@ -103,6 +104,7 @@ public class BookingPaymentService {
         var group = holds.lockOwnedGroup(userId, (Long) ref[0]);
         var slot = group.getStatus() == BookingGroupStatus.HOLDING
                 ? em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE) : null;
+        BookingQueueLifecycle.lockShows(em, group.getId(), (Long) ref[1]);
         var show = em.find(Showtime.class, (Long) ref[1], LockModeType.PESSIMISTIC_WRITE);
         var reservation = em.find(Reservation.class, id, LockModeType.PESSIMISTIC_WRITE);
         return new Locked(group, slot, show, reservation);
@@ -135,7 +137,8 @@ public class BookingPaymentService {
                 () -> cancelLocked(userId, id));
     }
 
-    private ReservationResponse cancelLocked(Long userId, Long id) {
+    @Transactional(noRollbackFor = BookingRejection.class)
+    ReservationResponse cancelLocked(Long userId, Long id) {
         var locked = lock(userId, id);
         var r = locked.reservation();
         if (r.getStatus() == ReservationStatus.CANCELLED) return holds.response(r, holds.now());
@@ -166,6 +169,9 @@ public class BookingPaymentService {
         owned.forEach(s -> { s.setStatus(SeatStatus.AVAILABLE); s.setReservation(null); s.setHoldExpiredAt(null); });
         r.setStatus(ReservationStatus.CANCELLED); r.setUpdatedAt(now);
         locked.group().setStatus(BookingGroupStatus.CANCELLED); locked.group().setUpdatedAt(now);
+        if (!confirmed && BookingQueueLifecycle.released(em, locked.group().getId(), true, now))
+            locked.group().setStatus(BookingGroupStatus.ACTIVE);
+        else BookingQueueLifecycle.cancelled(em, locked.group().getId(), now);
         if (locked.slot() != null) em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
         notifications.cancelled(userId);

@@ -37,8 +37,7 @@ public class BookingHoldService {
         return hold(userId, groupId, key, Source.MANUAL, new Candidate(null, request.seatIds()));
     }
 
-    // 후속 추천/대기 서비스는 외부 조회와 후보 탐색을 마친 뒤 별도 짧은 트랜잭션으로 호출한다.
-    // WAITING 관련 queue 상태 전이는 8단계에서 이 트랜잭션에 통합해야 한다.
+    // The waiting dispatcher calls acquire after locking all competing groups and shows.
     public BookingResult hold(Long userId, Long groupId, String key, Source source, Candidate candidate) {
         BookingIdempotency.key(key);
         requireUser(userId);
@@ -57,7 +56,9 @@ public class BookingHoldService {
                 () -> acquire(userId, groupId, source, candidate.showtimeId(), ids));
     }
 
-    private ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids) {
+    // Package scope: smart orchestration supplies its own request-level idempotency transaction.
+    @Transactional(noRollbackFor = BookingRejection.class)
+    ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids) {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
@@ -74,11 +75,15 @@ public class BookingHoldService {
             if (group.getSelectedShowtime() == null) reject(409, "선택 회차 연결을 확인할 수 없습니다.");
             target = group.getSelectedShowtime().getId();
         }
+        BookingQueueLifecycle.lockShows(em, group.getId(), target);
         var show = em.find(Showtime.class, target, LockModeType.PESSIMISTIC_WRITE);
         // 잠금 대기 후의 현재 시각을 사용한다.
         var now = now();
         validateShow(show, now);
         validateGroupShow(group, show);
+        if (BookingQueueLifecycle.rows(em, group.getId()).stream().anyMatch(q -> q.getShowtime().getId().equals(show.getId())
+                && (q.getStatus() == QueueStatus.EXPIRED || q.getStatus() == QueueStatus.CANCELLED)))
+            reject(409, "이 그룹에서 종료된 회차 기회입니다. 새 관람 요청으로 신청해주세요.");
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
         var inventory = lockInventory(show.getId());
         now = now();
@@ -90,7 +95,7 @@ public class BookingHoldService {
             if (!seat.isActive() || !seat.getScreen().getId().equals(show.getScreen().getId()))
                 reject(409, "이용할 수 없는 좌석입니다.");
             if (row.getStatus() != SeatStatus.AVAILABLE || row.getReservation() != null || row.getHoldExpiredAt() != null)
-                reject(409, "요청 좌석을 모두 확보할 수 없습니다.");
+                throw new BookingRejection(409, "SEAT_CONFLICT", "요청 좌석을 모두 확보할 수 없습니다.");
         }
         // 수동 선택에는 연속석 조건을 강제하지 않는다. 자동 후보는 알려진 연결정보만 검증한다.
         if (source != Source.MANUAL) validateAutomaticLayout(selected, inventory);
@@ -115,6 +120,7 @@ public class BookingHoldService {
         var slot = new BookingGroupHold(); slot.setRequestGroup(group); slot.setReservation(reservation);
         slot.setExpiresAt(expires); em.persist(slot);
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
+        BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
         updateAvailable(show, inventory, now);
         return response(reservation, now);
     }
@@ -148,6 +154,7 @@ public class BookingHoldService {
         catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
     }
 
+    @Transactional(noRollbackFor = BookingRejection.class)
     BookingRequestGroup lockOwnedGroup(Long userId, Long groupId) {
         var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
         if (group == null || !group.getUser().getId().equals(userId)) reject(404, "관람 요청을 찾을 수 없습니다.");
@@ -174,6 +181,7 @@ public class BookingHoldService {
         // slot의 lazy 예약을 먼저 읽어 잠그지 않는다. 회차 ID는 스칼라로 찾는다.
         Long showId = em.createQuery("select r.showtime.id from Reservation r where r.id=:id", Long.class)
                 .setParameter("id", reservationId).getSingleResult();
+        BookingQueueLifecycle.lockShows(em, group.getId(), showId);
         var show = em.find(Showtime.class, showId, LockModeType.PESSIMISTIC_WRITE);
         var reservation = em.find(Reservation.class, reservationId, LockModeType.PESSIMISTIC_WRITE);
         var now = now();
@@ -197,6 +205,7 @@ public class BookingHoldService {
         }
         reservation.setStatus(ReservationStatus.EXPIRED); reservation.setUpdatedAt(now);
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
+        BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot); updateAvailable(show, inventory, now);
         return true;
     }
@@ -259,13 +268,8 @@ public class BookingHoldService {
             sizes.add(size);
         }
         sizes.sort(Integer::compareTo);
-        boolean valid = sizes.size() == 1 || switch (selected.size()) {
-            case 4 -> sizes.equals(List.of(2, 2));
-            case 5 -> sizes.equals(List.of(2, 3));
-            case 6 -> sizes.equals(List.of(2, 4)) || sizes.equals(List.of(3, 3)) || sizes.equals(List.of(2, 2, 2));
-            default -> false;
-        };
-        if (!valid) reject(409, "허용된 연속석 또는 분할 착석 조건을 충족하지 않습니다.");
+        boolean valid = sizes.size() == 1;
+        if (!valid) reject(409, "전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉을 수 없습니다.");
     }
 
     private static List<Long> normalizeSeats(List<Long> seats) {

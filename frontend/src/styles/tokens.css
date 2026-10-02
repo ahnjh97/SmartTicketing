@@ -1,4 +1,5 @@
 :root {
+ --booking-smart-glow: rgb(255 196 38 / 14%);
  --booking-screen-glow: rgb(255 255 255 / 9%);
  --booking-selection-glow: 0 6px 24px rgb(255 196 38 / 22%);
  --booking-success: #8ae5bb;

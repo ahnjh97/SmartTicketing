@@ -21,8 +21,8 @@ function ShowtimePanel({ booking }) {
             <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} selected={selectedShow?.id === show.id}
                 label={availability(show, null)} onClick={() => update({ showtime: show.id })} />)}</div>
             <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
-            {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 스마트예매로 연결할 수 없습니다.</p>}
-            <BookingButtons normal disabled={!valid} smartDisabled={!smartReady} onEnter={enter} />
+            {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
+            <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
         </section>;
 }
 export function BookingConfirmation({ booking }) {
@@ -100,11 +100,11 @@ export function MovieBooking({ booking }) {
                 {from && until && rangeValid && until < from && <p>종료 범위는 다음 날 {until} 미만입니다.</p>}
                 {!rangeValid && <p role="alert">시작·종료 시간을 30분 단위로 선택해주세요.</p>}
                 {!validParty(party) && <p>총인원을 1~6명으로 선택해주세요.</p>}
-                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 4명: 2+2, 5명: 2+3, 6명: 2+4·3+3·2+2+2 분할도 허용합니다. 각 묶음은 같은 행·통로 안의 연속석이며, 묶음끼리는 다른 행·통로 건너편도 가능합니다. 실제 좌석 묶음은 후속 단계에서 확인합니다.</p></details>
+                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 2명 이상은 전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉습니다. 다른 행이나 통로 건너편으로 나누거나 일부 인원만 선점하지 않습니다.</p></details>
                 <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
                 {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차·좌석 상태 {items.length}개</summary>
                     <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} label={availability(show, validParty(party) ? Number(party) : null)} />)}</div>
-                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 영화별 스마트예매는 회차를 자동 선택하는 후속 단계로 연결됩니다.</p>
+                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차·좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
                 </details>}
             </div>
         </>);

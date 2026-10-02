@@ -23,11 +23,6 @@ export function availability(show, party) {
     if (!show.layoutComplete) return '배치 미확인';
     if (show.availableSeats === 0) return '매진';
     if (party && show.availableSeats < party) return '잔여좌석 부족';
-    if (party >= 4 && show.maxContiguousSeats < party) {
-        // Every allowed partition needs a pair; five people also need a triple.
-        if (show.maxContiguousSeats < (party === 5 ? 3 : 2)) return '연속좌석 부족';
-        return '분할 좌석 확인 필요';
-    }
     if (party > 1 && show.maxContiguousSeats < party) return '연속좌석 부족';
     return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 · 인원 선택 후 확인`;
 }
