@@ -2078,3 +2078,54 @@ input:focus {
         min-height: 0;
     }
 }
+
+/* My Page buttons - match /theaters button language */
+.profile-card .logout-button,
+.profile-card .primary-button,
+.profile-card .withdraw-button {
+    border: 1px solid #444;
+    border-radius: 7px;
+    background: #202020;
+    color: #ddd;
+    box-shadow: none;
+    transition:
+        transform 0.18s ease,
+        border-color 0.18s ease,
+        background 0.18s ease,
+        color 0.18s ease;
+}
+
+.profile-card .logout-button:hover:not(:disabled),
+.profile-card .primary-button:hover:not(:disabled),
+.profile-card .withdraw-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: #666;
+    background: #292929;
+    color: #fff;
+}
+
+.profile-card .primary-button {
+    padding: 11px 14px;
+    margin-top: 0;
+    font-weight: 700;
+}
+
+.profile-card .withdraw-button {
+    padding: 11px 14px;
+    border-color: #444;
+    background: #202020;
+    color: #aaa;
+}
+
+.profile-card .withdraw-button:hover:not(:disabled) {
+    border-color: #666;
+    background: #292929;
+    color: #ddd;
+}
+
+.profile-card .logout-button:focus-visible,
+.profile-card .primary-button:focus-visible,
+.profile-card .withdraw-button:focus-visible {
+    outline: 2px solid #666;
+    outline-offset: 2px;
+}
