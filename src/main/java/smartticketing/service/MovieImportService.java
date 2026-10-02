@@ -34,6 +34,7 @@ public class MovieImportService {
     private final Map<Long, String> ratingOverrides;
     private final Map<Long, Long> audienceSeeds;
     private final Map<String, String> nameOverrides;
+    private final Map<Long, LocalDate> releaseDateOverrides;
 
     public MovieImportService(
             @Qualifier("tmdbRestClient") RestClient tmdbRestClient,
@@ -44,7 +45,8 @@ public class MovieImportService {
             @Value("${tmdb.movie-ids}") String movieIds,
             @Value("${tmdb.rating-overrides:}") String ratingOverrides,
             @Value("${tmdb.audience-seeds:}") String audienceSeeds,
-            @Value("${tmdb.name-overrides:}") String nameOverrides) {
+            @Value("${tmdb.name-overrides:}") String nameOverrides,
+            @Value("${tmdb.release-date-overrides:}") String releaseDateOverrides) {
 
         this.tmdbRestClient = tmdbRestClient;
         this.movieRepository = movieRepository;
@@ -76,6 +78,12 @@ public class MovieImportService {
                 .filter(entry -> entry.contains(":"))
                 .map(entry -> entry.split(":"))
                 .collect(Collectors.toMap(pair -> pair[0].trim(), pair -> pair[1].trim()));
+
+        this.releaseDateOverrides = Arrays.stream(releaseDateOverrides.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> LocalDate.parse(pair[1].trim())));
     }
 
     public MovieImportResult importConfiguredMovies() {
@@ -149,14 +157,22 @@ public class MovieImportService {
             }
         }
 
+        releaseDateOverrides.forEach((tmdbId, date) ->
+                movieRepository.findByTmdbMovieId(tmdbId).ifPresent(movie -> {
+                    movie.setReleaseDate(date);
+                    movieRepository.save(movie);
+                }));
+
         // =========================================================================
         // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작(10/11 ~ 10/17)으로 지정
         // =========================================================================
         List<Movie> upcomingMovies = movieRepository.findAll().stream()
                 .filter(m -> m.getReleaseDate() != null)
-                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()) // 1. 가장 미래 개봉일 순 정렬
+                .filter(m -> !releaseDateOverrides.containsKey(m.getTmdbMovieId()))
+                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()
+                        .thenComparing(Movie::getTmdbMovieId)) // 1. 가장 미래 개봉일 순 (같으면 TMDB 번호 순)
                 .limit(10) // 2. 가장 최신/미래 영화 딱 10개 추출
-                .sorted(Comparator.comparing(Movie::getReleaseDate)) // 3. 다시 오름차순 정렬
+                .sorted(Comparator.comparing(Movie::getTmdbMovieId)) // 3. TMDB 번호 순으로 고정
                 .toList();
 
         for (int i = 0; i < upcomingMovies.size(); i++) {

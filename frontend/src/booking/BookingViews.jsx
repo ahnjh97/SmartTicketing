@@ -1,7 +1,8 @@
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './BookingViews.module.css';
 import ui from './BookingComponents.module.css';
-import { Fragment } from 'react';
+import useCatalog from './useCatalog.js';
+import { formatRating } from './format.js';
 import { Link } from 'react-router-dom';
 import { availability, validParty } from './state.js';
 import { BookingButtons, DateCards, MovieCard, Pagination, QueryStatus, ShowtimeCard } from './BookingComponents.jsx';
@@ -12,19 +13,31 @@ function BookingDates({ booking }) {
  const { date, today, update, theaterMode } = booking;
  return <DateCards value={date} today={today} onChange={value => update({ date: value, ...(theaterMode ? { movie: null } : {}), showtime: null })} />;
 }
-function ShowtimePanel({ booking }) {
- const { selectedMovie, date, update, shows, items, selectedShow, valid, smartReady, enter } = booking;
-        return <section className={ui.panel + ' ' + styles.showPanel} aria-label="상영 회차">
-            <div className={styles.panelHeading}><h3>{selectedMovie?.title || '상영 회차'}</h3><span>{date}</span>
-                <button onClick={() => update({ movie: null, showtime: null })}>접기 ⌃</button></div>
+
+function TheaterMovieRow({ movie, booking }) {
+    const { theaterId, date, now, params, update } = booking;
+    const shows = useCatalog('showtimes', { movieId: movie.movieId, theaterId, date });
+    const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
+    return <li className={styles.movieRow}>
+        <div className={styles.rowPoster}>{movie.posterUrl ? <img src={movie.posterUrl} alt="" loading="lazy" /> : <div className={ui.poster}>POSTER</div>}</div>
+        <div className={styles.rowBody}>
+            <div className={styles.rowTitle}>
+                <strong>{movie.title}</strong>
+                <small>{formatRating(movie.rating)} · {movie.runningTime ? `${movie.runningTime}분` : '시간 미확인'}</small>
+            </div>
             <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-            <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} selected={selectedShow?.id === show.id}
-                label={availability(show, null)} onClick={() => update({ showtime: show.id })} />)}</div>
-            <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
-            {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
-            <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
-        </section>;
+            <div className={styles.rowShowtimes}>{items.map(show => {
+                const selected = params.get('showtime') === String(show.id);
+                return <div key={show.id} className={selected ? `${styles.slot} ${styles.slotSelected}` : styles.slot}>
+                    <ShowtimeCard show={show} selected={false} label={availability(show, null)}
+                                  onClick={() => update({ movie: movie.movieId, showtime: show.id })} />
+                    {selected && <span className={ui.selectedBadge}>선택</span>}
+                </div>;
+            })}</div>
+        </div>
+    </li>;
 }
+
 export function BookingConfirmation({ booking }) {
     const { theaterMode, user, date, from, until, party, entry, update, theater, movies, detail, shows, selectedShow, selectedMovie, valid, smartReady } = booking;
     return (<section className={ui.panel + ' ' + styles.confirmation} aria-label="선택 확인">
@@ -42,7 +55,7 @@ export function BookingConfirmation({ booking }) {
         </section>);
 }
 export function TheaterBooking({ booking }) {
-    const { user, params, expanded, setExpanded, columns, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences } = booking;
+    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences, selectedShow, valid, smartReady, enter } = booking;
     return (<>
             <div className={styles.theaterToolbar}>
                 <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
@@ -73,14 +86,12 @@ export function TheaterBooking({ booking }) {
                 <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>
                 <QueryStatus query={movies} empty={movies.data?.items.length === 0} />
                 {movieId && movies.data && !selectedMovieExists && <p role="alert">해당 날짜의 영화를 다시 선택해주세요.</p>}
-                <div className={styles.movies}>{movies.data?.items.map((m, index, all) => {
-                    const selectedIndex = all.findIndex(item => String(item.movieId) === movieId);
-                    const rowEnd = Math.min(all.length - 1, Math.floor(selectedIndex / columns) * columns + columns - 1);
-                    return <Fragment key={m.movieId}>
-                        <MovieCard movie={m} selected={String(m.movieId) === movieId} onClick={() => update({ movie: String(m.movieId) === movieId ? null : m.movieId, showtime: null })} />
-                        {selectedIndex >= 0 && index === rowEnd && <div className={styles.rowPanel}><ShowtimePanel booking={booking} /></div>}
-                    </Fragment>;
-                })}</div>
+                <ul className={styles.movieList}>{movies.data?.items.map(m => <TheaterMovieRow key={m.movieId} movie={m} booking={booking} />)}</ul>
+                {movies.data?.items.length > 0 && <section className={ui.panel + ' ' + styles.showPanel} aria-label="예매 진행">
+                    <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
+                    {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
+                    <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
+                </section>}
             </>}
         </>);
 }
