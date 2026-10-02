@@ -216,6 +216,23 @@ export default function CommonHeader({
             <>
                 <button
                     type="button"
+                    className="common-header-icon-trigger"
+                    aria-label={openPanel === "tickets" ? "내 티켓 닫기" : "내 티켓 열기"}
+                    aria-expanded={openPanel === "tickets"}
+                    onClick={() => togglePanel("tickets")}
+                    disabled={navigationDisabled}
+                >
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M4 7h16v10H4z" />
+                            <path d="M8 7v10" stroke-dasharray="1.5 2" />
+                            <path d="M16 7v10" stroke-dasharray="1.5 2" />
+                        </svg>
+                    </span>
+                </button>
+
+                <button
+                    type="button"
                     className="common-header-notification-trigger"
                     aria-label={openPanel === "notifications" ? "알림 닫기" : "알림 열기"}
                     aria-expanded={openPanel === "notifications"}
@@ -233,23 +250,6 @@ export default function CommonHeader({
                             {unreadCount > 99 ? "99+" : unreadCount}
                         </span>
                     )}
-                </button>
-
-                <button
-                    type="button"
-                    className="common-header-icon-trigger"
-                    aria-label={openPanel === "tickets" ? "내 티켓 닫기" : "내 티켓 열기"}
-                    aria-expanded={openPanel === "tickets"}
-                    onClick={() => togglePanel("tickets")}
-                    disabled={navigationDisabled}
-                >
-                    <span className="common-header-trigger-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M4 7h16v10H4z" />
-                            <path d="M8 7v10" stroke-dasharray="1.5 2" />
-                            <path d="M16 7v10" stroke-dasharray="1.5 2" />
-                        </svg>
-                    </span>
                 </button>
 
                 <button
