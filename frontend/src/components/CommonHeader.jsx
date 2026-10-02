@@ -216,7 +216,8 @@ export default function CommonHeader({
             <>
                 <button
                     type="button"
-                    className={`common-header-link common-header-panel-trigger ${glass.button}`}
+                    className="common-header-notification-trigger"
+                    aria-label={openPanel === "notifications" ? "알림 닫기" : "알림 열기"}
                     aria-expanded={openPanel === "notifications"}
                     onClick={() => togglePanel("notifications")}
                     disabled={navigationDisabled}
@@ -227,7 +228,6 @@ export default function CommonHeader({
                             <path d="M10 21h4" />
                         </svg>
                     </span>
-                    <span>알림</span>
                     {unreadCount > 0 && (
                         <span className="common-header-notification-badge">
                             {unreadCount > 99 ? "99+" : unreadCount}
@@ -237,18 +237,12 @@ export default function CommonHeader({
 
                 <button
                     type="button"
-                    className={`common-header-link common-header-panel-trigger ${glass.button}`}
+                    className="common-header-ticket-trigger"
                     aria-expanded={openPanel === "tickets"}
                     onClick={() => togglePanel("tickets")}
                     disabled={navigationDisabled}
                 >
-                    <span className="common-header-trigger-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5V9a2 2 0 0 0 0 6v1.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5V15a2 2 0 0 0 0-6V7.5Z" />
-                            <path d="M12 7v10" strokeDasharray="1.5 2" />
-                        </svg>
-                    </span>
-                    <span>내 티켓</span>
+                    내 티켓
                 </button>
 
                 <button
@@ -372,7 +366,7 @@ export default function CommonHeader({
                         </div>
                     </div>
 
-                    <div className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}>
+                    <div className={`common-header-ticket-drawer${openPanel === "tickets" ? " is-open" : ""}`}>
                         <div className="common-header-popover-header">
                             <div>
                                 <strong>내 티켓</strong>
