@@ -156,7 +156,23 @@
 
 
 .common-header-ticket-trigger {
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 1px solid var(--glass-border);
     border-radius: 999px;
+    background: var(--glass-background);
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+    transition: background-color 160ms ease, border-color 160ms ease, transform 180ms ease;
+}
+
+.common-header-ticket-trigger:hover:not(:disabled) {
+    background: var(--glass-hover);
 }
 
 .common-header-trigger-icon {
