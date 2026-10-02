@@ -1,7 +1,9 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './BookingViews.module.css';
 import ui from './BookingComponents.module.css';
-import { Fragment } from 'react';
+import useCatalog from './useCatalog.js';
+import { formatRating } from './format.js';
 import { Link } from 'react-router-dom';
 import { availability, validParty } from './state.js';
 import { BookingButtons, DateCards, MovieCard, Pagination, QueryStatus, ShowtimeCard } from './BookingComponents.jsx';
@@ -12,29 +14,41 @@ function BookingDates({ booking }) {
  const { date, today, update, theaterMode } = booking;
  return <DateCards value={date} today={today} onChange={value => update({ date: value, ...(theaterMode ? { movie: null } : {}), showtime: null })} />;
 }
-function ShowtimePanel({ booking }) {
- const { selectedMovie, date, update, shows, items, selectedShow, valid, smartReady, enter } = booking;
-        return <section className={ui.panel + ' ' + styles.showPanel} aria-label="상영 회차">
-            <div className={styles.panelHeading}><h3>{selectedMovie?.title || '상영 회차'}</h3><span>{date}</span>
-                <button onClick={() => update({ movie: null, showtime: null })}>접기 ⌃</button></div>
+
+function TheaterMovieRow({ movie, booking }) {
+    const { theaterId, date, now, params, update } = booking;
+    const shows = useCatalog('showtimes', { movieId: movie.movieId, theaterId, date });
+    const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
+    return <li className={styles.movieRow}>
+        <div className={styles.rowPoster}>{movie.posterUrl ? <img src={movie.posterUrl} alt="" loading="lazy" /> : <div className={ui.poster}>POSTER</div>}</div>
+        <div className={styles.rowBody}>
+            <div className={styles.rowTitle}>
+                <strong>{movie.title}</strong>
+                <small><InlineDetails items={[formatRating(movie.rating), movie.runningTime ? `${movie.runningTime}분` : '시간 미확인']} /></small>
+            </div>
             <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-            <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} selected={selectedShow?.id === show.id}
-                label={availability(show, null)} onClick={() => update({ showtime: show.id })} />)}</div>
-            <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
-            {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
-            <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
-        </section>;
+            <div className={styles.rowShowtimes}>{items.map(show => {
+                const selected = params.get('showtime') === String(show.id);
+                return <div key={show.id} className={selected ? `${styles.slot} ${styles.slotSelected}` : styles.slot}>
+                    <ShowtimeCard show={show} selected={selected} label={availability(show, null)}
+                                  onClick={() => update({ movie: movie.movieId, showtime: show.id })} />
+                    {selected && <span className={ui.selectedBadge}>선택</span>}
+                </div>;
+            })}</div>
+        </div>
+    </li>;
 }
+
 export function BookingConfirmation({ booking }) {
     const { theaterMode, user, date, from, until, party, entry, update, theater, movies, detail, shows, selectedShow, selectedMovie, valid, smartReady } = booking;
     return (<section className={ui.panel + ' ' + styles.confirmation} aria-label="선택 확인">
-            <h2>선택 확인 · 예매 준비 중</h2>
+            <h2>선택 확인 후 예매 준비</h2>
             <QueryStatus query={theaterMode ? theater : detail} />{theaterMode && <QueryStatus query={movies} />}<QueryStatus query={shows} />
             {valid && (entry !== 'THEATER_SMART' || smartReady) ? <>
-                <p>{selectedMovie?.title} · {date}</p>
-                {theaterMode ? <p>{theater.data?.name} · {selectedShow.startTime.slice(11, 16)} → {selectedShow.endsNextDay && '익일 '}{selectedShow.endTime.slice(11, 16)} · 인원은 다음 단계에서 선택</p>
-                    : <p>{from} 이상 ~ {until} 미만{from > until && ' (다음 날)'} · 총 {party}명</p>}
-                <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점·결제·대기 신청은 실행되지 않았습니다.</p>
+                <p><InlineDetails items={[selectedMovie?.title, date]} /></p>
+                {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endsNextDay && '익일 '}{selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
+                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만{from > until && ' (다음 날)'}</>, `총 ${party}명`]} /></p>}
+                <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점, 결제, 대기 신청은 실행되지 않았습니다.</p>
                 {!user && <Link to="/login">로그인하고 이 선택으로 돌아오기</Link>}
             </> : (shows.loading || detail.loading || theater.loading || movies.loading) ? null
                 : <p role="alert">선택을 다시 확인해주세요. 날짜가 지났거나 해당 회차/좌석을 이용할 수 없습니다.</p>}
@@ -42,11 +56,11 @@ export function BookingConfirmation({ booking }) {
         </section>);
 }
 export function TheaterBooking({ booking }) {
-    const { user, params, expanded, setExpanded, columns, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences } = booking;
+    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences, selectedShow, valid, smartReady, enter } = booking;
     return (<>
             <div className={styles.theaterToolbar}>
                 <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
-                    <label className={ui.srOnly} htmlFor="theater-query">극장 이름·주소 검색</label>
+                    <label className={ui.srOnly} htmlFor="theater-query">극장 이름 또는 주소 검색</label>
                     <input id="theater-query" value={search} maxLength={100} onChange={e => update({ q: e.target.value, page: 0 })} placeholder="극장명 검색" />
                     <button className={ui.primary} type="submit">검색</button>
                 </form>
@@ -54,7 +68,7 @@ export function TheaterBooking({ booking }) {
                 <span className={styles.note}>선호 극장</span>
                 <div className={styles.favorites}>
                     {!user ? <Link to="/login">로그인 후 선호 극장</Link> : !preferences.length ? <span>저장한 선호 극장이 없습니다.</span>
-                        : (expanded ? preferences : preferences.slice(0, 3)).map(t => <GlassButton key={t.theaterId} aria-label={`${t.priority}순위 · ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>★ {t.theaterName || `극장 ${t.theaterId}`}</GlassButton>)}
+                        : (expanded ? preferences : preferences.slice(0, 3)).map(t => <GlassButton key={t.theaterId} aria-label={`${t.priority}순위 ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>★ {t.theaterName || `극장 ${t.theaterId}`}</GlassButton>)}
                     {preferences.length > 3 && <GlassButton onClick={() => setExpanded(!expanded)}>{expanded ? '접기' : '나머지 선호 극장 보기'}</GlassButton>}
                 </div>
             </div>
@@ -73,14 +87,12 @@ export function TheaterBooking({ booking }) {
                 <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>
                 <QueryStatus query={movies} empty={movies.data?.items.length === 0} />
                 {movieId && movies.data && !selectedMovieExists && <p role="alert">해당 날짜의 영화를 다시 선택해주세요.</p>}
-                <div className={styles.movies}>{movies.data?.items.map((m, index, all) => {
-                    const selectedIndex = all.findIndex(item => String(item.movieId) === movieId);
-                    const rowEnd = Math.min(all.length - 1, Math.floor(selectedIndex / columns) * columns + columns - 1);
-                    return <Fragment key={m.movieId}>
-                        <MovieCard movie={m} selected={String(m.movieId) === movieId} onClick={() => update({ movie: String(m.movieId) === movieId ? null : m.movieId, showtime: null })} />
-                        {selectedIndex >= 0 && index === rowEnd && <div className={styles.rowPanel}><ShowtimePanel booking={booking} /></div>}
-                    </Fragment>;
-                })}</div>
+                <section aria-label="상영 회차"><ul className={styles.movieList}>{movies.data?.items.map(m => <TheaterMovieRow key={m.movieId} movie={m} booking={booking} />)}</ul></section>
+                {movies.data?.items.length > 0 && <section className={ui.panel + ' ' + styles.showPanel} aria-label="예매 진행">
+                    <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
+                    {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
+                    <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
+                </section>}
             </>}
         </>);
 }
@@ -95,16 +107,16 @@ export function MovieBooking({ booking }) {
                 <BookingButtons disabled={!valid} onEnter={enter} />
             </div>
             <div className={styles.conditionsNote}>
-                <p>서울 시간 · 하한 포함, 상한 제외. 상한이 더 이르면 다음 날까지 검색합니다. 시간 초기화 시 남은 전체 회차를 조회합니다. 스마트예매 진입에는 시간 범위가 필요합니다.</p>
+                <p>서울 시간 기준이며, 하한은 포함하고 상한은 제외합니다. 상한이 더 이르면 다음 날까지 검색합니다. 시간 초기화 시 남은 전체 회차를 조회합니다. 스마트예매 진입에는 시간 범위가 필요합니다.</p>
                 {from && until && rangeValid && !rangeFuture && <p role="alert">이미 지난 시작 시간입니다. 현재 시각 이후로 다시 선택해주세요.</p>}
                 {from && until && rangeValid && until < from && <p>종료 범위는 다음 날 {until} 미만입니다.</p>}
-                {!rangeValid && <p role="alert">시작·종료 시간을 30분 단위로 선택해주세요.</p>}
+                {!rangeValid && <p role="alert">시작 시간과 종료 시간을 30분 단위로 선택해주세요.</p>}
                 {!validParty(party) && <p>총인원을 1~6명으로 선택해주세요.</p>}
-                <details><summary>인원·좌석 조건 안내</summary><p>최대 6명. 2명 이상은 전체 인원이 같은 행·같은 통로 구간의 연속좌석에 앉습니다. 다른 행이나 통로 건너편으로 나누거나 일부 인원만 선점하지 않습니다.</p></details>
+                <details><summary>인원과 좌석 조건 안내</summary><p>최대 6명. 스마트예매는 전체 연석을 우선하며, 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2, 3+3, 2+4로 나눠 앉을 수 있습니다. 각 묶음은 연석이며 서로 다른 행이나 통로 구간도 가능합니다. 같은 회차에서 전원 좌석을 한 번에 확보합니다.</p></details>
                 <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-                {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차·좌석 상태 {items.length}개</summary>
+                {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차와 좌석 상태 {items.length}개</summary>
                     <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} label={availability(show, validParty(party) ? Number(party) : null)} />)}</div>
-                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차·좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
+                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차와 좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
                 </details>}
             </div>
         </>);

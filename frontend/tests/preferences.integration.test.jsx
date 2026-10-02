@@ -54,8 +54,8 @@ test("saved seat priorities restore immediately and remain editable", () => {
             );
 
     expect(getSelectedPositions()).toEqual([
-        "중앙 · 5번",
-        "사이드 · 1번",
+        "중앙 5번",
+        "사이드 1번",
     ]);
 
     expect(getSelectedPositions()).toHaveLength(2);
@@ -65,7 +65,7 @@ test("saved seat priorities restore immediately and remain editable", () => {
 
     fireEvent.click(
         screen.getByRole("button", {
-            name: /중앙 · 5번/,
+            name: /중앙 5번/,
         })
     );
 
@@ -73,13 +73,13 @@ test("saved seat priorities restore immediately and remain editable", () => {
 
     fireEvent.click(
         screen.getByRole("button", {
-            name: /중앙 · 6번/,
+            name: /중앙 6번/,
         })
     );
 
     fireEvent.click(
         screen.getByRole("button", {
-            name: /사이드 · 2번/,
+            name: /사이드 2번/,
         })
     );
 
@@ -112,12 +112,12 @@ test("same side number reacts on both left and right, while center zones stay in
 
     const sideOneButtons = [
         ...container.querySelectorAll(
-            '.seat-zone-button[aria-label="사이드 · 1번"]'
+            '.seat-zone-button[aria-label="사이드 1번"]'
         ),
     ];
     const centerFourButtons = [
         ...container.querySelectorAll(
-            '.seat-zone-button[aria-label="중앙 · 4번"]'
+            '.seat-zone-button[aria-label="중앙 4번"]'
         ),
     ];
 

@@ -119,7 +119,8 @@ test('trailer iframe opens only on request and is removed when closed', async ()
 });
 test('movie restores conditions, poster, midnight bounds and honest confirmation', async () => {
     mount(`/movies?movie=41&date=${seoulDate()}&party=2&from=22:00&until=02:00`);
-    await screen.findByText(/20 \/ 108석 · 조회상 선택 가능/);
+    await screen.findByText('20 / 108석');
+    expect(screen.getByText('조회상 선택 가능')).toBeTruthy();
     expect(screen.getByLabelText('총인원').value).toBe('2');
     expect(screen.getByAltText('서울의 밤 배경')).toBeTruthy();
     expect(screen.getByText('23:00 → 익일 01:00')).toBeTruthy();
@@ -158,11 +159,11 @@ test('theater entry restores IDs and row panel without collecting party', async 
 test('sold out and unknown layouts have distinct button behavior', async () => {
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, layoutComplete: false }, { ...show, id: 92, availableSeats: 0 }] })) : baseFetch(url));
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText(/20 \/ 108석 · 배치 미확인/);
-    expect(screen.getByText(/0 \/ 108석 · 매진/)).toBeTruthy();
+    await screen.findByRole('button', { name: /20 \/ 108석 배치 미확인/ });
+    expect(screen.getByRole('button', { name: /0 \/ 108석 매진/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false);
     expect(screen.getByRole('button', { name: '일반예매' }).disabled).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: /0 \/ 108석 · 매진/ }));
+    fireEvent.click(screen.getByRole('button', { name: /0 \/ 108석 매진/ }));
     expect(screen.getByRole('button', { name: '일반예매' }).disabled).toBe(true);
 });
 test('loading, error, retry and empty states stay distinct', async () => {
@@ -186,16 +187,16 @@ test('map entry requests location, denial keeps manual public search', async () 
     fireEvent.click(screen.getByRole('button', { name: '지도 열기' }));
     await screen.findByText(/주변 극장 검색은 로그인이 필요/);
     expect(locate).toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('극장 이름·주소 검색'), { target: { value: '부산' } });
+    fireEvent.change(screen.getByLabelText('극장 이름 또는 주소 검색'), { target: { value: '부산' } });
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes('query=%EB%B6%80%EC%82%B0'))).toBe(true));
     expect(fetch.mock.calls.some(([url]) => url.includes('/nearby'))).toBe(false);
 });
 test('first three preferred theaters and remaining preferences are accessible', async () => {
     localStorage.setItem('accessToken', 'saved-token'); mount('/theaters');
-    await screen.findByRole('button', { name: '1순위 · 선호1' });
-    expect(screen.queryByRole('button', { name: '4순위 · 선호4' })).toBe(null);
+    await screen.findByRole('button', { name: '1순위 선호1' });
+    expect(screen.queryByRole('button', { name: '4순위 선호4' })).toBe(null);
     fireEvent.click(screen.getByRole('button', { name: '나머지 선호 극장 보기' }));
-    expect(screen.getByRole('button', { name: '4순위 · 선호4' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '4순위 선호4' })).toBeTruthy();
 });
 test('login and reload restore selection without booking mutation', async () => {
     const path = `/movies?movie=41&party=2&from=22:00&until=02:00&date=${seoulDate()}&entry=MOVIE_SMART`;
@@ -207,13 +208,13 @@ test('login and reload restore selection without booking mutation', async () => 
     await screen.findByRole('heading', { name: '좋은 자리는, 알아서.' });
     expect(decodeURIComponent(screen.getByTestId('url').textContent)).toBe(path);
     cleanup(); mount(path);
-    await screen.findByText(/실제 결제 없음 · 자동 대기 등록 없음/);
+    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
     expect(fetch.mock.calls.some(([url]) => /booking-groups|hold|payment|waiting/.test(url))).toBe(false);
 });
 test('expired date cannot enter the future flow', async () => {
     localStorage.setItem('accessToken', 'saved-token');
     mount('/movies?movie=41&party=2&date=2020-01-01&entry=MOVIE_SMART');
-    await screen.findByText(/영화·날짜·시간 또는 회차를 다시 선택해주세요/);
+    await screen.findByText(/영화, 날짜, 시간 또는 회차를 다시 선택해주세요/);
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
 });
 
@@ -240,9 +241,9 @@ test('quick theater search ignores the older result even if cancellation is igno
         return baseFetch(url);
     });
     mount('/theaters');
-    fireEvent.change(await screen.findByLabelText('극장 이름·주소 검색'), { target: { value: 'old' } });
+    fireEvent.change(await screen.findByLabelText('극장 이름 또는 주소 검색'), { target: { value: 'old' } });
     await waitFor(() => expect(finishOld).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('극장 이름·주소 검색'), { target: { value: 'new' } });
+    fireEvent.change(screen.getByLabelText('극장 이름 또는 주소 검색'), { target: { value: 'new' } });
     await screen.findByRole('button', { name: /새 검색 극장/ });
     await act(async () => finishOld(json({ items: [{ ...theater, name: '이전 검색 극장' }], size: 20, totalElements: 1 })));
     expect(screen.queryByRole('button', { name: /이전 검색 극장/ })).toBe(null);
@@ -258,14 +259,16 @@ test('date change clears movie and showtime, preserves the theater and seven dat
     expect(url.searchParams.get('theater')).toBe('71');
     expect(url.searchParams.has('movie')).toBe(false);
     expect(url.searchParams.has('showtime')).toBe(false);
-    expect(screen.queryByRole('region', { name: '상영 회차' })).toBe(null);
+    expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /23:00 → 익일 01:00/, pressed: true })).toBe(null);
+    expect((await screen.findByRole('button', { name: '일반예매' })).disabled).toBe(true);
 });
 
 test('OAuth callback restores the same saved booking and strips token from address', async () => {
     const path = `/movies?movie=41&party=2&from=22%3A00&until=02%3A00&date=${seoulDate()}&entry=MOVIE_SMART`;
     sessionStorage.setItem('booking.return', path);
     mount('/oauth2/callback#token=oauth-test-token');
-    await screen.findByText(/실제 결제 없음 · 자동 대기 등록 없음/);
+    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
     expect(screen.getByTestId('url').textContent).toBe(path);
     expect(fetch.mock.calls.find(([url]) => url === '/api/users/me')[1].headers.Authorization).toBe('Bearer oauth-test-token');
 });
@@ -276,7 +279,7 @@ test('guest manual entry requires login and never promises newly sold-out invent
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, availableSeats: 0 }] })) : baseFetch(url));
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
     await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/);
-    expect(screen.queryByText(/실제 결제 없음 · 자동 대기 등록 없음/)).toBe(null);
+    expect(screen.queryByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/)).toBe(null);
 });
 
 test('incomplete member deep link survives required preference setup', async () => {
@@ -287,7 +290,7 @@ test('incomplete member deep link survives required preference setup', async () 
     await screen.findByRole('heading', { name: '선호 정보 설정' });
     expect(sessionStorage.getItem('booking.return')).toBe(path);
     fireEvent.click(screen.getByRole('button', { name: '선호 설정 완료' }));
-    await screen.findByText(/실제 결제 없음 · 자동 대기 등록 없음/);
+    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
     expect(screen.getByTestId('url').textContent).toBe(path);
 });
 
@@ -310,4 +313,17 @@ test('authenticated nearby results use DB theater IDs and preserve the existing 
     expect(screen.getByTestId('url').textContent).toContain('theater=72');
     const call = fetch.mock.calls.find(([url]) => url.startsWith('/api/theaters/nearby?'));
     expect(call[1].headers.Authorization).toBe('Bearer nearby-test-token');
+});
+
+test('movie details retain main metadata with spaced fields instead of middle dots', async () => {
+    fetch.mockImplementation(url => url === '/api/movies/41'
+        ? Promise.resolve(json({ ...movie, rating: '12', releaseDate: '2026-10-01', genres: '액션, 모험', director: '감독 이름', castNames: '배우 이름' }))
+        : baseFetch(url));
+    mount('/movies?movie=41');
+    await screen.findByText('2026.10.01 개봉');
+    expect(screen.getByText('12세')).toBeTruthy();
+    expect(screen.getByText('액션, 모험')).toBeTruthy();
+    expect(screen.getByText('감독 이름')).toBeTruthy();
+    expect(screen.getByText('배우 이름')).toBeTruthy();
+    expect(screen.getByRole('region', { name: '서울의 밤 영화 소개' }).textContent).not.toContain('·');
 });

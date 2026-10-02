@@ -75,7 +75,7 @@ public class ShowtimeQueryService {
             return new ShowtimeItem(s.getId(), s.getMovie().getId(), s.getScreen().getTheater().getId(),
                     s.getScreen().getId(), s.getScreen().getName(), offset(s.getStartTime()), offset(s.getEndTime()),
                     s.getEndTime().toLocalDate().isAfter(s.getStartTime().toLocalDate()), s.getPricePerPerson(),
-                    list.size(), availability.available, availability.maxContiguous, availability.layoutComplete, s.getStatus());
+                    list.size(), availability.available, availability.maxContiguous, availability.layoutComplete, s.getStatus(), availability.bookableParties);
         }).toList();
         return new Items<>(items, offset(now));
     }
@@ -121,7 +121,7 @@ public class ShowtimeQueryService {
     }
 
     private record Segment(String row, String segment) {}
-    private record Availability(long available, int maxContiguous, boolean layoutComplete) {}
+    private record Availability(long available, int maxContiguous, boolean layoutComplete, List<Integer> bookableParties) {}
 
     private static Availability summarize(List<SeatItem> seats) {
         long available = 0;
@@ -138,14 +138,20 @@ public class ShowtimeQueryService {
             positions.put(seat.positionInSegment(), !duplicate && seat.status() == SeatStatus.AVAILABLE);
         }
         int longest = available > 0 ? 1 : 0;
+        var runs = new ArrayList<Integer>();
         for (var positions : segments.values()) {
             int run = 0, previous = -1;
             for (var entry : positions.entrySet()) {
-                run = entry.getValue() ? (entry.getKey() == previous + 1 ? run + 1 : 1) : 0;
+                if (entry.getValue() && (run == 0 || entry.getKey() == previous + 1)) run++;
+                else {
+                    if (run > 0) runs.add(run);
+                    run = entry.getValue() ? 1 : 0;
+                }
                 longest = Math.max(longest, run); previous = entry.getKey();
             }
+            if (run > 0) runs.add(run);
         }
-        return new Availability(available, longest, complete);
+        return new Availability(available, longest, complete, complete ? SeatPartyRules.bookableParties(runs) : List.of());
     }
 
     private static OffsetDateTime offset(LocalDateTime time) { return time.atZone(SEOUL).toOffsetDateTime(); }

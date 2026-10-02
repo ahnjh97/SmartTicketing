@@ -47,7 +47,7 @@ export default function TimeRangeMenu({ date, now, from, until, update }) {
         </div>
         {open && <section ref={panel} tabIndex={-1} id={id} className={styles.panel} aria-label={open === 'from' ? '시작시간 후보' : '종료시간 후보'}>
             <div className={styles.heading}><strong>{open === 'from' ? '언제부터 볼까요?' : '몇 시 시작 영화까지 볼까요?'}</strong><button type="button" onClick={close} aria-label="시간 선택 닫기">×</button></div>
-            <p>{open === 'from' ? '30분 간격 · 오늘 지난 시간은 제외됩니다.' : '선택한 종료 시각에 시작하는 영화는 제외됩니다.'}</p>
+            <p>{open === 'from' ? '30분 간격으로 선택합니다. 오늘 지난 시간은 제외됩니다.' : '선택한 종료 시각에 시작하는 영화는 제외됩니다.'}</p>
             {[0, 1].map(day => {
                 const dayGroups = groups.filter(g => g.startsWith(day + ':'));
                 return dayGroups.length > 0 && <div className={styles.groups} key={day} aria-label={day ? '다음 날 시간대' : '선택 날짜 시간대'}>

@@ -23,8 +23,12 @@ export function availability(show, party) {
     if (!show.layoutComplete) return '배치 미확인';
     if (show.availableSeats === 0) return '매진';
     if (party && show.availableSeats < party) return '잔여좌석 부족';
+    if (party && Array.isArray(show.bookablePartySizes)) {
+        if (!show.bookablePartySizes.includes(Number(party))) return '좌석 조합 부족';
+        return show.maxContiguousSeats < Number(party) ? '분할 착석 가능' : '조회상 선택 가능';
+    }
     if (party > 1 && show.maxContiguousSeats < party) return '연속좌석 부족';
-    return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 · 인원 선택 후 확인`;
+    return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 (인원 선택 후 확인)`;
 }
 export function rememberBooking(url) {
     if (!/^\/(movies|theaters|booking\/restore)(\?|$)/.test(url)) return;

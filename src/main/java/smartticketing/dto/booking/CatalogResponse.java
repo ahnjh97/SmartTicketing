@@ -21,10 +21,12 @@ public final class CatalogResponse {
     }
 
     public record MovieDetail(Long id, String title, String description, Integer runningTime,
-            String rating, LocalDate releaseDate, String posterUrl, String trailerUrl, MovieMedia media, String backdropUrl, String logoUrl) {
+                              String rating, LocalDate releaseDate, String posterUrl, String trailerUrl, MovieMedia media, String backdropUrl, String logoUrl,
+                              String genres, String director, String castNames) {
         public static MovieDetail from(Movie m) {
             return new MovieDetail(m.getId(), m.getTitle(), m.getDescription(), m.getRunningTime(),
-                    m.getRating(), m.getReleaseDate(), m.getPosterUrl(), m.getTrailerUrl(), MovieMedia.from(m), m.getBackdropUrl(), m.getLogoUrl());
+                    m.getRating(), m.getReleaseDate(), m.getPosterUrl(), m.getTrailerUrl(), MovieMedia.from(m), m.getBackdropUrl(), m.getLogoUrl(),
+                    m.getGenres(), m.getDirector(), m.getCastNames());
         }
     }
 

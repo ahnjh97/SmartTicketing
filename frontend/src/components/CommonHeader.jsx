@@ -1,3 +1,4 @@
+import InlineDetails from './InlineDetails.jsx';
 import { useEffect, useRef, useState } from "react";
 import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
@@ -405,7 +406,7 @@ export default function CommonHeader({
                                             <strong>{ticket.movieTitle}</strong>
                                             <span>{TICKET_STATUS_LABELS[ticket.status] ?? ticket.status}</span>
                                         </div>
-                                        <p>{ticket.theaterName} · {ticket.screenName}</p>
+                                        <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
                                         <p>{formatDate(ticket.startTime)}</p>
                                         <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
                                         <small>티켓 번호 {ticket.ticketNumber}</small>

@@ -122,7 +122,7 @@ class BookingSmartTests {
         assertThat(s.hold(f.user,f.group,key)).isEqualTo(failed); noBooking(f);
         assertThat(s.hold(f.user,f.group,key()).status()).isEqualTo(201);
     }
-    @Test void remainingSeatsCannotCrossAislesOrGapsOrRows() {
+    @Test void fourPeopleCanUseTwoPairsAcrossAislesGapsOrRows() {
         for (String boundary:List.of("aisle","gap","row")) {
             var f=fixture(false,4,4); tx(em -> { var rows=inventory(em,f.shows.getFirst());
                 for(int i=2;i<4;i++) { var seat=rows.get(i).getSeat();
@@ -130,8 +130,61 @@ class BookingSmartTests {
                     if(boundary.equals("row")) seat.setSeatRow("B");
                     if(boundary.equals("gap")) seat.setPositionInSegment(i+3);
                 } return null; });
+            var result = hold(f); assertThat(result.status()).isEqualTo(201);
+            assertThat(seatIds(result)).hasSize(4);
+        }
+    }
+
+    static void partition(List<ShowtimeSeat> rows, int... parts) {
+        int index = 0;
+        for (int block = 0; block < parts.length; block++)
+            for (int offset = 0; offset < parts[block]; offset++) {
+                var seat = rows.get(index++).getSeat();
+                seat.setSeatRow(String.valueOf((char) ('A' + block)));
+                seat.setAdjacencySegment(block % 2 == 0 ? "left" : "right");
+                seat.setPositionInSegment(offset + 1);
+            }
+    }
+
+    @Test void allApprovedSplitPatternsAcquireEveryoneInOneReservation() {
+        for (int[] parts : List.of(new int[]{2,2}, new int[]{2,3}, new int[]{2,2,2}, new int[]{3,3}, new int[]{2,4})) {
+            int party = java.util.Arrays.stream(parts).sum(); var f = fixture(false,party,party);
+            tx(em -> { partition(inventory(em,f.shows.getFirst()),parts); return null; });
+            var result = hold(f); assertThat(result.status()).isEqualTo(201);
+            assertThat(seatIds(result)).hasSize(party);
+            tx(em -> {
+                assertThat(inventory(em,f.shows.getFirst())).allMatch(i -> i.getStatus() == SeatStatus.HOLDING);
+                assertThat(inventory(em,f.shows.getFirst()).stream().map(i -> i.getReservation().getId()).distinct()).hasSize(1);
+                return null;
+            });
+        }
+    }
+
+    @Test void singlePersonFragmentsAndSplitsForTwoOrThreeAreRejected() {
+        for (int[] parts : List.of(new int[]{1,1}, new int[]{1,2}, new int[]{1,3}, new int[]{1,4}, new int[]{1,5}, new int[]{1,2,3})) {
+            int party = java.util.Arrays.stream(parts).sum(); var f = fixture(false,party,party);
+            tx(em -> { partition(inventory(em,f.shows.getFirst()),parts); return null; });
             code(hold(f),"NO_CONTIGUOUS_SEATS"); noBooking(f);
         }
+    }
+
+    @Test void wholeBlockPrecedesPreferredSplitSeatsInAnotherTheater() {
+        var f = fixture(true,4,4);
+        tx(em -> { partition(inventory(em,f.shows.getLast()),2,2); return null; });
+        assertThat(value(hold(f),"showtimeId")).isEqualTo(f.shows.getFirst());
+    }
+
+    @Test void competingSplitRequestsNeverDivideTheReservation() throws Exception {
+        var f = fixture(false,6,6);
+        tx(em -> { partition(inventory(em,f.shows.getFirst()),2,4); return null; });
+        var s = service(firstSearchBarrier());
+        var results = race(() -> s.hold(f.user,f.group,key()), () -> s.hold(f.other,f.otherGroup,key()));
+        assertThat(results).extracting(BookingResult::status).containsExactlyInAnyOrder(201,409);
+        tx(em -> {
+            assertThat(inventory(em,f.shows.getFirst())).allMatch(i -> i.getStatus() == SeatStatus.HOLDING);
+            assertThat(inventory(em,f.shows.getFirst()).stream().map(i -> i.getReservation().getId()).distinct()).hasSize(1);
+            return null;
+        });
     }
     @Test void unknownAndDuplicateLayoutsAreRejectedEvenWithRemainingSeats() {
         for(boolean duplicate:List.of(false,true)) {

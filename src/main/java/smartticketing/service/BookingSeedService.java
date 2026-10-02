@@ -113,25 +113,13 @@ public class BookingSeedService {
     }
 
     private List<Seat> createSeats(Screen screen) {
-        var result = new ArrayList<Seat>();
-        for (int row = 0; row < 9; row++) {
-            for (int number = 1; number <= 12; number++) {
-                var seat = new Seat();
-                seat.setScreen(screen);
-                seat.setSeatRow(String.valueOf((char) ('A' + row)));
-                seat.setSeatNumber(number);
-                seat.setSeatPosition(position(row, number));
-                seat.setAdjacencySegment(segment(number));
-                seat.setPositionInSegment(segmentPosition(number));
-                em.persist(seat);
-                result.add(seat);
-            }
-        }
+        var result = DefaultSeatLayout.create(screen);
+        result.forEach(em::persist);
         return result;
     }
 
     private boolean validLayout(List<Seat> seats) {
-        if (seats.size() != 108) return false;
+        if (seats.size() != DefaultSeatLayout.SIZE) return false;
         for (int i = 0; i < seats.size(); i++) {
             var seat = seats.get(i);
             int row = i / 12, number = i % 12 + 1;
@@ -146,7 +134,7 @@ public class BookingSeedService {
 
     private SeatPosition position(int row, int number) {
         String side = number >= 4 && number <= 9 ? "MIDDLE" : "SIDE";
-        return SeatPosition.valueOf(side + "_" + (row < 3 ? "FRONT" : row < 6 ? "MIDDLE" : "REAR"));
+        return SeatPosition.valueOf(side + "_" + (row < 3 ? "FRONT" : row < 7 ? "MIDDLE" : "REAR"));
     }
 
     private String segment(int number) { return number <= 3 ? "left" : number <= 9 ? "center" : "right"; }

@@ -465,22 +465,22 @@ public class UserService {
     ) {
         return switch (p) {
             case SIDE_FRONT ->
-                    "양옆 · 앞";
+                    "양옆 앞";
 
             case SIDE_MIDDLE ->
-                    "양옆 · 가운데";
+                    "양옆 가운데";
 
             case SIDE_REAR ->
-                    "양옆 · 뒤";
+                    "양옆 뒤";
 
             case MIDDLE_FRONT ->
-                    "중앙 · 앞";
+                    "중앙 앞";
 
             case MIDDLE_MIDDLE ->
-                    "중앙 · 가운데";
+                    "중앙 가운데";
 
             case MIDDLE_REAR ->
-                    "중앙 · 뒤";
+                    "중앙 뒤";
         };
     }
 }

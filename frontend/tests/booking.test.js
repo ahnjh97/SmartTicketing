@@ -31,7 +31,7 @@ test('confirmed party limit and midnight time range', () => {
     assert.equal(validRange('', ''), true);
     for (const pair of [['22:00', '22:00'], ['12:00', ''], ['24:00', '02:00']]) assert.equal(validRange(...pair), false);
 });
-test('inventory and layout require a single contiguous block for every party size', () => {
+test('legacy inventory without supported party sizes stays conservative', () => {
     const s = { layoutComplete: true, availableSeats: 63, maxContiguousSeats: 1 };
     assert.equal(availability(s, 2), '연속좌석 부족');
     assert.equal(availability(s, 4), '연속좌석 부족');
@@ -41,6 +41,15 @@ test('inventory and layout require a single contiguous block for every party siz
     assert.equal(availability({ ...s, maxContiguousSeats: 6 }, 6), '조회상 선택 가능');
     assert.equal(availability({ ...s, availableSeats: 0 }, 2), '매진');
     assert.equal(availability({ ...s, layoutComplete: false }, 2), '배치 미확인');
+});
+
+test('inventory reports supported split combinations without claiming every fragment works', () => {
+    const show = { layoutComplete:true, availableSeats:6, maxContiguousSeats:2, bookablePartySizes:[1,2,4,6] };
+    assert.equal(availability(show,4), '분할 착석 가능');
+    assert.equal(availability(show,6), '분할 착석 가능');
+    assert.equal(availability(show,5), '좌석 조합 부족');
+    assert.equal(availability(show,2), '조회상 선택 가능');
+    assert.equal(availability({ ...show, maxContiguousSeats:3, bookablePartySizes:[1,2,3,4,5,6] },5), '분할 착석 가능');
 });
 test('public API passes exact midnight bounds; nearby still requires auth', async () => {
     const original = { fetch: globalThis.fetch, storage: globalThis.localStorage };

@@ -127,15 +127,16 @@ public class BookingSmartService {
                     Math.max(0, theaters.indexOf(show.getScreen().getTheater().getId())), show.getStartTime(),
                     show.getScreen().getTheater().getId(), block));
         }
-        var best = candidates.stream().min(Comparator.comparingInt((Ranked c) -> c.block.preferenceRank())
+        var best = candidates.stream().min(Comparator.comparing((Ranked c) -> c.block.split())
+                .thenComparingInt(c -> c.block.preferenceRank())
                 .thenComparingInt(Ranked::theaterRank).thenComparing(Ranked::start)
                 .thenComparing(Ranked::theaterId).thenComparing(Ranked::showId)
                 .thenComparing(c -> c.block.row()).thenComparing(c -> c.block.segment())
                 .thenComparingInt(c -> c.block.firstPosition()));
         if (best.isPresent()) return new Search(new BookingHoldService.Candidate(best.get().showId, best.get().block.seatIds()), null, null);
         if (!priced) return Search.failure("PRICE_UNVERIFIED", "회차 가격을 확인할 수 없어 자동 선점할 수 없습니다.");
-        if (unknownLayout) return Search.failure("LAYOUT_UNVERIFIED", "일부 회차의 좌석 배치를 확인할 수 없고, 확인된 회차에도 전원 연속좌석이 없습니다.");
+        if (unknownLayout) return Search.failure("LAYOUT_UNVERIFIED", "일부 회차의 좌석 배치를 확인할 수 없고, 확인된 회차에도 허용된 좌석 조합이 없습니다.");
         if (knownLayout && available == 0) return Search.failure("SOLD_OUT", "조건에 맞는 회차의 좌석이 모두 매진되었습니다.");
-        return Search.failure("NO_CONTIGUOUS_SEATS", "잔여석은 있지만 전체 인원이 같은 행·통로 구간에 앉을 연속좌석이 없습니다.");
+        return Search.failure("NO_CONTIGUOUS_SEATS", "잔여석은 있지만 전체 연석 또는 인원별 허용된 분할 연석 조합이 없습니다.");
     }
 }

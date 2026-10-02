@@ -33,7 +33,7 @@ class ShowtimeQueryControllerTests {
     @Test void timeFiltersBindWithoutLosingNextDayDisplayInformation() throws Exception {
         var start = OffsetDateTime.parse("2026-10-01T22:00:00+09:00");
         var item = new ShowtimeItem(9L, 1L, 2L, 3L, "1관", start, start.plusHours(3), true,
-                10000, 108, 63, 1, true, ShowtimeStatus.SCHEDULED);
+                10000, 108, 63, 1, true, ShowtimeStatus.SCHEDULED, List.of(1));
         when(query.showtimes(1L, null, LocalDate.of(2026, 10, 1), LocalTime.of(22, 0), LocalTime.of(2, 0)))
                 .thenReturn(new Items<>(List.of(item), start.minusHours(5)));
         mvc.perform(get("/api/showtimes").param("movieId", "1").param("date", "2026-10-01")

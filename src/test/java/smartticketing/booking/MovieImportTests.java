@@ -26,10 +26,44 @@ class MovieImportTests {
         movies = mock(MovieRepository.class); writer = mock(MovieMetadataWriter.class);
         var builder = RestClient.builder().baseUrl("https://tmdb.test/3");
         server = MockRestServiceServer.bindTo(builder).build();
-        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "https://backdrops.test", "11,12", "11:ALL", "11:10000");
+        service = new MovieImportService(builder.build(), movies, writer, "https://images.test", "https://backdrops.test", "11,12", "11:ALL", "11:10000", "", "");
         when(writer.saveMissing(any())).thenAnswer(call -> call.getArgument(0));
     }
     @AfterEach void verifyServer() { server.verify(); }
+
+    @Test void defaultMetadataIsLoadedInBulkWithoutReadingEntireCatalog() {
+        var checked = new Movie(); checked.setGenres(""); checked.setId(1L); checked.setTmdbMovieId(11L);
+        checked.setMetadataFetchedAt(LocalDateTime.now()); checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
+        when(movies.findByTmdbMovieId(anyLong())).thenReturn(Optional.of(checked));
+        when(movies.findByTmdbMovieIdIn(anyList())).thenReturn(java.util.List.of(checked));
+        assertThat(service.importConfiguredMovies().skippedCount()).isEqualTo(2);
+        assertThat(checked.getRating()).isEqualTo("ALL");
+        assertThat(checked.getAudienceCount()).isEqualTo(10000);
+        verify(movies).findByTmdbMovieIdIn(java.util.List.of(11L, 12L));
+        verify(movies).findTop10ByReleaseDateIsNotNullOrderByReleaseDateDescTmdbMovieIdAsc();
+        verify(movies, never()).findAll();
+    }
+
+    @Test void explicitReleaseDatesStayExcludedAndUnchangedDefaultsAreNotSavedAgain() {
+        var fixed = new Movie(); fixed.setId(1L); fixed.setTmdbMovieId(11L);
+        fixed.setReleaseDate(java.time.LocalDate.of(2026, 10, 1));
+        var upcoming = new Movie(); upcoming.setId(2L); upcoming.setTmdbMovieId(12L);
+        upcoming.setReleaseDate(java.time.LocalDate.of(2026, 12, 1));
+        for (var movie : java.util.List.of(fixed, upcoming)) {
+            movie.setGenres(""); movie.setMetadataFetchedAt(LocalDateTime.now());
+            movie.setImageMetadataFetchedAt(movie.getMetadataFetchedAt());
+            when(movies.findByTmdbMovieId(movie.getTmdbMovieId())).thenReturn(Optional.of(movie));
+        }
+        when(movies.findByTmdbMovieIdIn(anyList())).thenReturn(java.util.List.of(fixed, upcoming));
+        when(movies.findTop10ByReleaseDateIsNotNullAndTmdbMovieIdNotInOrderByReleaseDateDescTmdbMovieIdAsc(java.util.List.of(11L)))
+                .thenReturn(java.util.List.of(upcoming));
+        service = new MovieImportService(RestClient.create(), movies, writer, "", "", "11,12", "", "", "", "11:2026-10-03");
+        service.importConfiguredMovies(); service.importConfiguredMovies();
+        assertThat(fixed.getReleaseDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 3));
+        assertThat(upcoming.getReleaseDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 11));
+        verify(movies, times(1)).save(fixed); verify(movies, times(1)).save(upcoming);
+        verify(movies, never()).findAll();
+    }
 
     @Test void databaseHitDoesNotCallExternalApi() {
         var movie = new Movie(); movie.setTmdbMovieId(11L); movie.setTitle("기존");
@@ -39,7 +73,7 @@ class MovieImportTests {
     }
 
     @Test void missingMovieLoadsDetailsAndOfficialTrailerInOneRequest() {
-        server.expect(requestTo("https://tmdb.test/3/movie/11?language=ko-KR&append_to_response=release_dates,videos,images&include_image_language=ko,en,null"))
+        server.expect(requestTo("https://tmdb.test/3/movie/11?language=ko-KR&append_to_response=release_dates,videos,images,credits&include_image_language=ko,en,null"))
                 .andRespond(withSuccess("""
                         {"id":11,"title":"새 영화","runtime":120,"poster_path":"/poster.jpg","backdrop_path":"/wide.jpg",
                          "images":{"logos":[{"file_path":"/en.png","iso_639_1":"en"},{"file_path":"/ko.png","iso_639_1":"ko"}]},
@@ -92,7 +126,7 @@ class MovieImportTests {
     }
 
     @Test void configuredImportSkipsCheckedMoviesAndContinuesAfterFailure() {
-        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        var checked = new Movie(); checked.setGenres(""); checked.setMetadataFetchedAt(LocalDateTime.now());
         checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(checked));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/12?"))).andRespond(withServerError());
@@ -138,7 +172,7 @@ class MovieImportTests {
 
     @Test void failedLegacyImageCollectionRemainsEligibleForRetry() {
         var legacy = new Movie(); legacy.setMetadataFetchedAt(LocalDateTime.now());
-        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        var checked = new Movie(); checked.setGenres(""); checked.setMetadataFetchedAt(LocalDateTime.now());
         checked.setImageMetadataFetchedAt(LocalDateTime.now());
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(legacy));
         when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
@@ -160,7 +194,7 @@ class MovieImportTests {
     }
 
     @Test void explicitRefreshCanRecheckMoviesWithPreviouslyMissingVideos() {
-        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        var checked = new Movie(); checked.setGenres(""); checked.setMetadataFetchedAt(LocalDateTime.now());
         checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
         when(movies.findByTmdbMovieId(11L)).thenReturn(Optional.of(checked));
         when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
@@ -189,14 +223,14 @@ class MovieImportTests {
 
     @Test void duplicateConfiguredIdsAreFetchedOnce() {
         service = new MovieImportService(clientForDuplicateTest(), movies, writer,
-                "https://images.test", "https://backdrops.test", "11,11", "", "");
+                "https://images.test", "https://backdrops.test", "11,11", "", "", "", "");
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))
                 .andRespond(withSuccess("{\"id\":11,\"title\":\"영화\"}", MediaType.APPLICATION_JSON));
         assertThat(service.importConfiguredMovies().savedCount()).isEqualTo(1);
     }
 
     @Test void quotaFailureDoesNotLabelAlreadyPreparedMoviesAsFailed() {
-        var checked = new Movie(); checked.setMetadataFetchedAt(LocalDateTime.now());
+        var checked = new Movie(); checked.setGenres(""); checked.setMetadataFetchedAt(LocalDateTime.now());
         checked.setImageMetadataFetchedAt(checked.getMetadataFetchedAt());
         when(movies.findByTmdbMovieId(12L)).thenReturn(Optional.of(checked));
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/movie/11?")))

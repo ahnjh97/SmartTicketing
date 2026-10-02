@@ -42,7 +42,7 @@ class BookingSeedConcurrencyTests {
                         .containsExactlyInAnyOrder(21, 0);
                 try (var em = database.open()) {
                     assertThat(em.createQuery("select count(s) from Showtime s", Long.class).getSingleResult()).isEqualTo(21);
-                    assertThat(em.createQuery("select count(s) from ShowtimeSeat s", Long.class).getSingleResult()).isEqualTo(2268);
+                    assertThat(em.createQuery("select count(s) from ShowtimeSeat s", Long.class).getSingleResult()).isEqualTo(2520);
                 }
             } finally {
                 executor.shutdownNow();

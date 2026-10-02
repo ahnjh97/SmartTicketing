@@ -26,7 +26,7 @@ public final class BookingAudiencePolicy {
                 || audience.adultCount() < 0 || audience.adultCount() > 6 || audience.youthCount() < 0 || audience.youthCount() > 6
                 || audience.adultCount() + audience.youthCount() != party
                 || audience.companionsEligible() == null || audience.guardianAccompanying() == null)
-            reject(400, "성인·청소년 인원의 합은 전체 인원 1~6명과 같아야 합니다.");
+            reject(400, "성인과 청소년 인원의 합은 전체 인원 1~6명과 같아야 합니다.");
         LocalDate birth = user.getBirthDate();
         if (birth == null || birth.isAfter(date)) reject(400, "회원 생년월일을 먼저 확인해주세요.");
         boolean youth = date.getYear() - birth.getYear() < 19;

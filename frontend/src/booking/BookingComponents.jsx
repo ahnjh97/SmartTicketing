@@ -1,3 +1,4 @@
+import InlineDetails from '../components/InlineDetails.jsx';
 import GlassButton from '../components/GlassButton.jsx';
 import ui from './BookingComponents.module.css';
 import { dates } from './state.js';
@@ -15,7 +16,7 @@ export function DateCards({ value, today, onChange }) {
 export function MovieCard({ movie, selected, onClick }) {
     return <button className={ui.movie} aria-pressed={selected} onClick={onClick}>
         <div className={ui.movieImage}>{movie.posterUrl ? <img src={movie.posterUrl} alt="" loading="lazy" /> : <div className={ui.poster}>POSTER</div>}{selected && <span className={ui.selectedBadge}>선택</span>}</div>
-        <strong>{movie.title}</strong><small>{movie.rating || '등급 미확인'} · {movie.runningTime ? `${movie.runningTime}분` : '시간 미확인'}</small>
+        <strong>{movie.title}</strong><small><InlineDetails items={[movie.rating || '등급 미확인', movie.runningTime ? `${movie.runningTime}분` : '시간 미확인']} /></small>
     </button>;
 }
 export function ShowtimeCard({ show, selected, label, onClick }) {
@@ -24,7 +25,7 @@ export function ShowtimeCard({ show, selected, label, onClick }) {
         <small>{show.screenName}</small>
         <strong>{show.startTime.slice(11, 16)} → {show.endsNextDay && '익일 '}{show.endTime.slice(11, 16)}</strong>
         <small>{show.startTime.slice(0, 10)}</small>
-        <span>{show.availableSeats} / {show.totalSeats}석 · {label}</span>
+        <InlineDetails items={[`${show.availableSeats} / ${show.totalSeats}석`, label]} />
     </Tag>;
 }
 export function BookingButtons({ normal, disabled, normalDisabled, smartDisabled, onEnter }) {
