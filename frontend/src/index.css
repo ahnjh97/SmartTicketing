@@ -900,6 +900,7 @@ input:focus {
 }
 
 .map-theater-info {
+    position: relative;
     min-width: max-content;
     padding: 7px 10px;
     border: 1px solid rgba(255, 196, 38, 0.65);
@@ -912,7 +913,7 @@ input:focus {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
     white-space: nowrap;
     pointer-events: none;
-    transform: translateY(-4px);
+    transform: translateY(-12px);
     backdrop-filter: blur(6px);
 }
 
@@ -920,26 +921,24 @@ input:focus {
     content: "";
     position: absolute;
     left: 50%;
-    bottom: -5px;
-    width: 9px;
-    height: 9px;
-    transform: translateX(-50%) rotate(45deg);
-    background: rgba(20, 20, 20, 0.94);
-    border-right: 1px solid rgba(255, 196, 38, 0.65);
-    border-bottom: 1px solid rgba(255, 196, 38, 0.65);
+    bottom: -7px;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 7px solid rgba(20, 20, 20, 0.94);
 }
 
 .map-theater-info.below {
-    transform: translateY(4px);
+    transform: translateY(12px);
 }
 
 .map-theater-info.below::after {
-    top: -5px;
+    top: -7px;
     bottom: auto;
-    border-top: 1px solid rgba(255, 196, 38, 0.65);
-    border-left: 1px solid rgba(255, 196, 38, 0.65);
-    border-right: 0;
-    border-bottom: 0;
+    border-top: 0;
+    border-bottom: 7px solid rgba(20, 20, 20, 0.94);
 }
 
 .map-theater-info strong {
