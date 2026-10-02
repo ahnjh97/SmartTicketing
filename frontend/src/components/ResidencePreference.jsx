@@ -1523,17 +1523,18 @@ export default function ResidencePreference({
                                 location &&
                                 theater.latitude != null &&
                                 theater.longitude != null
-                                    ? "https://map.kakao.com/?map_type=TYPE_MAP&target=car&rt=" +
-                                      [
-                                          location.longitude,
-                                          location.latitude,
-                                          theater.longitude,
-                                          theater.latitude,
-                                      ].join(",") +
-                                      "&rt1=" +
+                                    ? "https://map.kakao.com/link/by/car/" +
                                       encodeURIComponent(address || "선택한 위치") +
-                                      "&rt2=" +
-                                      encodeURIComponent(theater.name)
+                                      "," +
+                                      location.latitude +
+                                      "," +
+                                      location.longitude +
+                                      "/to/" +
+                                      encodeURIComponent(theater.name) +
+                                      "," +
+                                      theater.latitude +
+                                      "," +
+                                      theater.longitude
                                     : "https://map.kakao.com/link/to/" +
                                       encodeURIComponent(theater.name) +
                                       "," +
@@ -1570,11 +1571,6 @@ export default function ResidencePreference({
                                             }
                                         </strong>
 
-                                        <span>
-                                            {
-                                                theater.brand
-                                            }
-                                        </span>
 
                                         <small>
                                             {
