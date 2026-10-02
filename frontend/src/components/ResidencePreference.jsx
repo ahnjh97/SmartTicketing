@@ -1124,45 +1124,38 @@ export default function ResidencePreference({
 
             const brand = String(theater.brand ?? "").toUpperCase();
 
-            const logoConfig =
+            const logoFile =
                 brand === "CGV"
-                    ? {
-                        text: "CGV",
-                        textSize: 10,
-                        textWeight: 900,
-                        textColor: "#e51b23",
-                    }
+                    ? "CGV.png"
                     : brand === "LOTTE_CINEMA"
-                        ? {
-                            text: "LOTTE",
-                            subText: "CINEMA",
-                            textSize: 6.5,
-                            subTextSize: 4.2,
-                            textWeight: 900,
-                            textColor: "#111",
-                        }
-                        : {
-                            text: "MEGABOX",
-                            textSize: 5.5,
-                            textWeight: 900,
-                            textColor: "#111",
-                        };
+                        ? "LOTTE_CINEMA.png"
+                        : "MEGABOX.png";
 
-            const markerSize = selected ? 38 : 34;
+            const markerSize = selected ? 42 : 38;
             const center = markerSize / 2;
-            const radius = selected ? 15 : 14;
+            const borderRadius = selected ? 18 : 16;
             const borderColor = selected ? "#ffc426" : "#111";
 
-            const logoMarkup =
-                brand === "LOTTE_CINEMA"
-                    ? '<text x="' + center + '" y="' + (center - 1) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.textSize + '" font-weight="' + logoConfig.textWeight + '" fill="' + logoConfig.textColor + '">' + logoConfig.text + '</text>' +
-                      '<text x="' + center + '" y="' + (center + 6) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.subTextSize + '" font-weight="700" fill="' + logoConfig.textColor + '">' + logoConfig.subText + '</text>'
-                    : '<text x="' + center + '" y="' + (center + logoConfig.textSize / 3) + '" text-anchor="middle" font-family="Arial, sans-serif" font-size="' + logoConfig.textSize + '" font-weight="' + logoConfig.textWeight + '" fill="' + logoConfig.textColor + '">' + logoConfig.text + '</text>';
+            // PNG 안의 검정 원은 작업용 가이드이므로 SVG 필터에서 투명하게 제거합니다.
+            // 실제 지도에는 PNG 내부의 영화관 로고만 보이고, 선택 여부는 바깥 테두리로 표시합니다.
+            const logoUrl =
+                "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
+                logoFile;
 
             const markerSvg =
                 '<svg xmlns="http://www.w3.org/2000/svg" width="' + markerSize + '" height="' + markerSize + '" viewBox="0 0 ' + markerSize + ' ' + markerSize + '">' +
-                    '<circle cx="' + center + '" cy="' + center + '" r="' + radius + '" fill="#ffffff" stroke="' + borderColor + '" stroke-width="3"/>' +
-                    logoMarkup +
+                    '<defs>' +
+                        '<filter id="remove-black" x="-20%" y="-20%" width="140%" height="140%">' +
+                            '<feColorMatrix type="matrix" values="' +
+                                '1 0 0 0 0 ' +
+                                '0 1 0 0 0 ' +
+                                '0 0 1 0 0 ' +
+                                '0.333 0.333 0.333 0 0' +
+                            '"/>' +
+                        '</filter>' +
+                    '</defs>' +
+                    '<circle cx="' + center + '" cy="' + center + '" r="' + borderRadius + '" fill="transparent" stroke="' + borderColor + '" stroke-width="3"/>' +
+                    '<image href="' + logoUrl + '" x="4" y="4" width="' + (markerSize - 8) + '" height="' + (markerSize - 8) + '" preserveAspectRatio="xMidYMid meet" filter="url(#remove-black)"/>' +
                 '</svg>';
 
             const markerImage =
@@ -1174,14 +1167,6 @@ export default function ResidencePreference({
                         offset: new window.kakao.maps.Point(center, center),
                     }
                 );
-
-            const marker =
-                new window.kakao.maps.Marker({
-                    map: mapInstanceRef.current,
-                    position,
-                    image: markerImage,
-                    zIndex: selected ? 30 : 10,
-                });
 
             const distanceText =
                 theater.distance != null
