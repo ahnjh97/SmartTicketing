@@ -959,22 +959,20 @@ export default function ResidencePreference({
     async function loadNearbyTheaters(
         latitude,
         longitude,
-        resolvedAddress,
-        sort = "DISTANCE"
+        resolvedAddress
     ) {
         setSelectedTheaters([]);
         setTheaterLoading(true);
         clearMapSearchVisuals();
         setError("");
-        setTheaterSort(sort);
+        setTheaterSort("DISTANCE");
 
         try {
             const data = await theaterApi.nearby({
                 address: resolvedAddress,
                 latitude,
                 longitude,
-                radius: 10000,
-                sort,
+                sort: "DISTANCE",
             });
 
             if (!Array.isArray(data)) {
@@ -1006,22 +1004,6 @@ export default function ResidencePreference({
         }
     }
 
-    async function changeTheaterSort(sort) {
-        if (!location) {
-            return;
-        }
-
-        await loadNearbyTheaters(
-            location.latitude,
-            location.longitude,
-            address,
-            sort
-        );
-
-        if (sort === "WALK") {
-            setMessage("");
-        }
-    }
 
     function renderTheaterMarkers(
         theaterList
