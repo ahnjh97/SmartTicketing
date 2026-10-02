@@ -818,7 +818,7 @@ input:focus {
     word-break: keep-all;
 }
 
-.theater-name-marquee.is-overflowing strong {
+.theater-name-marquee strong {
     animation: theater-name-marquee 1.5s ease-in-out infinite alternate;
 }
 
