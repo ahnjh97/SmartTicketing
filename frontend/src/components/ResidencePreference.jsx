@@ -1185,9 +1185,6 @@ export default function ResidencePreference({
                             position
                         );
 
-                    const mapSize =
-                        map.getSize();
-
                     const showBelow =
                         point.y < 65;
 
@@ -1213,11 +1210,8 @@ export default function ResidencePreference({
                     );
                     overlay.setMap(map);
 
-                    // 지도 상단 경계에 가까우면
-                    // 오버레이를 마커 아래로 뒤집습니다.
+                    // 지도 상단 경계에 가까우면 오버레이를 마커 아래로 뒤집습니다.
                     overlay.setZIndex(40);
-
-                    void mapSize;
                 }
             );
 
