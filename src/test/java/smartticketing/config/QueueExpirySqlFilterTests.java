@@ -37,6 +37,7 @@ class QueueExpirySqlFilterTests {
 
             logger.debug(QUERY);
             logger.debug(QUERY.replace("wq1_0", "q2_0"));
+            logger.debug(QUERY.replace("where wq1_0.status=?", "where wq1_0.status=? and wq1_0.request_group_id is null"));
             String holdQuery = """
                     select bgh1_0.group_id
                     from booking_group_holds bgh1_0

@@ -179,6 +179,13 @@ export default function SignupPage() {
             return;
         }
 
+        if (password.length < 8) {
+            setError(
+                "비밀번호는 8자리 이상 입력해주세요."
+            );
+            return;
+        }
+
         if (!passwordsMatch) {
             setError(
                 "비밀번호가 일치하지 않습니다."
@@ -337,8 +344,21 @@ export default function SignupPage() {
                     }
                     placeholder="8~100자"
                     autoComplete="new-password"
+                    minLength={8}
+                    maxLength={100}
                     required
                 />
+
+                {
+                    password && password.length < 8 && (
+                        <p
+                            className="error-message field-message"
+                            role="alert"
+                        >
+                            비밀번호는 8자리 이상 입력해주세요.
+                        </p>
+                    )
+                }
 
                 <label htmlFor="signup-password-confirm">
                     비밀번호 확인

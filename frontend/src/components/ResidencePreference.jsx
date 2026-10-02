@@ -76,7 +76,7 @@ function restorePreferredSeats(
             };
         })
         .filter(Boolean)
-        .slice(0, 3);
+        .slice(0, 6);
 }
 
 function initializeMap(
@@ -1164,13 +1164,6 @@ export default function ResidencePreference({
             return;
         }
 
-        if (selectedSeats.length >= 3) {
-            setError(
-                "선호 좌석 위치는 최대 3개까지 선택할 수 있습니다."
-            );
-            return;
-        }
-
         setSelectedSeats(
             (current) => [
                 ...current,
@@ -1676,7 +1669,7 @@ export default function ResidencePreference({
                     </h2>
 
                     <span>
-                        {selectedSeats.length}/3
+                        {selectedSeats.length}/6
                     </span>
                 </div>
 
@@ -1685,7 +1678,7 @@ export default function ResidencePreference({
                     좌측/우측의 같은 번호 사이드는 하나의 영역으로 취급합니다.
                     예를 들어 1번에 마우스를 올리면 좌측 1번과 우측 1번이 함께 반응하고,
                     중앙 4·5·6번은 각각 독립적으로 반응합니다.
-                    선호 위치는 3개까지 선택하고 선택한 순서가 우선순위가 됩니다.
+                    선호 위치는 1~6개까지 선택하고 선택한 순서가 우선순위가 됩니다.
                 </p>
 
                 <div className="screen preference-screen">

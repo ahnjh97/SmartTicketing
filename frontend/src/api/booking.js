@@ -6,11 +6,17 @@ export const catalog = (path, query, signal) => request(`/api/${path}`, {
 });
 
 export const bookingApi = {
+    waiting: (id, signal) => request(`/api/booking-groups/${id}/waiting-queues`, { signal }),
+    registerWaiting: (id, showtimeIds, key) => request(`/api/booking-groups/${id}/waiting-queues`, {
+        method: 'POST', body: { showtimeIds }, idempotencyKey: key,
+    }),
+    cancelGroup: (id, key) => request(`/api/booking-groups/${id}/cancel`, { method: 'POST', idempotencyKey: key }),
     createGroup: (body, key) => request('/api/booking-groups', { method: 'POST', body, idempotencyKey: key }),
     group: (id, signal) => request(`/api/booking-groups/${id}`, { signal }),
     hold: (id, seatIds, key) => request(`/api/booking-groups/${id}/manual-hold`, {
         method: 'POST', body: { seatIds }, idempotencyKey: key,
     }),
+    smartHold: (id, key) => request(`/api/booking-groups/${id}/smart-hold`, { method: 'POST', idempotencyKey: key }),
     reservation: (id, signal) => request(`/api/reservations/${id}`, { signal }),
     payment: (id, signal) => request(`/api/reservations/${id}/payment`, { signal }),
     pay: (id, key, simulateFailure = false) => request(`/api/reservations/${id}/mock-payments`, {

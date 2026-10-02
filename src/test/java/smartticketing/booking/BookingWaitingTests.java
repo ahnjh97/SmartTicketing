@@ -1,0 +1,230 @@
+package smartticketing.booking;
+
+import jakarta.persistence.*;
+import org.junit.jupiter.api.*;
+import org.springframework.orm.jpa.*;
+import smartticketing.dto.booking.*;
+import smartticketing.entity.*;
+import smartticketing.entity.enums.*;
+import smartticketing.service.*;
+import java.time.*;
+import java.util.*;
+import java.util.function.Function;
+import static org.assertj.core.api.Assertions.*;
+
+class BookingWaitingTests {
+    static TemporaryMysqlDatabase db;
+    static final Clock CLOCK = BookingSmartTests.CLOCK;
+    static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
+    record Fixture(long user, long group, List<Long> shows) {}
+    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(); }
+    @AfterAll static void stop() throws Exception { if (db != null) db.close(); }
+    static String key() { return UUID.randomUUID().toString(); }
+    static <T> T tx(Function<EntityManager,T> fn) {
+        try (var em = db.open()) {
+            em.getTransaction().begin();
+            try { T value = fn.apply(em); em.getTransaction().commit(); return value; }
+            catch (RuntimeException ex) { em.getTransaction().rollback(); throw ex; }
+        }
+    }
+    static BookingHoldService holds(EntityManager em, Clock clock) { return new BookingHoldService(em, new BookingIdempotency(em), clock); }
+    static BookingWaitingService service(EntityManager em, Clock clock) {
+        return new BookingWaitingService(em, holds(em,clock), BookingPaymentTests.service(em,clock,true), new BookingIdempotency(em));
+    }
+    static BookingWaitingDispatcher dispatcher(Clock clock) {
+        var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
+        return new BookingWaitingDispatcher(em,holds(em,clock),service(em,clock),new JpaTransactionManager(db.factory()));
+    }
+    static Fixture fixture(int party, int seats) {
+        return tx(em -> {
+            var user=new Users(); user.setName("대기 관객"); user.setNickname("대기"); user.setBirthDate(LocalDate.of(1990,1,1)); em.persist(user);
+            var movie=new Movie(); movie.setTitle("복수 대기 검증"); movie.setRating("ALL"); movie.setTmdbMovieId(System.nanoTime()); em.persist(movie);
+            var theater=new Theater(); theater.setName("격리 극장"); theater.setAddress("서울"); theater.setKakaoPlaceId(key()); theater.setBrand(TheaterBrand.CGV); em.persist(theater);
+            var shows=new ArrayList<Showtime>();
+            for(int n=0;n<2;n++) {
+                var screen=new Screen(); screen.setTheater(theater); screen.setName("관"+n); em.persist(screen);
+                var show=new Showtime(); show.setMovie(movie); show.setScreen(screen); show.setStartTime(NOW.plusHours(3+n)); show.setEndTime(NOW.plusHours(5+n));
+                show.setPricePerPerson(10000); show.setTotalSeats(seats); show.setAvailableSeats(seats); show.setCreatedAt(NOW); show.setUpdatedAt(NOW); em.persist(show); shows.add(show);
+                for(int i=1;i<=seats;i++) {
+                    var seat=new Seat(); seat.setScreen(screen); seat.setSeatRow("A"); seat.setSeatNumber(i); seat.setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
+                    seat.setAdjacencySegment("center"); seat.setPositionInSegment(i); em.persist(seat);
+                    var inventory=new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat); em.persist(inventory);
+                }
+            }
+            var group=BookingSmartTests.group(em,user,movie,shows.getFirst(),List.of(theater),true,party);
+            return new Fixture(user.getId(),group.getId(),shows.stream().map(Showtime::getId).toList());
+        });
+    }
+    static Fixture another(Fixture f, int party, boolean sameUser) {
+        return tx(em -> {
+            var original=em.find(BookingRequestGroup.class,f.group);
+            Users user;
+            if(sameUser) user=original.getUser();
+            else { user=new Users(); user.setName("뒤 관객"); user.setNickname("뒤"); user.setBirthDate(LocalDate.of(1990,1,1)); em.persist(user); }
+            var group=BookingSmartTests.group(em,user,original.getMovie(),em.find(Showtime.class,f.shows.getFirst()),original.getTheaterPreferences(),true,party);
+            return new Fixture(user.getId(),group.getId(),f.shows);
+        });
+    }
+    static BookingResult register(Fixture f,List<Long> ids,String key) { return tx(em -> service(em,CLOCK).register(f.user,f.group,key,new WaitingRequest(ids))); }
+    static void register(Fixture f) { assertThat(register(f,f.shows,key()).status()).isEqualTo(201); }
+    static WaitingResponse state(Fixture f,Clock clock) { return tx(em -> service(em,clock).get(f.user,f.group)); }
+    static WaitingResponse state(Fixture f) { return state(f,CLOCK); }
+    static void statuses(Fixture f,QueueStatus... statuses) { assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactly(statuses); }
+    static List<ShowtimeSeat> inventory(EntityManager em,Long show) { return BookingSmartTests.inventory(em,show); }
+
+    @Test void registrationReplayAndNumbersAreDistinctFromAheadCount() {
+        var f=fixture(2,2); var next=another(f,2,false); String key=key();
+        var first=register(f,f.shows,key); assertThat(first.status()).isEqualTo(201);
+        assertThat(register(f,f.shows.reversed(),key)).isEqualTo(first);
+        register(next); var s=state(next); assertThat(s.items()).allSatisfy(q -> { assertThat(q.queueNumber()).isEqualTo(2); assertThat(q.aheadCount()).isEqualTo(1); });
+        tx(em -> service(em,CLOCK).cancel(f.user,f.group,key()));
+        assertThat(state(next).items()).allSatisfy(q -> { assertThat(q.queueNumber()).isEqualTo(2); assertThat(q.aheadCount()).isZero(); });
+        assertThat(register(f,f.shows,key()).status()).isEqualTo(409);
+    }
+    @Test void simultaneousShowsAllocateOnlyOneHoldAndPauseOtherQueues() throws Exception {
+        var f=fixture(2,2); register(f);
+        BookingPaymentTests.race(() -> dispatcher(CLOCK).dispatch(f.shows.getFirst()), () -> dispatcher(CLOCK).dispatch(f.shows.getLast()));
+        assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactlyInAnyOrder(QueueStatus.HOLDING,QueueStatus.PAUSED);
+        tx(em -> { assertThat(em.createQuery("select count(r) from Reservation r where r.requestGroup.id=:g",Long.class).setParameter("g",f.group).getSingleResult()).isEqualTo(1); return null; });
+    }
+    @Test void pausedDoesNotBlockOthersAndExpiredRestoresOriginalNumberWithoutRetroactiveGuarantee() {
+        var f=fixture(2,2); var other=another(f,2,false); register(f); register(other);
+        dispatcher(CLOCK).dispatch(f.shows.getFirst()); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        dispatcher(CLOCK).dispatch(f.shows.getLast()); statuses(other,QueueStatus.PAUSED,QueueStatus.HOLDING);
+        var later=Clock.offset(CLOCK,Duration.ofMinutes(5));
+        tx(em -> holds(em,later).expire(f.group));
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.WAITING);
+        assertThat(state(f).items()).allSatisfy(q -> assertThat(q.queueNumber()).isEqualTo(1));
+        assertThat(dispatcher(later).dispatch(f.shows.getLast())).isZero(); // other user's slot has not been released
+        assertThat(register(f,List.of(f.shows.getFirst()),key()).status()).isEqualTo(201);
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.WAITING);
+        var fresh=another(f,2,true); assertThat(register(fresh,List.of(f.shows.getFirst()),key()).status()).isEqualTo(201);
+        assertThat(state(fresh).items().getFirst().queueNumber()).isEqualTo(3);
+    }
+    @Test void eligibleFifoSkipsImpossiblePartyAndUsesSeatPreference() {
+        var f=fixture(3,2); var second=another(f,2,false); register(f); register(second);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+        statuses(f,QueueStatus.WAITING,QueueStatus.WAITING); statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+    @Test void paymentCompletesOwnOpportunityAndCancelsPausedAtomically() {
+        var f=fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); long r=state(f).activeReservationId();
+        var pay=tx(em -> BookingPaymentTests.service(em,CLOCK,true).pay(f.user,r,key(),new MockPaymentRequest(PaymentMethod.MOCK,false)));
+        assertThat(pay.status()).isEqualTo(201); statuses(f,QueueStatus.COMPLETED,QueueStatus.CANCELLED);
+        assertThat(state(f).groupStatus()).isEqualTo(BookingGroupStatus.COMPLETED);
+        assertThat(tx(em -> service(em,CLOCK).cancel(f.user,f.group,key())).status()).isEqualTo(409);
+    }
+    @Test void pendingCancellationResumesOthersButGroupCancellationReleasesEverything() {
+        var f=fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); long r=state(f).activeReservationId();
+        assertThat(tx(em -> BookingPaymentTests.service(em,CLOCK,true).cancel(f.user,r,key())).status()).isEqualTo(200);
+        statuses(f,QueueStatus.CANCELLED,QueueStatus.WAITING);
+        dispatcher(CLOCK).dispatch(f.shows.getLast());
+        String key=key(); var cancelled=tx(em -> service(em,CLOCK).cancel(f.user,f.group,key));
+        assertThat(cancelled.status()).isEqualTo(200);
+        var replay=tx(em -> service(em,CLOCK).cancel(f.user,f.group,key)); assertThat(replay).isEqualTo(cancelled);
+        statuses(f,QueueStatus.CANCELLED,QueueStatus.CANCELLED);
+        tx(em -> { assertThat(em.find(BookingGroupHold.class,f.group)).isNull(); assertThat(inventory(em,f.shows.getLast())).allSatisfy(i -> assertThat(i.getStatus()).isEqualTo(SeatStatus.AVAILABLE)); return null; });
+    }
+    @Test void crossGroupDuplicateRegistrationIsRejectedUnderRace() throws Exception {
+        var f=fixture(2,2); var duplicate=another(f,2,true);
+        var results=BookingPaymentTests.race(() -> register(f,f.shows,key()), () -> register(duplicate,duplicate.shows,key()));
+        assertThat(results.stream().map(r -> ((BookingResult)r).status())).containsExactlyInAnyOrder(201,409);
+    }
+    @Test void duplicateIdsMismatchAndForeignAccessDoNotWrite() {
+        var f=fixture(2,2); var foreign=fixture(2,2);
+        assertThatThrownBy(() -> register(f,List.of(f.shows.getFirst(),f.shows.getFirst()),key())).isInstanceOf(IllegalArgumentException.class);
+        assertThat(register(f,List.of(f.shows.getFirst(),foreign.shows.getFirst()),key()).status()).isEqualTo(400);
+        assertThat(state(f).items()).isEmpty();
+        assertThat(tx(em -> service(em,CLOCK).register(foreign.user,f.group,key(),new WaitingRequest(f.shows))).status()).isEqualTo(404);
+        assertThatThrownBy(() -> tx(em -> service(em,CLOCK).get(foreign.user,f.group))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    }
+    @Test void legacyQueuesRemainUntouchedAndStartedShowsNeverAllocate() {
+        var f=fixture(2,2);
+        tx(em -> { var q=new WaitingQueue(); q.setUser(em.find(Users.class,f.user)); q.setShowtime(em.find(Showtime.class,f.shows.getFirst())); q.setQueueNumber(1); q.setCreatedAt(NOW); q.setUpdatedAt(NOW); em.persist(q); return null; });
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
+        var other=another(f,2,false); register(other);
+        var late=Clock.offset(CLOCK,Duration.ofHours(4)); dispatcher(late).dispatch(f.shows.getFirst()); dispatcher(late).dispatch(f.shows.getLast());
+        assertThat(state(other,late).items()).allSatisfy(q -> assertThat(q.status()).isEqualTo(QueueStatus.EXPIRED));
+        tx(em -> { assertThat(em.createQuery("select q.status from WaitingQueue q where q.requestGroup is null and q.showtime.id=:s",QueueStatus.class).setParameter("s",f.shows.getFirst()).getSingleResult()).isEqualTo(QueueStatus.WAITING); return null; });
+    }
+    @Test void paymentExpiryAndParallelDispatchPreserveSingleOutcome() throws Exception {
+        var f=fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); long r=state(f).activeReservationId();
+        var later=Clock.offset(CLOCK,Duration.ofMinutes(5));
+        BookingPaymentTests.race(() -> tx(em -> BookingPaymentTests.service(em,later,true).pay(f.user,r,key(),new MockPaymentRequest(PaymentMethod.MOCK,false))),
+                () -> tx(em -> holds(em,later).expire(f.group)));
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.WAITING);
+        assertThat(dispatcher(later).dispatch(f.shows.getLast())).isEqualTo(1);
+        tx(em -> { assertThat(holds(em,later).expire(f.group)).isFalse(); return null; });
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.HOLDING);
+    }
+    @Test void restartFindsCommittedWaitingWithoutAnInMemoryEvent() {
+        var f=fixture(2,2); register(f); db.restartPersistence();
+        var d=dispatcher(CLOCK); assertThat(d.pendingShows()).containsAll(f.shows);
+        assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+    @Test void regularSmartHoldAlsoUpdatesMatchingWaitingOpportunityAndExpiryResumesOthers() {
+        var f=fixture(2,2); register(f);
+        tx(em -> { var ids=inventory(em,f.shows.getFirst()).stream().map(i -> i.getSeat().getId()).toList();
+            assertThat(holds(em,CLOCK).hold(f.user,f.group,key(),BookingHoldService.Source.SMART,new BookingHoldService.Candidate(f.shows.getFirst(),ids)).status()).isEqualTo(201); return null; });
+        statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        tx(em -> holds(em,Clock.offset(CLOCK,Duration.ofMinutes(5))).expire(f.group));
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.WAITING);
+    }
+
+    @Test void actualTwoReservationCancellationsThenConcurrentAllocationKeepOneGroupSlot() throws Exception {
+        var f=fixture(2,2); var ownerA=another(f,2,false); var ownerB=another(f,2,false);
+        List<Long> reservations=new ArrayList<>();
+        for(int index=0;index<2;index++) {
+            var owner=index==0?ownerA:ownerB; long show=f.shows.get(index);
+            long reservation=tx(em -> {
+                var seats=inventory(em,show).stream().map(i -> i.getSeat().getId()).toList();
+                var held=holds(em,CLOCK).hold(owner.user,owner.group,key(),BookingHoldService.Source.SMART,new BookingHoldService.Candidate(show,seats));
+                return BookingSmartTests.value(held,"id");
+            });
+            reservations.add(reservation);
+            tx(em -> BookingPaymentTests.service(em,CLOCK,true).pay(owner.user,reservation,key(),new MockPaymentRequest(PaymentMethod.MOCK,false)));
+        }
+        register(f); assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
+        BookingPaymentTests.race(() -> { tx(em -> BookingPaymentTests.service(em,CLOCK,true).cancel(ownerA.user,reservations.getFirst(),key())); return dispatcher(CLOCK).dispatch(f.shows.getFirst()); },
+                () -> { tx(em -> BookingPaymentTests.service(em,CLOCK,true).cancel(ownerB.user,reservations.getLast(),key())); return dispatcher(CLOCK).dispatch(f.shows.getLast()); });
+        assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactlyInAnyOrder(QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void pendingPaymentRacingAnotherShowAllocationNeverCreatesSecondReservation() throws Exception {
+        var f=fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); long r=state(f).activeReservationId();
+        BookingPaymentTests.race(() -> tx(em -> BookingPaymentTests.service(em,CLOCK,true).pay(f.user,r,key(),new MockPaymentRequest(PaymentMethod.MOCK,false))),
+                () -> dispatcher(CLOCK).dispatch(f.shows.getLast()));
+        statuses(f,QueueStatus.COMPLETED,QueueStatus.CANCELLED);
+    }
+
+    @Test void snapshotOlderThanRegistrationRollsBackRatherThanLockingShowsOutOfOrder() {
+        var f=fixture(2,2);
+        assertThatThrownBy(() -> tx(em -> {
+            em.createQuery("select count(q) from WaitingQueue q",Long.class).getSingleResult();
+            register(f);
+            var ids=inventory(em,f.shows.getFirst()).stream().map(i -> i.getSeat().getId()).toList();
+            return holds(em,CLOCK).hold(f.user,f.group,key(),BookingHoldService.Source.SMART,new BookingHoldService.Candidate(f.shows.getFirst(),ids));
+        })).isInstanceOf(org.springframework.dao.TransientDataAccessResourceException.class);
+        assertThat(state(f).activeReservationId()).isNull();
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+    }
+
+    @Test void theaterScopeAndChangedAudienceAreRecheckedWithoutPartialRegistration() {
+        var f=fixture(2,2);
+        tx(em -> { em.find(BookingRequestGroup.class,f.group).getTheaterPreferences().clear(); return null; });
+        assertThat(register(f,f.shows,key()).status()).isEqualTo(400); assertThat(state(f).items()).isEmpty();
+        var second=fixture(2,2); register(second);
+        tx(em -> { em.find(BookingRequestGroup.class,second.group).getMovie().setRating("19"); return null; });
+        assertThat(dispatcher(CLOCK).dispatch(second.shows.getFirst())).isZero(); assertThat(state(second).activeReservationId()).isNull();
+    }
+
+    @Test void waitingRejectsSplitSeatsAndTerminatedOpportunityCannotBeReacquiredViaSmartPrimitive() {
+        var f=fixture(4,4); register(f);
+        tx(em -> { var rows=inventory(em,f.shows.getFirst()); rows.get(2).getSeat().setAdjacencySegment("other"); rows.get(3).getSeat().setAdjacencySegment("other"); return null; });
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
+        dispatcher(CLOCK).dispatch(f.shows.getLast());
+        var later=Clock.offset(CLOCK,Duration.ofMinutes(5)); tx(em -> holds(em,later).expire(f.group));
+        var result=tx(em -> holds(em,later).hold(f.user,f.group,key(),BookingHoldService.Source.SMART,
+                new BookingHoldService.Candidate(f.shows.getLast(),inventory(em,f.shows.getLast()).stream().map(i -> i.getSeat().getId()).toList())));
+        assertThat(result.status()).isEqualTo(409);
+    }
+}

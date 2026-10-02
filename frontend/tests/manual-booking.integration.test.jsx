@@ -47,6 +47,7 @@ const response = value => new Response(JSON.stringify(value));
 function payment() { return { paymentId: paymentStatus ? 601 : null, status: paymentStatus, amount: paymentStatus ? 18000 : null, reservation: saved,
     ticket: paymentStatus === 'SUCCESS' ? { ticketId: 701, ticketNumber: 'ST-TEST' } : null }; }
 async function api(url, options = {}) {
+    if(url==='/api/booking-groups/401/waiting-queues') return response({groupId:401,groupStatus:'HOLDING',activeReservationId:saved?.id,items:[],choices:[]});
     if (url === '/api/users/me') return response(member);
     if (url === '/api/auth/login') return response({ accessToken: 'test-token' });
     if (url.startsWith('/api/theaters?')) return response({ items: [], totalElements: 0 });
@@ -105,6 +106,7 @@ test('network failure retries the same hold identity without showing premature s
     fireEvent.click(screen.getByLabelText(/동반 관객 모두/)); fireEvent.click(await screen.findByRole('button',{name:'A1 좌석'}));
     fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점 →'}));
     await screen.findByText('연결 끊김'); expect(screen.queryByText('좌석을 선점했습니다')).toBeNull();
+    expect(screen.getByTestId('path').textContent).toContain('group=401');
     fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점 →'}));
     await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
     const callsToHold=fetch.mock.calls.filter(([url])=>url.endsWith('/manual-hold'));
