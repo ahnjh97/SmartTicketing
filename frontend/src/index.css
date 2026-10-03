@@ -207,6 +207,43 @@ h2 {
     color: #222222;
 }
 
+.profile-social-providers {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-social-provider {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.profile-social-provider.google {
+    background: #ffffff;
+    border: 1px solid #dddddd;
+}
+
+.profile-social-provider.naver {
+    background: #03c75a;
+    color: #ffffff;
+}
+
+.profile-social-provider.kakao {
+    background: #fee500;
+    color: #222222;
+}
+
+.profile-social-provider .social-logo {
+    width: 19px;
+    height: 19px;
+}
+
+
 .divider {
     display: flex;
 
