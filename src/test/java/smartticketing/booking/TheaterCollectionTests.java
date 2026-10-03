@@ -89,6 +89,28 @@ class TheaterCollectionTests {
         assertThat(service.collectSeoulTheaters()).containsEntry("apiCallCount", 75);
     }
 
+    @Test void excludedFacilitiesDoNotReachWriterOrStopPagination() {
+        server.expect(anything()).andRespond(withSuccess("""
+                {"meta":{"is_end":false},"documents":[
+                  {"id":"alias-1","place_name":"CGV 씨네드쉐프 용산아이파크몰","road_address_name":"서울 용산구 한강대로23길 55"},
+                  {"id":"alias-2","place_name":"CGV 씨네드쉐프용산","road_address_name":"서울 용산구 한강대로23길 55"},
+                  {"id":"alias-3","place_name":"CGV 압구정 본관","road_address_name":"서울 강남구 논현로 848"},
+                  {"id":"alias-4","place_name":"CGV씨네드쉐프 압구정","road_address_name":"서울 강남구 압구정로30길 45"}]}
+                """, MediaType.APPLICATION_JSON));
+        server.expect(request -> assertThat(request.getURI().getQuery()).contains("page=2"))
+                .andRespond(withSuccess("""
+                {"meta":{"is_end":true},"documents":[
+                  {"id":"normal","place_name":"CGV 압구정","road_address_name":"서울 강남구 압구정로30길 45",
+                   "x":"127.02","y":"37.5"}]}
+                """, MediaType.APPLICATION_JSON));
+        server.expect(times(74), anything()).andRespond(withSuccess(EMPTY, MediaType.APPLICATION_JSON));
+        assertThat(service.collectSeoulTheaters()).containsEntry("apiCallCount", 76)
+                .containsEntry("collectedTheaterCount", 1).containsEntry("insertedCount", 1);
+        verify(writer).savePage(eq("seoul-v1:강남구:CGV"), eq(1), eq(false), argThat(List::isEmpty));
+        verify(writer).savePage(eq("seoul-v1:강남구:CGV"), eq(2), eq(true), argThat(p ->
+                p.size() == 1 && p.getFirst().kakaoPlaceId().equals("normal")));
+    }
+
     @Test void explicitRefreshRechecksCompletedQueries() {
         server.expect(times(150), anything()).andRespond(withSuccess(EMPTY, MediaType.APPLICATION_JSON));
         service.collectSeoulTheaters();
@@ -99,7 +121,8 @@ class TheaterCollectionTests {
     @Test void malformedResponseNeverMarksCollectionComplete() {
         server.expect(anything()).andRespond(withSuccess("{\"documents\":[]}", MediaType.APPLICATION_JSON));
         assertThatThrownBy(() -> service.collectSeoulTheaters()).isInstanceOf(IllegalStateException.class);
-        verifyNoInteractions(writer);
+        verify(writer).consolidateBranches();
+        verify(writer, never()).savePage(anyString(), anyInt(), anyBoolean(), anyList());
     }
 
     @Test void missingKeyMakesNoNetworkRequests() {

@@ -45,6 +45,7 @@ public class SeoulTheaterCollectionService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "카카오 지도 REST API 키가 설정되지 않았습니다.");
         }
         long start = System.nanoTime();
+        writer.consolidateBranches();
         int calls = 0, inserted = 0, updated = 0, duplicates = 0, skipped = 0;
         var seen = new HashSet<String>();
         var brands = new LinkedHashMap<String, TheaterBrand>();
@@ -119,6 +120,7 @@ public class SeoulTheaterCollectionService {
                 throw new IllegalStateException("장소 필수 정보가 없습니다.");
             }
             if (!(address.startsWith("서울 ") || address.startsWith("서울특별시 ")) || !matchesBrand(name, brand)) continue;
+            if (TheaterBranchIdentity.excludedFromCollection(brand, name, address)) continue;
             var lat = decimal(map.get("y"));
             var lon = decimal(map.get("x"));
             if (lat == null || lon == null || lat.abs().compareTo(java.math.BigDecimal.valueOf(90)) > 0

@@ -28,6 +28,8 @@ public class TheaterCatalogWriter {
         }
         int inserted = 0, updated = 0;
         for (var place : places) {
+            // Never recreate excluded facilities, even when the catalog is empty.
+            if (TheaterBranchIdentity.excludedFromCollection(place.brand(), place.name(), place.address())) continue;
             var existing = theaters.findByKakaoPlaceId(place.kakaoPlaceId());
             Theater theater = existing.orElseGet(Theater::new);
             if (existing.isEmpty()) inserted++; else updated++;
@@ -44,7 +46,28 @@ public class TheaterCatalogWriter {
         state.setComplete(last);
         state.setCheckedAt(LocalDateTime.now(ZoneOffset.UTC));
         progress.save(state);
+        // Preserve old alias rows; hide them once their representative is available.
+        consolidateBranches();
         return new Counts(inserted, updated);
+    }
+
+    /** Keep IDs and all existing references; only the representative remains visible.
+     * Also runs for completed collections, so old catalogs need no API refresh.
+     * Never reactivate a manually disabled representative or hide an orphan alias.
+     */
+    @Transactional
+    public int consolidateBranches() {
+        var catalog = theaters.findAll();
+        int deactivated = 0;
+        for (var theater : catalog) {
+            if (theater.isActive() && catalog.stream().anyMatch(candidate ->
+                    TheaterBranchIdentity.isAliasOf(theater, candidate))) {
+                theater.setActive(false);
+                theaters.save(theater);
+                deactivated++;
+            }
+        }
+        return deactivated;
     }
 
     /** Explicit refresh invalidates progress only, never catalog data. */

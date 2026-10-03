@@ -88,6 +88,17 @@ class TheaterCatalogWriterTests {
                 .getRepository(TheaterCollectionProgressRepository.class);
         new TheaterDataInitializer(new SeoulTheaterCollectionService(repo, writer, client, "test"), true, "test").run(null);
         server.verify(); server.reset();
+        // Simulate a catalog collected by the old application, with all queries complete.
+        try (var em = database.open()) {
+            em.getTransaction().begin();
+            for (String name : List.of("CGV 압구정", "CGV 압구정 본관", "CGV씨네드쉐프 압구정")) {
+                var row = new Theater();
+                row.setKakaoPlaceId("legacy-" + name); row.setName(name); row.setBrand(TheaterBrand.CGV);
+                row.setAddress(name.endsWith("본관") ? "서울 강남구 논현로 848" : "서울 강남구 압구정로30길 45");
+                em.persist(row);
+            }
+            em.getTransaction().commit();
+        }
         database.restartPersistence(); setup();
         repo = new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(database.factory()))
                 .getRepository(TheaterCollectionProgressRepository.class);
@@ -98,6 +109,94 @@ class TheaterCatalogWriterTests {
         try (var em = database.open()) {
             assertThat(em.createQuery("select count(t) from Theater t where t.kakaoPlaceId = 'startup'", Long.class)
                     .getSingleResult()).isEqualTo(1);
+            var legacy = em.createQuery("from Theater t where t.kakaoPlaceId like 'legacy-%'", Theater.class).getResultList();
+            assertThat(legacy).hasSize(3);
+            assertThat(legacy).filteredOn(Theater::isActive).extracting(Theater::getName).containsExactly("CGV 압구정");
         }
+    }
+
+    @Test void legacyAliasAndItsReferencesSurviveRefreshWithoutCreatingNewAliases() {
+        var alias = branchPlace("alias-yongsan", "CGV 씨네드쉐프용산", "서울 용산구 한강대로23길 55");
+        var otherAlias = branchPlace("alias-yongsan-long", "CGV 씨네드쉐프 용산아이파크몰", "서울 용산구 한강대로23길 55");
+        var representative = branchPlace("branch-yongsan", "CGV 용산아이파크몰", "서울 용산구 한강대로23길 55");
+        Long aliasId;
+        Long screenId;
+        try (var em = database.open()) {
+            em.getTransaction().begin();
+            var row = new Theater();
+            row.setKakaoPlaceId(alias.kakaoPlaceId()); row.setName(alias.name());
+            row.setBrand(alias.brand()); row.setAddress(alias.address());
+            em.persist(row);
+            aliasId = row.getId();
+            var screen = new smartticketing.entity.Screen();
+            screen.setTheater(row); screen.setName("기존 상영관");
+            em.persist(screen); em.getTransaction().commit();
+            screenId = screen.getId();
+        }
+        writer.savePage("branch-pages", 1, true, List.of(representative));
+        database.restartPersistence(); setup();
+        writer.reset(List.of("branch-pages"));
+        // Reverse order during refresh, including an additional formatting variant.
+        writer.savePage("branch-pages", 1, true, List.of(representative, alias, otherAlias,
+                branchPlace("alias-yongsan-new", "cgv 씨네드쉐프 용산", "서울특별시 용산구 한강대로23길 55")));
+        assertThat(writer.consolidateBranches()).isZero();
+        try (var em = database.open()) {
+            var rows = em.createQuery("from Theater t where t.address like '%용산구%'", Theater.class).getResultList();
+            assertThat(rows).hasSize(2);
+            assertThat(rows).filteredOn(Theater::isActive).extracting(Theater::getKakaoPlaceId)
+                    .containsExactly(representative.kakaoPlaceId());
+            assertThat(em.find(Theater.class, aliasId).isActive()).isFalse();
+            assertThat(em.find(smartticketing.entity.Screen.class, screenId).getTheater().getId()).isEqualTo(aliasId);
+            em.getTransaction().begin();
+            rows.stream().filter(Theater::isActive).forEach(row -> row.setActive(false));
+            em.getTransaction().commit();
+        }
+        writer.reset(List.of("branch-pages"));
+        writer.savePage("branch-pages", 1, true, List.of(alias, representative));
+        try (var em = database.open()) {
+            assertThat(em.createQuery("from Theater t where t.address like '%용산구%'", Theater.class)
+                    .getResultList()).hasSize(2).noneMatch(Theater::isActive);
+        }
+    }
+
+    @Test void freshCollectionNeverInsertsExcludedFacilitiesEvenBeforeRepresentatives() {
+        var aliases = List.of(
+                branchPlace("fresh-alias-1", "CGV 씨네드쉐프 용산아이파크몰", "서울 용산구 한강대로23길 55"),
+                branchPlace("fresh-alias-2", "cgv 씨네드쉐프용산", "서울특별시 용산구 한강대로23길 55"),
+                branchPlace("fresh-alias-3", "CGV 압구정 본관", "서울 강남구 논현로 848"),
+                branchPlace("fresh-alias-4", "CGV씨네드쉐프 압구정", "서울 강남구 압구정로30길 45"));
+        var counts = writer.savePage("fresh", 1, false, aliases);
+        assertThat(counts.inserted()).isZero();
+        assertThat(counts.updated()).isZero();
+        try (var em = database.open()) {
+            assertThat(em.createQuery("select count(t) from Theater t where t.kakaoPlaceId like 'fresh-alias-%'", Long.class)
+                    .getSingleResult()).isZero();
+            assertThat(em.find(TheaterCollectionProgress.class, "fresh").getNextPage()).isEqualTo(2);
+        }
+        writer.savePage("fresh", 2, true, List.of(place("fresh-normal", "CGV 강남")));
+        writer.reset(List.of("fresh"));
+        writer.savePage("fresh", 1, true, aliases);
+        try (var em = database.open()) {
+            assertThat(em.createQuery("select count(t) from Theater t where t.kakaoPlaceId like 'fresh-alias-%'", Long.class)
+                    .getSingleResult()).isZero();
+        }
+    }
+
+    @Test void separateBranchesAndUnverifiedAddressesAreNotConsolidated() {
+        var boutique = new TheaterPlace("separate-boutique", "메가박스 더부티크 목동현대백화점",
+                TheaterBrand.MEGABOX, "서울 양천구 목동동로 257", new BigDecimal("37.5"), new BigDecimal("127.0"));
+        var mokdong = new TheaterPlace("separate-mokdong", "메가박스 목동",
+                TheaterBrand.MEGABOX, "서울 양천구 목동동로 309", boutique.latitude(), boutique.longitude());
+        writer.savePage("separate", 1, true, List.of(boutique, mokdong,
+                branchPlace("separate-cgv", "CGV 홍대", "서울 마포구 양화로 153"),
+                branchPlace("separate-unknown", "CGV 압구정 본관", "서울 강남구 다른주소 1")));
+        try (var em = database.open()) {
+            assertThat(em.createQuery("from Theater t where t.kakaoPlaceId like 'separate-%'", Theater.class)
+                    .getResultList()).hasSize(4).allMatch(Theater::isActive);
+        }
+    }
+
+    private TheaterPlace branchPlace(String id, String name, String address) {
+        return new TheaterPlace(id, name, TheaterBrand.CGV, address, new BigDecimal("37.5"), new BigDecimal("127.0"));
     }
 }
