@@ -111,15 +111,16 @@ export default function TicketsPage() {
         setVerificationSeconds(3);
         setVerificationPhase("processing");
 
-        window.setTimeout(() => {
-            setTickets((currentTickets) =>
-                currentTickets.map((ticket) =>
-                    ticket.ticketId === selected.ticketId
-                        ? { ...ticket, status: "USED" }
-                        : ticket
-                )
-            );
-            setVerificationPhase("used");
+        window.setTimeout(async () => {
+            try {
+                const result = await ticketApi.completeVerify(selected.qrCode || selected.ticketNumber);
+                if (!result?.used) throw new Error(result?.message || "티켓 사용 처리에 실패했습니다.");
+                setTickets((currentTickets) => currentTickets.map((ticket) => ticket.ticketId === selected.ticketId ? { ...ticket, status: "USED" } : ticket));
+                setVerificationPhase("used");
+            } catch (e) {
+                setVerificationPhase("idle");
+                setError(e?.message ?? "티켓 사용 처리에 실패했습니다.");
+            }
         }, 3000);
     };
 
