@@ -231,10 +231,13 @@ h2 {
 }
 
 .profile-social-provider.kakao {
-    width: 34px;
+    width: 75px;
+    min-width: 75px;
+    height: 34px;
     border-radius: 8px;
     background: #fee500;
     color: #222222;
+    overflow: visible;
 }
 
 .profile-social-provider .social-logo {
