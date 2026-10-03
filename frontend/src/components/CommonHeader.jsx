@@ -70,7 +70,28 @@ export default function CommonHeader({
 
         loadUnread();
         const timer = window.setInterval(loadUnread, 30000);
-        return () => {
+        function renderGuestItems() {
+        return (
+            <>
+                <NavLink
+                    to={PAGE_PATHS.login}
+                    className={`common-header-link ${glass.button}`}
+                    onClick={handleNavigation}
+                >
+                    로그인
+                </NavLink>
+                <NavLink
+                    to={PAGE_PATHS.signup}
+                    className="common-header-link common-header-signup"
+                    onClick={handleNavigation}
+                >
+                    회원가입
+                </NavLink>
+            </>
+        );
+    }
+
+    return () => {
             mounted = false;
             window.clearInterval(timer);
         };
@@ -320,12 +341,7 @@ export default function CommonHeader({
                         ))}
                     </nav>
                     <nav ref={accountRef} className="common-header-account" aria-label="회원 메뉴">
-                        {user ? renderAccountItems() : (
-                            <>
-                                <NavLink to={PAGE_PATHS.login} className={`common-header-link ${glass.button}`} onClick={handleNavigation}>로그인</NavLink>
-                                <NavLink to={PAGE_PATHS.signup} className="common-header-link common-header-signup" onClick={handleNavigation}>회원가입</NavLink>
-                            </>
-                        )}
+                        {user ? renderAccountItems() : renderGuestItems()}
                     </nav>
                 </div>
 
@@ -426,7 +442,7 @@ export default function CommonHeader({
             )}
 
             {menuOpen && <nav id="common-header-mobile-menu" className="common-header-mobile-menu" aria-label="전체 메뉴">
-                {renderAccountItems()}
+                {user ? renderAccountItems() : renderGuestItems()}
             </nav>}
         </header>
     );
