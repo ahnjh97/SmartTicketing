@@ -181,7 +181,7 @@ export default function TicketsPage() {
                                         <div>
                                             <span>THEATER</span>
                                             <strong>
-                                                <InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} />
+                                                {selectedTicket.theaterName || "-"} , {selectedTicket.screenName || "-"}
                                             </strong>
                                         </div>
                                         <div>
