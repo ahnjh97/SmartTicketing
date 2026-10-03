@@ -4,7 +4,8 @@
 .ticketGroups { display: grid; gap: 28px; }
 .ticketGroup { min-width: 0; }
 .dateHeading { margin: 0 0 12px; font-size: 17px; font-weight: 700; }
-.tickets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tickets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.ticketItem { min-width: 0; align-self: start; }
 .ticket { min-width: 0; border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); background: var(--booking-soft); overflow: hidden; }
 .ticket.expanded { box-shadow: 0 8px 24px rgb(0 0 0 / 8%); }
 .ticketSummary { width: 100%; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(90px, .8fr) minmax(125px, auto) auto auto; align-items: center; gap: 8px; padding: 12px 14px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
@@ -24,8 +25,15 @@
 .status_used { }
 .status_cancelled { opacity: .6; } 
 .expandIcon { font-size: 11px; opacity: .7; white-space: nowrap; }
-.ticketDetails { padding: 0 16px 18px; border-top: 1px solid var(--booking-border); }
-.ticketDetails p { line-height: 1.6; }
+.ticketDropdown {
+    margin-top: 4px;
+    padding: 16px;
+    border: 1px solid var(--booking-border);
+    border-radius: var(--booking-radius-large);
+    background: var(--booking-surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
+}
+.ticketDropdown p { line-height: 1.6; }
 
 @media (max-width: 700px) {
     .tickets { grid-template-columns: 1fr; }
