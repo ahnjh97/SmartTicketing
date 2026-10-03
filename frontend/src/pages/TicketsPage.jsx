@@ -117,9 +117,6 @@ export default function TicketsPage() {
                                                         <span className={styles.summaryStatus}>
                                                             {formatTicketStatus(ticket.status)}
                                                         </span>
-                                                        <span className={styles.expandIcon} aria-hidden="true">
-                                                            {expanded ? "▲" : "▼"}
-                                                        </span>
                                                     </button>
                                                 </article>
                                             </div>
