@@ -242,23 +242,23 @@ h2 {
     height: 19px;
 }
 
-.profile-social-provider .social-logo {
-    width: 20px;
-    height: 20px;
+.profile-social-provider .social-wordmark {
     display: block;
+    width: auto;
+    height: 24px;
+    object-fit: contain;
 }
 
 .profile-social-provider .google-logo {
-    width: 62px;
-    height: 20px;
+    width: 79px;
 }
 
 .profile-social-provider .naver-logo {
-    color: #03C75A;
+    width: 82px;
 }
 
 .profile-social-provider .kakao-logo {
-    color: #222;
+    width: 75px;
 }
 
 
