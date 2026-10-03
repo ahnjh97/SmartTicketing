@@ -290,6 +290,11 @@
     .ticketQrPlaceholder {
         width: 130px;
     }
+
+    .ticketQrPlaceholder svg {
+        width: 130px;
+        height: 130px;
+    }
 }
 
 .ticketCardInfo > div {
