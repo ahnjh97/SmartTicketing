@@ -59,6 +59,8 @@ export default function TicketsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [expandedTicketId, setExpandedTicketId] = useState(null);
+    const [verificationPhase, setVerificationPhase] = useState("idle");
+    const [verificationSeconds, setVerificationSeconds] = useState(5);
 
     useEffect(() => {
         let mounted = true;
@@ -72,7 +74,68 @@ export default function TicketsPage() {
             .finally(() => {
                 if (mounted) setLoading(false);
             });
+        useEffect(() => {
+        if (!expandedTicketId) {
+            setVerificationPhase("idle");
+            return;
+        }
+
+        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+        if (!selected || selected.status !== "VALID") {
+            setVerificationPhase(selected?.status === "USED" ? "used" : "idle");
+            return;
+        }
+
+        let stopped = false;
+        let timer;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(
+                    `/api/tickets/verify/${encodeURIComponent(selected.qrCode || selected.ticketNumber)}`
+                );
+                const data = await response.json().catch(() => ({}));
+                if (stopped) return;
+
+                if (data.processing) {
+                    setVerificationPhase("processing");
+                    setVerificationSeconds(5);
+                } else if (data.used) {
+                    setVerificationPhase("used");
+                    setTickets((current) =>
+                        current.map((ticket) =>
+                            ticket.ticketId === selected.ticketId
+                                ? { ...ticket, status: "USED" }
+                                : ticket
+                        )
+                    );
+                    return;
+                }
+            } catch {
+                // QR 사용 확인은 다음 주기에 다시 시도한다.
+            }
+            timer = window.setTimeout(poll, 1000);
+        };
+
+        poll();
+
         return () => {
+            stopped = true;
+            if (timer) window.clearTimeout(timer);
+        };
+    }, [expandedTicketId, tickets.length]);
+
+    useEffect(() => {
+        if (verificationPhase !== "processing") return;
+
+        const timer = window.setInterval(() => {
+            setVerificationSeconds((current) => Math.max(0, current - 1));
+        }, 1000);
+
+        return () => window.clearInterval(timer);
+    }, [verificationPhase]);
+
+    return () => {
             mounted = false;
         };
     }, []);
@@ -161,7 +224,9 @@ export default function TicketsPage() {
                         <div className={styles.ticketCard}>
                             <div className={styles.ticketCardHeader}>
                                 <span className={styles.ticketLabel}>CINEMA PASS</span>
-                                <span className={styles.ticketStatus}>{formatTicketStatus(selectedTicket.status)}</span>
+                                <span className={styles.ticketStatus}>
+                                    {verificationPhase === "used" ? "사용 처리됨" : formatTicketStatus(selectedTicket.status)}
+                                </span>
                             </div>
 
                             <div className={styles.ticketCardContent}>
@@ -201,7 +266,16 @@ export default function TicketsPage() {
                                             level="M"
                                             title={`티켓 QR - ${selectedTicket.ticketNumber}`}
                                         />
+                                        {verificationPhase === "processing" && (
+                                            <div className={styles.qrProcessingOverlay}>
+                                                <strong>처리 중입니다...</strong>
+                                                <span>{verificationSeconds}초</span>
+                                            </div>
+                                        )}
                                     </div>
+                                    {verificationPhase === "used" && (
+                                        <div className={styles.ticketUsedStamp}>USED</div>
+                                    )}
                                     <div className={styles.ticketNumber}>
                                         <span>TICKET NO.</span>
                                         <strong>{selectedTicket.ticketNumber}</strong>
