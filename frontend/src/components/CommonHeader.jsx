@@ -55,14 +55,14 @@ export default function CommonHeader({
             <>
                 <NavLink
                     to={PAGE_PATHS.login}
-                    className={`common-header-link ${glass.button}`}
+                    className="common-header-link common-header-signup"
                     onClick={handleNavigation}
                 >
                     로그인
                 </NavLink>
                 <NavLink
                     to={PAGE_PATHS.signup}
-                    className="common-header-link common-header-signup"
+                    className={`common-header-link ${glass.button}`}
                     onClick={handleNavigation}
                 >
                     회원가입
