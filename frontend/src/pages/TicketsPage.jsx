@@ -17,6 +17,19 @@ function formatDate(value) {
         : "-";
 }
 
+function formatTicketStatus(status) {
+    switch (status) {
+        case "VALID":
+            return "사용 가능";
+        case "USED":
+            return "사용 처리됨";
+        case "CANCELLED":
+            return "취소됨";
+        default:
+            return status || "-";
+    }
+}
+
 function formatDateOnly(value) {
     return value
         ? new Date(value).toLocaleDateString("ko-KR", {
@@ -99,6 +112,9 @@ export default function TicketsPage() {
                                         </span>
                                         <span className={styles.summaryTime}>
                                             {formatDate(ticket.startTime)}
+                                        </span>
+                                        <span className={`${styles.summaryStatus} ${styles[`status_${ticket.status?.toLowerCase()}`] || ""}`}>
+                                            {formatTicketStatus(ticket.status)}
                                         </span>
                                         <span className={styles.expandIcon} aria-hidden="true">
                                             {expanded ? "▲" : "▼"}
