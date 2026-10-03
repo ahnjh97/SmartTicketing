@@ -257,6 +257,17 @@ h2 {
 .google-red { color: #EA4335; }
 .google-yellow { color: #FBBC05; }
 .google-green { color: #34A853; }
+.naver-wordmark {
+    display: inline-flex;
+    align-items: center;
+    color: #03C75A;
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: -0.7px;
+    line-height: 1;
+}
+
 
 
 
