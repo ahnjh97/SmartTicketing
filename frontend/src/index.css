@@ -243,6 +243,22 @@ h2 {
     height: 19px;
 }
 
+.google-wordmark {
+    display: inline-flex;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    line-height: 1;
+}
+
+.google-blue { color: #4285F4; }
+.google-red { color: #EA4335; }
+.google-yellow { color: #FBBC05; }
+.google-green { color: #34A853; }
+
+
 
 .divider {
     display: flex;
