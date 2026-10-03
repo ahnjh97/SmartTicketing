@@ -223,11 +223,25 @@ h2 {
 }
 
 .profile-social-provider.google {
-    background: transparent;
+    width: 72px;
+    min-width: 72px;
+    height: 34px;
+    padding: 0;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
 }
 
 .profile-social-provider.naver {
-    background: transparent;
+    width: 72px;
+    min-width: 72px;
+    height: 34px;
+    padding: 0;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
 }
 
 .profile-social-provider.kakao {
