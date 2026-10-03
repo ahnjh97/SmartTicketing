@@ -122,6 +122,9 @@ export default function TicketsPage() {
                                                         </span>
                                                     </button>
                                                 </article>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </section>
                         ))}
