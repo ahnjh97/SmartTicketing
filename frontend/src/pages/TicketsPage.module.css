@@ -7,14 +7,36 @@
 .tickets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .ticket { min-width: 0; border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); background: var(--booking-soft); overflow: hidden; }
 .ticket.expanded { box-shadow: 0 8px 24px rgb(0 0 0 / 8%); }
-.ticketSummary { width: 100%; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(140px, 1fr) minmax(180px, 1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.ticketSummary { width: 100%; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(120px, .9fr) minmax(150px, 1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .ticketSummary:hover { background: rgb(255 255 255 / 5%); }
 .summaryMovie { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 700; }
 .summaryTheater, .summaryTime { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--booking-muted, inherit); }
+.summaryStatus {
+    justify-self: start;
+    padding: 4px 8px;
+    border: 1px solid var(--booking-border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.status_valid { }
+.status_used { }
+.status_cancelled { opacity: .6; } 
 .expandIcon { font-size: 12px; opacity: .7; }
 .ticketDetails { padding: 0 16px 18px; border-top: 1px solid var(--booking-border); }
 .ticketDetails p { line-height: 1.6; }
 
 @media (max-width: 700px) {
     .tickets { grid-template-columns: 1fr; }
+    .ticketSummary {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .summaryTheater, .summaryTime, .summaryStatus {
+        grid-column: 1;
+    }
+    .expandIcon {
+        grid-column: 2;
+        grid-row: 1 / span 4;
+        align-self: center;
+    }
 }
