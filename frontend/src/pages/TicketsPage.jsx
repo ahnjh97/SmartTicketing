@@ -89,58 +89,59 @@ export default function TicketsPage() {
                                 </h3>
                                 <div className={styles.tickets}>
                                     {dateTickets.map((ticket) => {
-                            const expanded = expandedTicketId === ticket.ticketId;
+                                        const expanded = expandedTicketId === ticket.ticketId;
 
-                            return (
-                                <article
-                                    key={ticket.ticketId}
-                                    className={`${styles.ticket}${expanded ? ` ${styles.expanded}` : ""}`}
-                                >
-                                    <button
-                                        type="button"
-                                        className={styles.ticketSummary}
-                                        aria-expanded={expanded}
-                                        onClick={() =>
-                                            setExpandedTicketId((current) =>
-                                                current === ticket.ticketId ? null : ticket.ticketId
-                                            )
-                                        }
-                                    >
-                                        <span className={styles.summaryMovie}>{ticket.movieTitle}</span>
-                                        <span className={styles.summaryTheater}>
-                                            <InlineDetails items={[ticket.theaterName]} />
-                                        </span>
-                                        <span className={styles.summaryTime}>
-                                            {formatDate(ticket.startTime)}
-                                        </span>
-                                        <span className={`${styles.summaryStatus} ${styles[`status_${ticket.status?.toLowerCase()}`] || ""}`}>
-                                            {formatTicketStatus(ticket.status)}
-                                        </span>
-                                        <span className={styles.expandIcon} aria-hidden="true">
-                                            {expanded ? "▲" : "▼"}
-                                        </span>
-                                    </button>
-
-                                    {expanded && (
-                                        <div className={styles.ticketDetails}>
-                                            <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
-                                            <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
-                                            <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
-                                            <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
-                                            <p>QR: {ticket.qrCode}</p>
-                                            <p>상태: {formatTicketStatus(ticket.status)}</p>
-                                            {ticket.groupId && (
-                                                <Link
-                                                    className={glass.button}
-                                                    to={`/booking/restore?group=${ticket.groupId}`}
+                                        return (
+                                            <div key={ticket.ticketId} className={styles.ticketItem}>
+                                                <article
+                                                    className={`${styles.ticket}${expanded ? ` ${styles.expanded}` : ""}`}
                                                 >
-                                                    예약 상세 및 전체 취소
-                                                </Link>
-                                            )}
-                                        </div>
-                                    )}
-                                </article>
-                            );
+                                                    <button
+                                                        type="button"
+                                                        className={styles.ticketSummary}
+                                                        aria-expanded={expanded}
+                                                        onClick={() =>
+                                                            setExpandedTicketId((current) =>
+                                                                current === ticket.ticketId ? null : ticket.ticketId
+                                                            )
+                                                        }
+                                                    >
+                                                        <span className={styles.summaryMovie}>{ticket.movieTitle}</span>
+                                                        <span className={styles.summaryTheater}>
+                                                            <InlineDetails items={[ticket.theaterName]} />
+                                                        </span>
+                                                        <span className={styles.summaryTime}>
+                                                            {formatDate(ticket.startTime)}
+                                                        </span>
+                                                        <span className={`${styles.summaryStatus} ${styles[`status_${ticket.status?.toLowerCase()}`] || ""}`}>
+                                                            {formatTicketStatus(ticket.status)}
+                                                        </span>
+                                                        <span className={styles.expandIcon} aria-hidden="true">
+                                                            {expanded ? "▲" : "▼"}
+                                                        </span>
+                                                    </button>
+                                                </article>
+
+                                                {expanded && (
+                                                    <div className={styles.ticketDropdown}>
+                                                        <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
+                                                        <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
+                                                        <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
+                                                        <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
+                                                        <p>QR: {ticket.qrCode}</p>
+                                                        <p>상태: {formatTicketStatus(ticket.status)}</p>
+                                                        {ticket.groupId && (
+                                                            <Link
+                                                                className={glass.button}
+                                                                to={`/booking/restore?group=${ticket.groupId}`}
+                                                            >
+                                                                예약 상세 및 전체 취소
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
                                     })}
                                 </div>
                             </section>
