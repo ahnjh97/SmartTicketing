@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
+const PUBLIC_TICKET_BASE_URL = "https://ahnjh97.github.io/SmartTicketing";
+
 function formatDate(value) {
     return value
         ? new Date(value).toLocaleString("ko-KR", {
@@ -193,7 +195,7 @@ export default function TicketsPage() {
                                     <span className={styles.ticketStubLabel}>ADMIT ONE</span>
                                     <div className={styles.ticketQrPlaceholder}>
                                         <QRCodeSVG
-                                            value={`${window.location.origin}${import.meta.env.BASE_URL}ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
+                                            value={`${PUBLIC_TICKET_BASE_URL}/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
                                             size={220}
                                             marginSize={2}
                                             level="M"
