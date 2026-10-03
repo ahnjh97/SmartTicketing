@@ -16,12 +16,14 @@ import OAuthCallbackPage from "./pages/OAuthCallbackPage.jsx";
 import BookingRestorePage from './pages/BookingRestorePage.jsx';
 import TicketsPage from "./pages/TicketsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
+import TicketVerifyPage from "./pages/TicketVerifyPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
 
 export default function App() {
     return (
         <AuthProvider>
             <Routes>
+                <Route path="/ticket/verify/:qrCode" element={<TicketVerifyPage />} />
                 <Route element={<AppLayout />}>
                     <Route path={PAGE_PATHS.login} element={<LoginPage />} />
                     <Route path={PAGE_PATHS.findAccount} element={<FindAccountPage />} />
