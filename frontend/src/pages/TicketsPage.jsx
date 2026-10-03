@@ -74,7 +74,9 @@ export default function TicketsPage() {
             .finally(() => {
                 if (mounted) setLoading(false);
             });
-        useEffect(() => {
+        }, [/* ticket load effect */]);
+
+    useEffect(() => {
         if (!expandedTicketId) {
             setVerificationPhase("idle");
             return;
@@ -125,7 +127,7 @@ export default function TicketsPage() {
             stopped = true;
             if (timer) window.clearTimeout(timer);
         };
-    }, [expandedTicketId, tickets.length]);
+    }, [expandedTicketId, tickets]);
 
     useEffect(() => {
         if (verificationPhase !== "processing") return;
