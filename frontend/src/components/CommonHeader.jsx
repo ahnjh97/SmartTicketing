@@ -393,6 +393,13 @@ export default function CommonHeader({
                                 <strong>내 티켓</strong>
                                 <span>{tickets.length}개</span>
                             </div>
+                            <Link
+                                to={PAGE_PATHS.tickets}
+                                className="common-header-ticket-list-link"
+                                onClick={handleNavigation}
+                            >
+                                목록
+                            </Link>
                         </div>
                         <div className="common-header-popover-body">
                             {ticketLoading ? (
