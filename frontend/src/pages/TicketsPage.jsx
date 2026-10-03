@@ -60,7 +60,7 @@ export default function TicketsPage() {
     const [error, setError] = useState("");
     const [expandedTicketId, setExpandedTicketId] = useState(null);
     const [verificationPhase, setVerificationPhase] = useState("idle");
-    const [verificationSeconds, setVerificationSeconds] = useState(5);
+    const [verificationSeconds, setVerificationSeconds] = useState(3);
 
     useEffect(() => {
         let mounted = true;
@@ -108,12 +108,12 @@ export default function TicketsPage() {
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
         if (!selected || selected.status !== "VALID" || verificationPhase === "processing") return;
 
-        setVerificationSeconds(5);
+        setVerificationSeconds(3);
         setVerificationPhase("processing");
 
         window.setTimeout(() => {
             setVerificationPhase("used");
-        }, 5000);
+        }, 3000);
     };
 
     return (
