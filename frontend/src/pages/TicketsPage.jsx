@@ -74,7 +74,10 @@ export default function TicketsPage() {
             .finally(() => {
                 if (mounted) setLoading(false);
             });
-        }, [/* ticket load effect */]);
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (!expandedTicketId) {
