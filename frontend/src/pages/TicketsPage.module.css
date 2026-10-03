@@ -97,7 +97,7 @@
     height: 28px;
     border: 0;
     border-radius: 50%;
-    background: #fff;
+    background: rgb(0 0 0 / 55%);
     transform: translateY(-50%);
 }
 .ticketCard::before { left: -15px; }
