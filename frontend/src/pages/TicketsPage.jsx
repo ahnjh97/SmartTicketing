@@ -129,7 +129,13 @@ export default function TicketsPage() {
         <section className={styles.page}>
             <h1>내 티켓</h1>
             <div className={styles.panel}>
-                <div className={styles.ticketFilterHeader}>\n                    <h2>발급된 티켓</h2>\n                    <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setExpandedTicketId(null); }} aria-label="티켓 날짜 필터">\n                        <option value="ALL">전체 날짜</option>\n                        {ticketDates.map((date) => <option key={date} value={date}>{new Date(date + "T00:00:00").toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</option>)}\n                    </select>\n                </div>
+                <div className={styles.ticketFilterHeader}>
+                    <h2>발급된 티켓</h2>
+                    <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setExpandedTicketId(null); }} aria-label="티켓 날짜 필터">
+                        <option value="ALL">전체 날짜</option>
+                        {ticketDates.map((date) => <option key={date} value={date}>{new Date(date + "T00:00:00").toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</option>)}
+                    </select>
+                </div>
                 {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
