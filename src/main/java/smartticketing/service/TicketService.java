@@ -1,6 +1,7 @@
 package smartticketing.service;
 
 import smartticketing.dto.ticket.TicketResponse;
+import smartticketing.dto.ticket.TicketVerifyResponse;
 import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
 import smartticketing.repository.*;
@@ -43,6 +44,25 @@ public class TicketService {
         Ticket saved = tickets.save(t);
         NotificationService.link(notifications.completed(userId), r);
         return to(saved);
+    }
+
+    public TicketVerifyResponse verifyAndUse(String qrCode) {
+        if (qrCode == null || qrCode.isBlank()) return new TicketVerifyResponse(false, "유효하지 않은 티켓입니다.", null);
+        Ticket ticket = tickets.findByQrCode(qrCode).orElseGet(() -> tickets.findByTicketNumber(qrCode).orElse(null));
+        if (ticket == null) return new TicketVerifyResponse(false, "유효하지 않은 티켓입니다.", null);
+        if (ticket.getStatus() == TicketStatus.USED) return new TicketVerifyResponse(false, "이미 사용된 티켓입니다.", to(ticket));
+        if (ticket.getStatus() == TicketStatus.CANCELLED) return new TicketVerifyResponse(false, "취소된 티켓입니다.", to(ticket));
+
+        int updated = tickets.markUsedIfValid(qrCode, TicketStatus.VALID, TicketStatus.USED, LocalDateTime.now());
+        if (updated == 0) {
+            Ticket current = tickets.findByQrCode(qrCode).orElseGet(() -> tickets.findByTicketNumber(qrCode).orElse(ticket));
+            return new TicketVerifyResponse(false,
+                    current.getStatus() == TicketStatus.USED ? "이미 사용된 티켓입니다." : "티켓 사용 처리에 실패했습니다.",
+                    to(current));
+        }
+        ticket.setStatus(TicketStatus.USED);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return new TicketVerifyResponse(true, "사용 처리되었습니다.", to(ticket));
     }
 
     @Transactional(readOnly = true)
