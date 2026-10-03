@@ -28,17 +28,6 @@
 .status_used { }
 .status_cancelled { opacity: .6; } 
 .expandIcon { font-size: 11px; opacity: .7; white-space: nowrap; }
-.ticketDropdown { position: absolute; top: calc(100% + 4px); left: 0; width: 100%; box-sizing: border-box;
-    margin-top: 4px;
-    padding: 16px;
-    border: 1px solid var(--booking-border);
-    border-radius: var(--booking-radius-large);
-    background: var(--booking-surface);
-    z-index: 30;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
-}
-.ticketDropdown p { line-height: 1.6; }
-
 @media (max-width: 700px) {
     .tickets { grid-template-columns: 1fr; }
     .ticketSummary {
@@ -51,5 +40,74 @@
         grid-column: 2;
         grid-row: 1 / span 4;
         align-self: center;
+    }
+}
+
+.ticketModalBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: rgb(0 0 0 / 45%);
+    backdrop-filter: blur(4px);
+}
+.ticketModal {
+    position: relative;
+    width: min(560px, 100%);
+    max-height: min(720px, calc(100vh - 48px));
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 32px;
+    border: 1px solid var(--booking-border);
+    border-radius: var(--booking-radius-large);
+    background: var(--booking-surface);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+.ticketModal h2 {
+    margin: 0 40px 18px 0;
+    font-size: 26px;
+}
+.ticketModal p {
+    line-height: 1.7;
+}
+.ticketModalClose {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+}
+.ticketModalClose:hover {
+    background: rgb(0 0 0 / 7%);
+}
+@media (max-width: 700px) {
+    .tickets { grid-template-columns: 1fr; }
+    .ticketSummary {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .summaryTheater, .summaryTime, .summaryStatus {
+        grid-column: 1;
+    }
+    .expandIcon {
+        grid-column: 2;
+        grid-row: 1 / span 4;
+        align-self: center;
+    }
+    .ticketModalBackdrop {
+        padding: 16px;
+    }
+    .ticketModal {
+        padding: 24px;
     }
 }
