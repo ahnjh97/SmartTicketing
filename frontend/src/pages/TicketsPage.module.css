@@ -110,105 +110,77 @@
     font-weight: 700;
 }
 
-.ticketCardMovie {
-    padding: 26px 24px 20px;
-}
-
-.ticketCardMovie h2 {
-    margin: 0 0 9px;
-    padding-right: 32px;
-    font-size: clamp(24px, 5vw, 32px);
-    letter-spacing: -.04em;
-}
-
-.ticketCardMovie p {
-    margin: 0;
-    color: var(--booking-muted, inherit);
-    font-size: 13px;
-}
-
-.ticketCardInfo {
+.ticketCardContent {
     display: grid;
-    grid-template-columns: 1.5fr 1fr;
-    gap: 20px;
-    padding: 4px 24px 24px;
+    grid-template-columns: 1fr 1fr;
+    min-height: 330px;
 }
 
-.ticketCardInfo > div,
-.ticketCardBottom > div:first-child {
+.ticketCardLeft {
     min-width: 0;
+    padding: 28px 26px;
 }
 
+.ticketCardRight {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 18px;
+    padding: 28px 24px;
+    border-left: 1px dashed var(--booking-border);
+}
+
+.ticketCardMovie {
+    padding: 0 0 24px;
+}
+
+.ticketInfoLabel,
 .ticketCardInfo span,
-.ticketCardBottom span {
+.ticketNumber span {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     color: var(--booking-muted, inherit);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .12em;
-    text-transform: uppercase;
+}
+
+.ticketCardMovie h2 {
+    margin: 0;
+    padding-right: 8px;
+    font-size: clamp(22px, 4vw, 30px);
+    letter-spacing: -.04em;
+    line-height: 1.2;
+}
+
+.ticketCardInfo {
+    display: grid;
+    gap: 20px;
+}
+
+.ticketCardInfo > div {
+    min-width: 0;
 }
 
 .ticketCardInfo strong {
     display: block;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
     word-break: break-word;
 }
 
-.ticketCardDivider {
-    position: relative;
-    height: 1px;
-    margin: 0 0 22px;
-    border-top: 1px dashed var(--booking-border);
-}
-
-.ticketCardDivider span {
-    position: absolute;
-    top: 50%;
-    width: 20px;
-    height: 20px;
-    border: 1px solid var(--booking-border);
-    border-radius: 50%;
-    background: var(--booking-soft);
-    transform: translateY(-50%);
-}
-
-.ticketCardDivider span:first-child {
-    left: -11px;
-}
-
-.ticketCardDivider span:last-child {
-    right: -11px;
-}
-
-.ticketCardBottom {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 92px;
-    gap: 20px;
-    align-items: center;
-    padding: 0 24px 24px;
-}
-
-.ticketCardBottom strong {
-    display: block;
-    overflow: hidden;
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .ticketQrPlaceholder {
     display: flex;
-    width: 92px;
-    height: 92px;
+    width: min(170px, 100%);
+    aspect-ratio: 1;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     box-sizing: border-box;
     border: 1px dashed var(--booking-border);
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--booking-soft);
     text-align: center;
 }
@@ -216,17 +188,30 @@
 .ticketQrPlaceholder span {
     margin: 0;
     color: inherit;
-    font-size: 17px;
-    letter-spacing: 0;
-    text-transform: none;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: .04em;
 }
 
 .ticketQrPlaceholder small {
-    max-width: 78px;
+    max-width: 80%;
     overflow: hidden;
-    margin-top: 4px;
+    margin-top: 6px;
     color: var(--booking-muted, inherit);
     font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ticketNumber {
+    width: 100%;
+    text-align: center;
+}
+
+.ticketNumber strong {
+    display: block;
+    overflow: hidden;
+    font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
