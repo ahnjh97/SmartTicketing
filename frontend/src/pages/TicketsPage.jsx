@@ -128,7 +128,7 @@ export default function TicketsPage() {
                                             <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
                                             <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
                                             <p>QR: {ticket.qrCode}</p>
-                                            <p>상태: {ticket.status}</p>
+                                            <p>상태: {formatTicketStatus(ticket.status)}</p>
                                             {ticket.groupId && (
                                                 <Link
                                                     className={glass.button}
