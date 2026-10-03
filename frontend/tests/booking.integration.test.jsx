@@ -29,27 +29,27 @@ function Probe() { const navigate = useNavigate(); const location = useLocation(
 function mount(path) { window.history.replaceState({}, '', path); return render(<StrictMode><MemoryRouter initialEntries={[path]}><App /><Probe /></MemoryRouter></StrictMode>); }
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T09:00:00+09:00`)); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
-test('movie navigation opens a real default film while preserving incoming conditions', async () => {
+test('movie tab stays on home and direct catalog navigation never selects a default film', async () => {
+    mount('/');
+    await screen.findByRole('link', { name: '서울의 밤 이미지로 예매하기' });
+    fireEvent.click(screen.getByText('영화', { exact: true }));
+    expect(screen.getByTestId('url').textContent).toBe('/');
+    cleanup();
     mount('/movies?party=3&from=10%3A00&until=22%3A00');
-    await screen.findByRole('heading', { name: '서울의 밤' });
-    const url = new URL(screen.getByTestId('url').textContent, 'http://localhost');
-    expect(url.searchParams.get('movie')).toBe('41');
-    expect(url.searchParams.get('party')).toBe('3');
-    expect(url.searchParams.get('from')).toBe('10:00');
-    expect(screen.queryByRole('heading', { name: '영화 목록' })).toBe(null);
-    expect(screen.getByRole('link', { name: '← 홈으로' }).getAttribute('href')).toBe('/');
+    await screen.findByRole('heading', { name: '영화 목록' });
+    expect(new URL(screen.getByTestId('url').textContent, 'http://localhost').searchParams.has('movie')).toBe(false);
 });
-test('party is a 1–6 dropdown; elapsed showtimes and restored past ranges cannot enter booking', async () => {
+test('party uses counters; elapsed showtimes and restored past ranges cannot enter booking', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T22:59:00+09:00`));
     try {
         mount(`/movies?movie=41&party=2&from=23:00&until=02:00&date=${seoulDate()}`);
-        const party = await screen.findByRole('combobox', { name: '총인원' });
-        expect([...party.options].map(option => option.value)).toEqual(['', '1', '2', '3', '4', '5', '6']);
+        await screen.findByLabelText('성인 인원');
+        expect(screen.queryByRole('combobox')).toBe(null);
         const enter = screen.getByRole('button', { name: '스마트예매' });
         await waitFor(() => expect(enter.disabled).toBe(false));
         clock.mockReturnValue(Date.parse(`${seoulDate()}T23:00:01+09:00`));
         await waitFor(() => expect(enter.disabled).toBe(true), { timeout: 2500 });
-        expect(screen.getByRole('alert').textContent).toContain('이미 지난');
+        expect(screen.getByRole('alert').textContent).toContain('현재 시각 이후');
     } finally { clock.mockRestore(); }
 });
 
@@ -84,7 +84,8 @@ test('home uses title artwork while booking always uses a text title', async () 
     fireEvent.click(screen.getByRole('link', { name: '서울의 밤', exact: true }));
     expect((await screen.findByRole('heading', { name: '서울의 밤' })).textContent).toBe('서울의 밤');
     expect(screen.queryByAltText('서울의 밤')).toBe(null);
-    fireEvent.click(screen.getByRole('link', { name: '← 홈으로' }));
+    expect(screen.queryByRole('link', { name: '← 홈으로' })).toBe(null);
+    fireEvent.click(screen.getByRole('link', { name: 'SmartTicketing' }));
     fireEvent.error(await screen.findByAltText('서울의 밤'));
     expect(screen.getByRole('heading', { name: '서울의 밤' }).textContent).toBe('서울의 밤');
 });
@@ -117,29 +118,51 @@ test('trailer iframe opens only on request and is removed when closed', async ()
         else delete HTMLDialogElement.prototype.showModal;
     }
 });
-test('movie restores conditions, poster, midnight bounds and honest confirmation', async () => {
+test('movie restores audience and midnight bounds without showing inventory notes', async () => {
     mount(`/movies?movie=41&date=${seoulDate()}&party=2&from=22:00&until=02:00`);
-    await screen.findByText('20 / 108석');
-    expect(screen.getByText('조회상 선택 가능')).toBeTruthy();
-    expect(screen.getByLabelText('총인원').value).toBe('2');
+    await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false));
+    expect(screen.queryByText('조회상 선택 가능')).toBe(null);
+    expect(screen.getByLabelText('성인 인원').textContent).toBe('2');
     expect(screen.getByAltText('서울의 밤 배경')).toBeTruthy();
-    expect(screen.getByText('23:00 → 01:00')).toBeTruthy();
+    expect(screen.queryByText('23:00 → 01:00')).toBe(null);
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom=22%3A00&startUntil=02%3A00'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '스마트예매' }));
     await screen.findByRole('heading', { name: '좋은 자리는, 알아서.' });
     expect(await screen.findByText(/로그인하고 스마트예매를 시작하세요/)).toBeTruthy();
     expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
-    expect((await screen.findByLabelText('총인원')).value).toBe('2');
-    fireEvent.change(screen.getByLabelText('총인원'), { target: { value: '6' } });
-    expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false);
-    fireEvent.change(screen.getByLabelText('총인원'), { target: { value: '7' } });
+    expect((await screen.findByLabelText('성인 인원')).textContent).toBe('2');
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole('button', { name: '청소년 인원 늘리기' }));
+    expect(screen.getByLabelText('청소년 인원').textContent).toBe('4');
+    expect(screen.getByLabelText('총인원').textContent).toBe('6명');
+    expect(screen.getByRole('button', { name: '성인 인원 늘리기' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: '청소년 인원 늘리기' }).disabled).toBe(true);
+});
+
+test('showtimes are never queried until both time bounds are selected', async () => {
+    mount('/movies?movie=41');
+    await screen.findByRole('heading', { name: '서울의 밤' });
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '10:00', exact: true }));
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
+    expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '+2시간 12:00' }));
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: '이 시간으로 적용' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false));
+    expect(fetch.mock.calls.some(([url]) => url.includes('startFrom=10%3A00&startUntil=12%3A00'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '다시 선택' }));
+    expect(screen.getByRole('button', { name: '이 시간으로 적용' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '시간 선택 닫기' }));
+    expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false);
 });
 test('late showtime response cannot overwrite a newer movie selection', async () => {
     let resolveOld;
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?movieId=41') ? new Promise(resolve => { resolveOld = resolve; }) : baseFetch(url));
-    mount(`/movies?movie=41&party=2&date=${seoulDate()}`);
+    mount(`/movies?movie=41&party=2&from=22:00&until=02:00&date=${seoulDate()}`);
     await waitFor(() => expect(resolveOld).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: '다른 영화' }));
     await screen.findByRole('heading', { name: '두 번째 영화' });

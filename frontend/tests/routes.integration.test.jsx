@@ -66,7 +66,7 @@ afterEach(() => {
 test("header navigation changes paths and browser history with public booking pages", async () => {
     mount("/login");
     await screen.findByLabelText("아이디");
-    const movies = screen.getByRole("link", { name: "영화" });
+    const movies = screen.getByText("영화", { exact: true });
     const theaters = screen.getByRole("link", { name: "극장" });
     expect(movies.getAttribute("aria-current")).toBe(null);
     expect(theaters.getAttribute("aria-current")).toBe(null);
@@ -77,11 +77,9 @@ test("header navigation changes paths and browser history with public booking pa
     expect(theaters.getAttribute("aria-current")).toBe(null);
     fireEvent.click(screen.getByRole("button", { name: "테스트 뒤로가기" }));
     await at("/login");
-    fireEvent.click(screen.getByRole("link", { name: "영화" }));
-    await at("/movies");
-    expect(movies.getAttribute("aria-current")).toBe("page");
-    expect(theaters.getAttribute("aria-current")).toBe(null);
-    expect(screen.getByRole("heading", { name: "영화별 예매" })).toBeTruthy();
+    fireEvent.click(movies);
+    await at("/login");
+    expect(movies.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("link", { name: "극장" }));
     await at("/theaters");
     expect(movies.getAttribute("aria-current")).toBe(null);
@@ -126,7 +124,8 @@ test('all public pages reuse the home header without route-specific appearance',
         const header = screen.getByRole('banner');
         expect(screen.getAllByRole('banner')).toHaveLength(1);
         expect(header.className).toBe('common-header');
-        expect(within(header).getAllByRole('link').map(link => link.textContent)).toEqual(['SmartTicketing', '영화', '극장', '로그인', '회원가입']);
+        expect(within(header).getAllByRole('link').map(link => link.textContent)).toEqual(['SmartTicketing', '극장', '로그인', '회원가입']);
+        expect(within(header).getByText('영화').getAttribute('aria-disabled')).toBe('true');
         cleanup();
     }
 });

@@ -1,66 +1,88 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { cinemaTime } from './state.js';
+import { createPortal } from 'react-dom';
+import { cinemaTime, halfHour } from './state.js';
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './TimeRangeMenu.module.css';
 
-const periods = ['새벽', '오전', '오후', '저녁'];
-const slots = Array.from({ length: 48 }, (_, i) => ({
-    minute: i * 30, time: String(Math.floor(i / 2)).padStart(2, '0') + ':' + (i % 2 ? '30' : '00'),
-    period: Math.floor(i / 12),
-}));
+const timeLabel = minute => String(Math.floor(minute / 60) % 24).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
+const minuteOf = time => halfHour(time) ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) + (time < '04:00' ? 1440 : 0) : null;
+const slots = Array.from({ length: 49 }, (_, i) => ({ minute: 240 + i * 30, time: timeLabel(240 + i * 30) }));
+const periods = [{ label: '오전', min: 240, max: 720 }, { label: '오후', min: 720, max: 1080 }, { label: '저녁', min: 1080, max: 1440 }, { label: '다음 날 새벽', min: 1440, max: 1681 }];
+const caption = (time, end = false) => time && (time < '04:00' || end && time === '04:00') ? '다음 날 ' + time : time;
+
 export default function TimeRangeMenu({ date, now, from, until, update }) {
     const id = useId();
     const startButton = useRef(null);
     const endButton = useRef(null);
-    const [open, setOpen] = useState(null);
-    const [view, setView] = useState(null);
+    const trigger = useRef(null);
     const panel = useRef(null);
-    useEffect(() => { if (open) panel.current?.focus(); }, [open]);
-    const start = /^(?:[01]\d|2[0-3]):(00|30)$/.test(from) ? Number(from.slice(0, 2)) * 60 + Number(from.slice(3)) : null;
-    const startValid = start !== null && cinemaTime(date, from) > now;
-    const orderedSlots = slots.map(s => ({ ...s, day: s.time < '04:00' ? 1 : 0 }))
-        .sort((a, b) => (a.minute + a.day * 1440) - (b.minute + b.day * 1440));
-    const options = open === 'until'
-        ? startValid ? [...orderedSlots, { minute: 240, time: '04:00', period: 0, day: 1 }]
-            .filter(s => s.time !== from && Date.parse(date + 'T' + s.time + ':00+09:00') + s.day * 86400000 > cinemaTime(date, from)) : []
-        : orderedSlots.filter(s => cinemaTime(date, s.time) > now);
-    const groups = [...new Set(options.map(s => s.day + ':' + s.period))];
-    const current = groups.includes(view) ? view : groups[0];
-    function close() { setOpen(null); (open === 'from' ? startButton : endButton).current?.focus(); }
-    function toggle(field) {
-        setOpen(open === field ? null : field);
-        const value = field === 'from' ? from : until;
-        const minute = /^(?:[01]\d|2[0-3]):(00|30)$/.test(value) ? Number(value.slice(0, 2)) * 60 + Number(value.slice(3)) : null;
-        setView(minute === null ? null : (value < '04:00' ? 1 : 0) + ':' + Math.floor(minute / 360));
+    const list = useRef(null);
+    const [open, setOpen] = useState(null);
+    const [draft, setDraft] = useState({ from: '', until: '' });
+    const start = minuteOf(draft.from);
+    const end = draft.until === '04:00' ? 1680 : minuteOf(draft.until);
+    const startValid = start !== null && cinemaTime(date, draft.from) > now;
+    const ready = startValid && end !== null && end > start && draft.from !== draft.until;
+    const options = slots.filter(slot => open === 'until' ? startValid && slot.minute > start && slot.time !== draft.from : slot.minute < 1680 && cinemaTime(date, slot.time) > now);
+    const durations = startValid ? [2, 3, 4].filter(hours => start + hours * 60 <= 1680) : [];
+    useEffect(() => {
+        if (!open) return;
+        panel.current?.focus();
+        const selected = list.current?.querySelector('[aria-pressed="true"]');
+        if (selected?.scrollIntoView) selected.scrollIntoView({ block: 'nearest' });
+        else if (list.current) list.current.scrollTop = 0;
+    }, [open]);
+    useEffect(() => {
+        if (!open) return;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previous; };
+    }, [open]);
+    function show(field) {
+        trigger.current = field === 'from' ? startButton.current : endButton.current;
+        setDraft({ from, until });
+        setOpen(field === 'until' && halfHour(from) && cinemaTime(date, from) > now ? 'until' : 'from');
     }
+    function close() { setOpen(null); trigger.current?.focus(); }
     function choose(slot) {
         if (open === 'from') {
-            update({ from: slot.time, until: null }); setView(null); setOpen('until');
-            endButton.current?.focus();
-        } else { update({ until: slot.time }); close(); }
+            setDraft({ from: slot.time, until: end !== null && end > slot.minute ? draft.until : '' });
+            setOpen('until');
+        } else setDraft(previous => ({ ...previous, until: slot.time }));
     }
-    return <div className={styles.menu} onKeyDown={e => { if (e.key === 'Escape' && open) { e.stopPropagation(); close(); } }}>
+    function keyboard(event) {
+        if (event.key === 'Escape') { event.stopPropagation(); close(); }
+        if (event.key === 'Tab') {
+            const buttons = [...panel.current.querySelectorAll('button:not(:disabled)')];
+            const first = buttons[0], last = buttons.at(-1);
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
+    }
+    return <div className={styles.menu}>
         <div className={styles.summary}>
-            <GlassButton ref={startButton} aria-label="시작시간 선택" aria-expanded={open === 'from'} aria-controls={id} onClick={() => toggle('from')}>
-                <small>시작</small><strong>{from || '시간 선택'}</strong><span aria-hidden="true">⌄</span>
-            </GlassButton>
-            <span aria-hidden="true">~</span>
-            <GlassButton ref={endButton} aria-label="종료시간 선택" disabled={!startValid} aria-expanded={open === 'until'} aria-controls={id} onClick={() => toggle('until')}>
-                <small>종료</small><strong>{until || '시간 선택'}</strong><span aria-hidden="true">⌄</span>
-            </GlassButton>
+            <GlassButton ref={startButton} aria-label="시작시간 선택" aria-expanded={Boolean(open)} aria-controls={id} onClick={() => show('from')}><strong>{caption(from) || '시작 시간'}</strong><small>부터</small></GlassButton>
+            <span aria-hidden="true">—</span>
+            <GlassButton ref={endButton} aria-label="종료시간 선택" aria-expanded={Boolean(open)} aria-controls={id} onClick={() => show('until')}><strong>{caption(until, true) || '종료 시간'}</strong><small>까지</small></GlassButton>
         </div>
-        {open && <section ref={panel} tabIndex={-1} id={id} className={styles.panel} aria-label={open === 'from' ? '시작시간 후보' : '종료시간 후보'}>
-            <div className={styles.heading}><strong>{open === 'from' ? '언제부터 볼까요?' : '몇 시 시작 영화까지 볼까요?'}</strong><button type="button" onClick={close} aria-label="시간 선택 닫기">×</button></div>
-            <p>{open === 'from' ? '30분 간격으로 선택합니다. 오늘 지난 시간은 제외됩니다.' : '선택한 종료 시각에 시작하는 영화는 제외됩니다.'}</p>
-            {[0, 1].map(day => {
-                const dayGroups = groups.filter(g => g.startsWith(day + ':'));
-                return dayGroups.length > 0 && <div className={styles.groups} key={day} aria-label={day ? '다음 날 시간대' : '선택 날짜 시간대'}>
-                    {dayGroups.map(g => <button key={g} type="button" aria-pressed={g === current} onClick={() => setView(g)}>{periods[Number(g.split(':')[1])]}</button>)}
-                </div>;
-            })}
-            <div className={styles.slots}>{options.filter(s => s.day + ':' + s.period === current).map(s => <button type="button" key={s.day + ':' + s.time} aria-pressed={(open === 'from' ? from : until) === s.time} onClick={() => choose(s)}>{s.time}</button>)}</div>
-            {!options.length && <p role="status">선택 가능한 시간이 없습니다. 날짜 또는 시작 시간을 다시 선택해주세요.</p>}
-        </section>}
-        {(from || until) && <button className={styles.reset} type="button" onClick={() => { update({ from: null, until: null }); setOpen(null); startButton.current?.focus(); }}>시간 초기화</button>}
+        {open && createPortal(<div className={styles.overlay} role="dialog" aria-modal="true" aria-label="상영 시작 시간 범위 선택" onKeyDown={keyboard} onClick={event => { if (event.target === event.currentTarget) close(); }}>
+            <section ref={panel} tabIndex={-1} id={id} className={styles.panel} aria-label={open === 'from' ? '시작시간 후보' : '종료시간 후보'}>
+                <header className={styles.heading}><div><span>{date.replaceAll('-', '.')}</span><h2>언제 영화를 볼까요?</h2></div><button type="button" onClick={close} aria-label="시간 선택 닫기">×</button></header>
+                <div className={styles.range}>
+                    <button type="button" aria-pressed={open === 'from'} onClick={() => setOpen('from')}><span>이 시간부터</span><strong>{caption(draft.from) || '시작 선택'}</strong></button>
+                    <span aria-hidden="true">—</span>
+                    <button type="button" aria-pressed={open === 'until'} disabled={!startValid} onClick={() => setOpen('until')}><span>이 시간 전까지</span><strong>{caption(draft.until, true) || '종료 선택'}</strong></button>
+                </div>
+                <div className={styles.toolbar}><strong>{open === 'from' ? '시작 시간을 선택하세요' : '종료 시간을 선택하세요'}</strong>{open === 'until' && <div className={styles.presets}>{durations.map(hours => <button type="button" key={hours} aria-label={'+' + hours + '시간 ' + timeLabel(start + hours * 60)} onClick={() => setDraft(previous => ({ ...previous, until: timeLabel(start + hours * 60) }))}>+{hours}시간</button>)}</div>}</div>
+                <div className={styles.timeList} ref={list}>
+                    {periods.map(period => {
+                        const choices = options.filter(slot => slot.minute >= period.min && slot.minute < period.max);
+                        return choices.length > 0 && <div className={styles.period} key={period.label}><h3>{period.label}</h3><div className={styles.slots}>{choices.map(slot => <button type="button" key={slot.minute} aria-pressed={(open === 'from' ? draft.from : draft.until) === slot.time} onClick={() => choose(slot)}>{slot.time}</button>)}</div></div>;
+                    })}
+                    {!options.length && <p role="status">선택 가능한 시간이 없습니다. 날짜 또는 시작 시간을 다시 선택해주세요.</p>}
+                </div>
+                <footer className={styles.footer}><button className={styles.reset} type="button" onClick={() => { setDraft({ from: '', until: '' }); setOpen('from'); }}>다시 선택</button><button className={styles.apply} type="button" disabled={!ready} onClick={() => { update(draft); close(); }}>이 시간으로 적용</button></footer>
+            </section>
+        </div>, document.body)}
     </div>;
 }

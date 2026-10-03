@@ -5,8 +5,7 @@ import ui from './BookingComponents.module.css';
 import useCatalog from './useCatalog.js';
 import { formatRating } from './format.js';
 import { Link } from 'react-router-dom';
-import { availability, validParty } from './state.js';
-import { BookingButtons, DateCards, MovieCard, Pagination, QueryStatus, ShowtimeCard } from './BookingComponents.jsx';
+import { DateCards, MovieCard, Pagination, QueryStatus } from './BookingComponents.jsx';
 import BookingMap from './BookingMap.jsx';
 import TimeRangeMenu from './TimeRangeMenu.jsx';
 import HorizontalRail from '../components/HorizontalRail.jsx';
@@ -118,29 +117,36 @@ export function TheaterBooking({ booking }) {
     </>);
 }
 export function MovieBooking({ booking }) {
-    const { date, now, rangeFuture, dateValid, from, until, party, rangeValid, update, shows, items, valid, enter } = booking;
-    return (<>
-            <BookingDates booking={booking} />
-            {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
-            <div className={styles.fields}>
-                <label>인원 선택<select aria-label="총인원" value={validParty(party) ? party : ''} onChange={e => update({ party: e.target.value })}><option value="" disabled>인원 선택</option>{[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}명</option>)}</select></label>
-                <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} update={update} />
-                <BookingButtons disabled={!valid} onEnter={enter} />
+    const { date, now, rangeFuture, dateValid, from, until, adultCount, youthCount, audienceValid, update, shows, valid, enter } = booking;
+    const total = adultCount + youthCount;
+    const changeCount = (field, value) => update({ adult: adultCount, youth: youthCount, [field]: value, party: total + value - (field === 'adult' ? adultCount : youthCount) });
+    return <>
+        <BookingDates booking={booking} />
+        <div className={styles.bookingRail}>
+            <div className={styles.movieFields}>
+                <fieldset className={styles.audiencePicker}>
+                    <legend>관람 인원 <span>최대 6명</span></legend>
+                    <div className={styles.audienceRow}>{[['adult', '성인', adultCount], ['youth', '청소년', youthCount]].map(([field, label, value]) =>
+                        <div className={styles.counter} key={field}>
+                            <span>{label}</span>
+                            <div className={styles.counterControls}>
+                            <button type="button" aria-label={label + ' 인원 줄이기'} disabled={value <= 0 || total <= 1} onClick={() => changeCount(field, value - 1)}>−</button>
+                            <output aria-label={label + ' 인원'} aria-live="polite">{value}</output>
+                            <button type="button" aria-label={label + ' 인원 늘리기'} disabled={total >= 6} onClick={() => changeCount(field, value + 1)}>+</button>
+                            </div>
+                        </div>)}<div className={styles.partyTotal}><span>총인원</span><output aria-label="총인원" aria-live="polite"><strong>{total}</strong>명</output></div></div>
+                </fieldset>
+                <div className={styles.timePicker}><span className={styles.fieldLabel}>상영 시작 시간</span>
+                    <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} update={update} />
+                </div>
+                <button className={ui.primary + ' ' + styles.movieSubmit} disabled={!valid} onClick={() => enter('MOVIE_SMART')}>스마트예매</button>
             </div>
-            <div className={styles.conditionsNote}>
-                <p>서울 시간 기준이며, 하한은 포함하고 상한은 제외합니다. 상한이 더 이르면 다음 날까지 검색합니다. 시간 초기화 시 남은 전체 회차를 조회합니다. 스마트예매 진입에는 시간 범위가 필요합니다.</p>
-                {from && until && rangeValid && !rangeFuture && <p role="alert">이미 지난 시작 시간입니다. 현재 시각 이후로 다시 선택해주세요.</p>}
-                {from && until && rangeValid && until < from && <p>종료 범위는 다음 날 {until} 미만입니다.</p>}
-                {!rangeValid && <p role="alert">시작 시간과 종료 시간을 30분 단위로 선택해주세요.</p>}
-                {!validParty(party) && <p>총인원을 1~6명으로 선택해주세요.</p>}
-                <details><summary>인원과 좌석 조건 안내</summary><p>최대 6명. 스마트예매는 전체 연석을 우선하며, 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2, 3+3, 2+4로 나눠 앉을 수 있습니다. 각 묶음은 연석이며 서로 다른 행이나 통로 구간도 가능합니다. 같은 회차에서 전원 좌석을 한 번에 확보합니다.</p></details>
-                <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-                {items.length > 0 && <details className={styles.inventory}><summary>조회한 회차와 좌석 상태 {items.length}개</summary>
-                    <div className={ui.showtimes}>{items.map(show => <ShowtimeCard key={show.id} show={show} label={availability(show, validParty(party) ? Number(party) : null)} />)}</div>
-                    <p>조회 결과는 좌석 확보를 보장하지 않습니다. 스마트예매에서 선호극장 안의 회차와 좌석을 자동 선택하며, 확보하지 못하면 대안을 안내합니다.</p>
-                </details>}
-            </div>
-        </>);
+        </div>
+        {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 선택해주세요.</p>}
+        {from && until && !rangeFuture && <p role="alert">현재 시각 이후의 시간 범위를 선택해주세요.</p>}
+        {!audienceValid && <p role="alert">관람 인원은 총 1~6명으로 선택해주세요.</p>}
+        {shows.error && <QueryStatus query={shows} />}
+    </>;
 }
 export function MovieCatalog({ booking }) {
     const { page, update, list } = booking;

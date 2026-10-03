@@ -47,7 +47,6 @@ export default function MovieHero({ movie, home = false }) {
         <div className={styles.shade} aria-hidden="true" />
         <div className={styles.inner}>
             <div className={styles.copy}>
-                {!home && <Link className={styles.back} to="/">← 홈으로</Link>}
                 <h1 className={logo ? styles.logoTitle : undefined}>{home
                     ? <Link className={styles.titleLink} to={href}>{title}</Link>
                     : title}</h1>

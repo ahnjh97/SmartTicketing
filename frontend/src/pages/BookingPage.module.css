@@ -3,3 +3,5 @@
 @media (max-width: 999px) { .container { padding: 24px 32px; } }
 @media (max-width: 599px) { .container { padding: 20px 16px; } }
 .scene { position: relative; isolation: isolate; }
+.movieControls { position: relative; margin-top: -64px; padding-top: 0; }
+@media (max-width: 599px) { .movieControls { margin-top: -24px; } }

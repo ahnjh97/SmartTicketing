@@ -108,9 +108,13 @@ test('a new waiting hold replaces an old reservation URL and survives completed 
     const path=screen.getByTestId('url').textContent;cleanup();mount(path);await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
 });
 
-test('no seat availability still allows smart failure guidance; mismatched audience cannot submit',async()=>{
-    mount();fireEvent.change(await screen.findByLabelText('성인 인원'),{target:{value:'1'}});
-    fireEvent.click(screen.getByLabelText(/동반 관객 모두/));
-    expect(screen.getByRole('button',{name:'자동으로 찾아 5분 선점 →'}).disabled).toBe(true);
-    expect(fetch.mock.calls.some(([url])=>url==='/api/booking-groups')).toBe(false);
+test('movie audience is carried into booking without another count selection',async()=>{
+    mount(moviePath + '&adult=1&youth=1');
+    await screen.findByText('성인 1명 · 청소년 1명');
+    expect(screen.queryByRole('combobox', { name: '성인 인원' })).toBe(null);
+    await confirm();
+    await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
+    const body=JSON.parse(fetch.mock.calls.find(([url])=>url==='/api/booking-groups')[1].body);
+    expect(body.audience).toMatchObject({adultCount:1,youthCount:1});
+    expect(body.partySize).toBe(2);
 });

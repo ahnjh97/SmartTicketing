@@ -345,7 +345,9 @@ export default function CommonHeader({
 
                 <div className="common-header-desktop" aria-hidden={compact || undefined} inert={compact || undefined}>
                     <nav ref={navRef} className="common-header-nav" aria-label="주 메뉴">
-                        {[{ view: "movies", label: "영화" }, { view: "theaters", label: "극장" }].map(({ view, label }) => (
+                        {[{ view: "movies", label: "영화" }, { view: "theaters", label: "극장" }].map(({ view, label }) => view === "movies" ? (
+                            <span key={view} aria-disabled="true" aria-current={activeMenu === view ? "page" : undefined} className={`common-header-link common-header-menu-link${activeMenu === view ? " is-active" : ""}`}>{label}</span>
+                        ) : (
                             <Link
                                 key={view}
                                 to={PAGE_PATHS[view]}
@@ -366,7 +368,9 @@ export default function CommonHeader({
 
                 {compact && <>
                     <nav className="common-header-nav common-header-compact-nav" aria-label="주 메뉴">
-                        {[{ view: "movies", label: "영화" }, { view: "theaters", label: "극장" }].map(({ view, label }) => (
+                        {[{ view: "movies", label: "영화" }, { view: "theaters", label: "극장" }].map(({ view, label }) => view === "movies" ? (
+                            <span key={view} aria-disabled="true" aria-current={activeMenu === view ? "page" : undefined} className={`common-header-link common-header-menu-link${activeMenu === view ? " is-active" : ""}`}>{label}</span>
+                        ) : (
                             <Link key={view} to={PAGE_PATHS[view]}
                                 className={`common-header-link common-header-menu-link${activeMenu === view ? " is-active" : ""}`}
                                 aria-current={activeMenu === view ? "page" : undefined}

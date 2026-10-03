@@ -18,8 +18,12 @@ export default function useBookingPage(mode) {
     const dateValid = dates(today).includes(date);
     const from = params.get('from') || '';
     const until = params.get('until') || '';
-    const party = params.get('party') || '';
-    const rangeValid = validRange(from, until) && ((!from && !until) || (halfHour(from) && halfHour(until)));
+    const adultCount = params.has('adult') ? Number(params.get('adult')) : validParty(params.get('party')) ? Number(params.get('party')) : 1;
+    const youthCount = params.has('youth') ? Number(params.get('youth')) : 0;
+    const audienceValid = [adultCount, youthCount].every(n => Number.isInteger(n) && n >= 0 && n <= 6) && validParty(adultCount + youthCount);
+    const party = String(adultCount + youthCount);
+    const rangeValid = validRange(from, until) && halfHour(from) && halfHour(until);
+    const rangeFuture = rangeValid && futureRange(date, from, until, now);
     const page = /^\d+$/.test(params.get('page') || '') ? Math.min(Number(params.get('page')), 2147483647) : 0;
     const search = params.get('q') || '';
     const entry = params.get('entry');
@@ -54,16 +58,15 @@ export default function useBookingPage(mode) {
     const movies = useCatalog(theaterMode && theaterId && dateValid ? `theaters/${theaterId}/movies` : null, { date });
     const detail = useCatalog(!theaterMode && movieId ? `movies/${movieId}` : null);
     const selectedMovieExists = theaterMode ? movies.data?.items.some(m => String(m.movieId) === movieId) : Boolean(detail.data);
-    const shows = useCatalog(movieId && dateValid && selectedMovieExists && (theaterMode ? theater.data : rangeValid) ? 'showtimes' : null,
+    const shows = useCatalog(movieId && dateValid && selectedMovieExists && (theaterMode ? theater.data : rangeFuture && audienceValid) ? 'showtimes' : null,
         { movieId, ...(theaterMode ? { theaterId } : from && until ? { startFrom: from, startUntil: until } : {}), date }, entry || '');
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
-    const rangeFuture = futureRange(date, from, until, now);
     const selectedShow = items.find(s => String(s.id) === params.get('showtime'));
     const selectedMovie = theaterMode ? movies.data?.items.find(m => String(m.movieId) === movieId) : detail.data;
     const preferences = [...(user?.preferredTheaters || [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     const valid = Boolean(dateValid && selectedMovieExists && !shows.loading && !shows.error && (theaterMode
         ? selectedShow
-        : validParty(party) && rangeFuture));
+        : audienceValid && rangeFuture));
     const smartReady = theaterMode ? Boolean(selectedShow) : true;
     const enter = kind => {
         if (!valid || (kind === 'THEATER_SMART' && !smartReady)) return;
@@ -72,9 +75,12 @@ export default function useBookingPage(mode) {
             const next = new URLSearchParams(previous);
             next.set('entry', kind); next.set('date', date);
             // Movie smart booking selects a time range, not a specific showtime.
-            if (!theaterMode) next.delete('showtime');
+            if (!theaterMode) {
+                next.delete('showtime');
+                next.set('adult', String(adultCount)); next.set('youth', String(youthCount)); next.set('party', party);
+            }
             return next;
         });
     };
-    return { theaterMode, user, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
+    return { theaterMode, user, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, adultCount, youthCount, audienceValid, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
 }

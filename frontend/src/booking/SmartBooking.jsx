@@ -6,7 +6,6 @@ import AudienceFields from './AudienceFields.jsx';
 import ReservationPanel from './ReservationPanel.jsx';
 import { QueryStatus } from './BookingComponents.jsx';
 import useManualHold from './useManualHold.js';
-import { validParty } from './state.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import styles from './SmartBooking.module.css';
 import WaitingPanel from './WaitingPanel.jsx';
@@ -23,8 +22,8 @@ export default function SmartBooking({ booking }) {
     useEffect(() => { if (flow.error) failureHeading.current?.focus(); }, [flow.error]);
     const movieMode = !booking.theaterMode;
     const audience = flow.group?.audience || {
-        adultCount: params.has('adult') ? count(params.get('adult')) : movieMode && validParty(booking.party) ? Number(booking.party) : 1,
-        youthCount: count(params.get('youth')), companionsEligible: params.get('eligible') === '1',
+        adultCount: movieMode ? booking.adultCount : params.has('adult') ? count(params.get('adult')) : 1,
+        youthCount: movieMode ? booking.youthCount : count(params.get('youth')), companionsEligible: params.get('eligible') === '1',
         guardianAccompanying: params.get('guardian') === '1',
     };
     const party = audience.adultCount + audience.youthCount;
@@ -42,7 +41,7 @@ export default function SmartBooking({ booking }) {
         booking.update({ entry: null, group: null, reservation: null, eligible: null, guardian: null });
     };
     const ready = Boolean(flow.group || (booking.dateValid && booking.selectedMovie && (movieMode
-        ? booking.rangeFuture && validParty(booking.party)
+        ? booking.rangeFuture && booking.audienceValid
         : booking.selectedShow)));
     const choiceLoading = movieMode ? booking.detail.loading || booking.shows.loading
         : booking.theater.loading || booking.movies.loading || booking.shows.loading;
@@ -71,7 +70,7 @@ export default function SmartBooking({ booking }) {
                         <p><InlineDetails items={[flow.group?.viewingDate || booking.date, ...(movieMode
                             ? [`${booking.from} 이상 ~ ${booking.until} 미만`]
                             : [booking.theater.data?.name || '선택한 극장', booking.selectedShow?.startTime.slice(11,16) || '회차 확인 중'])]} /></p></div>
-                    <AudienceFields {...audience} onChange={changeAudience} disabled={flow.busy || Boolean(flow.group)}/>
+                    <AudienceFields {...audience} readOnlyCounts={movieMode} onChange={changeAudience} disabled={flow.busy || Boolean(flow.group)}/>
                     {movieMode && party !== Number(flow.group?.partySize || booking.party) && <p className={styles.error}>선택한 총 {flow.group?.partySize || booking.party}명에 맞춰 성인과 청소년 인원을 나눠주세요.</p>}
                     <p className={styles.hint}>전체 연석 우선. 없으면 4명은 2+2, 5명은 2+3, 6명은 2+2+2, 3+3, 2+4로 다른 행이나 통로에도 나눠 앉을 수 있습니다.</p>
                     {!ready && <><QueryStatus query={movieMode ? booking.detail : booking.shows}/>{!choiceLoading && <p role="alert">영화, 날짜, 시간 또는 회차를 다시 선택해주세요.</p>}</>}
