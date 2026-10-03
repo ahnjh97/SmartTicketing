@@ -261,6 +261,7 @@ h2 {
 
 .profile-social-provider .kakao-logo {
     width: 75px;
+    transform: translateY(2px);
 }
 
 
