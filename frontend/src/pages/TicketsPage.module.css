@@ -58,13 +58,11 @@
 .ticketModal {
     position: relative;
     width: min(520px, 100%);
-    max-height: min(720px, calc(100vh - 48px));
-    overflow-y: auto;
 }
 .ticketModalClose {
     position: absolute;
-    top: -14px;
-    right: -14px;
+    top: 6px;
+    right: 6px;
     width: 36px;
     height: 36px;
     border: 0;
