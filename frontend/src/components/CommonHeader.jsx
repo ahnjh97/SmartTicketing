@@ -50,27 +50,7 @@ export default function CommonHeader({
         : matchPath(`${PAGE_PATHS.theaters}/*`, pathname) ? "theaters" : null;
     const navigationDisabled = disabled || Boolean(user && setupRequired);
 
-    useEffect(() => {
-        if (!user || disabled) {
-            setUnreadCount(0);
-            setNotifications([]);
-            setTickets([]);
-            setOpenPanel(null);
-            return;
-        }
-
-        let mounted = true;
-        const loadUnread = () => notificationApi.list(true)
-            .then((items) => {
-                if (mounted) setUnreadCount(Array.isArray(items) ? items.length : 0);
-            })
-            .catch(() => {
-                if (mounted) setUnreadCount(0);
-            });
-
-        loadUnread();
-        const timer = window.setInterval(loadUnread, 30000);
-        function renderGuestItems() {
+    function renderGuestItems() {
         return (
             <>
                 <NavLink
@@ -91,7 +71,27 @@ export default function CommonHeader({
         );
     }
 
-    return () => {
+    useEffect(() => {
+        if (!user || disabled) {
+            setUnreadCount(0);
+            setNotifications([]);
+            setTickets([]);
+            setOpenPanel(null);
+            return;
+        }
+
+        let mounted = true;
+        const loadUnread = () => notificationApi.list(true)
+            .then((items) => {
+                if (mounted) setUnreadCount(Array.isArray(items) ? items.length : 0);
+            })
+            .catch(() => {
+                if (mounted) setUnreadCount(0);
+            });
+
+        loadUnread();
+        const timer = window.setInterval(loadUnread, 30000);
+        return () => {
             mounted = false;
             window.clearInterval(timer);
         };
