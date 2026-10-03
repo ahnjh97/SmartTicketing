@@ -234,8 +234,7 @@ h2 {
     width: 75px;
     min-width: 75px;
     height: 34px;
-    border-radius: 8px;
-    background: #fee500;
+    background: transparent;
     color: #222222;
     overflow: visible;
 }
