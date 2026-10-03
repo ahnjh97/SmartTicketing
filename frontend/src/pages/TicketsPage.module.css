@@ -1,0 +1,22 @@
+undefined
+
+.verifyDemoButton {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #171717;
+    border-radius: 6px;
+    background: #171717;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.verifyDemoButton:hover:not(:disabled) {
+    opacity: .86;
+}
+
+.verifyDemoButton:disabled {
+    cursor: wait;
+    opacity: .55;
+}
