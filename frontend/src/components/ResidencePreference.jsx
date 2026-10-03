@@ -9,8 +9,6 @@ import { theaterApi, userApi } from "../api";
 const ROWS =
     "ABCDEFGHIJ".split("");
 
-const SEATS_PER_ROW = 12;
-
 const SEAT_POSITION_LABELS = {
     SIDE_FRONT: "양옆 1번",
     SIDE_MIDDLE: "양옆 2번",
@@ -19,29 +17,6 @@ const SEAT_POSITION_LABELS = {
     MIDDLE_MIDDLE: "중앙 5번",
     MIDDLE_REAR: "중앙 6번",
 };
-
-function getSeatPosition(
-    rowIndex,
-    seatNumber
-) {
-    let vertical;
-
-    if (rowIndex <= 2) {
-        vertical = "FRONT";
-    } else if (rowIndex <= 6) {
-        vertical = "MIDDLE";
-    } else {
-        vertical = "REAR";
-    }
-
-    const horizontal =
-        seatNumber <= 3 ||
-        seatNumber >= 10
-            ? "SIDE"
-            : "MIDDLE";
-
-    return `${horizontal}_${vertical}`;
-}
 
 function getSeatLabel(
     position
@@ -283,6 +258,69 @@ export default function ResidencePreference({
     useEffect(() => {
         let active = true;
         let script;
+        let dragMap;
+
+        async function updateSelectedMapCenter() {
+            const map = mapInstanceRef.current;
+
+            if (!map || !isMapSelectionModeRef.current) {
+                return;
+            }
+
+            const center = map.getCenter();
+            const latitude = center.getLat();
+            const longitude = center.getLng();
+
+            setLocation({
+                latitude,
+                longitude,
+            });
+            setLocationSource("MAP");
+
+            try {
+                const kakao = window.kakao;
+                const geocoder =
+                    new kakao.maps.services.Geocoder();
+
+                const addressResult = await new Promise(
+                    (resolve, reject) => {
+                        geocoder.coord2Address(
+                            longitude,
+                            latitude,
+                            (result, status) => {
+                                if (
+                                    status !==
+                                    kakao.maps.services.Status.OK
+                                ) {
+                                    reject(
+                                        new Error(
+                                            "선택한 위치의 주소를 가져오지 못했습니다."
+                                        )
+                                    );
+                                    return;
+                                }
+
+                                resolve(result);
+                            }
+                        );
+                    }
+                );
+
+                const first = addressResult?.[0];
+                const resolvedAddress =
+                    first?.road_address?.address_name ??
+                    first?.address?.address_name;
+
+                if (resolvedAddress) {
+                    setAddress(resolvedAddress);
+                }
+            } catch (e) {
+                setError(
+                    e.message ??
+                    "선택한 위치의 주소를 확인하지 못했습니다."
+                );
+            }
+        }
 
         function handleLoad() {
             if (!active) {
@@ -311,12 +349,11 @@ export default function ResidencePreference({
                         mapInstanceRef
                     );
 
-                    kakao.maps.event.addListener(
-                        mapInstanceRef.current,
+                    dragMap = mapInstanceRef.current;
+                    window.kakao.maps.event.addListener(
+                        dragMap,
                         "dragend",
-                        () => {
-                            updateSelectedMapCenter();
-                        }
+                        updateSelectedMapCenter
                     );
                 }
             );
@@ -391,6 +428,14 @@ export default function ResidencePreference({
 
         return () => {
             active = false;
+
+            if (dragMap) {
+                window.kakao.maps.event.removeListener(
+                    dragMap,
+                    "dragend",
+                    updateSelectedMapCenter
+                );
+            }
 
             script?.removeEventListener(
                 "load",
@@ -725,68 +770,6 @@ export default function ResidencePreference({
         setLocationSource("MAP");
     }
 
-    async function updateSelectedMapCenter() {
-        const map = mapInstanceRef.current;
-
-        if (!map || !isMapSelectionModeRef.current) {
-            return;
-        }
-
-        const center = map.getCenter();
-        const latitude = center.getLat();
-        const longitude = center.getLng();
-
-        setLocation({
-            latitude,
-            longitude,
-        });
-        setLocationSource("MAP");
-
-        try {
-            const kakao = window.kakao;
-            const geocoder =
-                new kakao.maps.services.Geocoder();
-
-            const addressResult = await new Promise(
-                (resolve, reject) => {
-                    geocoder.coord2Address(
-                        longitude,
-                        latitude,
-                        (result, status) => {
-                            if (
-                                status !==
-                                kakao.maps.services.Status.OK
-                            ) {
-                                reject(
-                                    new Error(
-                                        "선택한 위치의 주소를 가져오지 못했습니다."
-                                    )
-                                );
-                                return;
-                            }
-
-                            resolve(result);
-                        }
-                    );
-                }
-            );
-
-            const first = addressResult?.[0];
-            const resolvedAddress =
-                first?.road_address?.address_name ??
-                first?.address?.address_name;
-
-            if (resolvedAddress) {
-                setAddress(resolvedAddress);
-            }
-        } catch (e) {
-            setError(
-                e.message ??
-                "선택한 위치의 주소를 확인하지 못했습니다."
-            );
-        }
-    }
-
     function searchPlaces() {
         const keyword = placeSearchKeyword.trim();
 
@@ -1050,7 +1033,6 @@ export default function ResidencePreference({
             }));
 
             setTheaters(normalized);
-            renderTheaterMarkers(normalized);
 
             // 영화관 마커를 그린 뒤에도 현재 위치 마커를 유지합니다.
             if (
@@ -1073,7 +1055,6 @@ export default function ResidencePreference({
                 "주변 영화관 조회에 실패했습니다."
             );
             setTheaters([]);
-            renderTheaterMarkers([]);
         } finally {
             setTheaterLoading(false);
         }
@@ -1081,444 +1062,51 @@ export default function ResidencePreference({
 
 
     useEffect(() => {
-        if (
-            theaters.length > 0 &&
-            mapInstanceRef.current &&
-            window.kakao?.maps
+        function getTheaterBrand(
+            theater
         ) {
-            renderTheaterMarkers(theaters);
-        }
-    }, [selectedTheaters, theaters]);
-    function getTheaterBrand(
-        theater
-    ) {
-        const brand = String(
-            theater.brand ?? ""
-        ).toUpperCase();
+            const brand = String(
+                theater.brand ?? ""
+            ).toUpperCase();
 
-        return brand === "CGV"
-            ? "CGV"
-            : brand === "LOTTE_CINEMA"
-                ? "LOTTE_CINEMA"
-                : "MEGABOX";
-    }
-
-    function getTheaterLogoUrl(
-        brand
-    ) {
-        return (
-            "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
-            brand +
-            ".png"
-        );
-    }
-
-    function createTransparentMarkerImage(
-        markerSize
-    ) {
-        const svg =
-            '<svg xmlns="http://www.w3.org/2000/svg" width="' +
-            markerSize +
-            '" height="' +
-            markerSize +
-            '" viewBox="0 0 ' +
-            markerSize +
-            " " +
-            markerSize +
-            '"><rect width="' +
-            markerSize +
-            '" height="' +
-            markerSize +
-            '" fill="transparent"/></svg>';
-
-        return new window.kakao.maps.MarkerImage(
-            "data:image/svg+xml;charset=UTF-8," +
-                encodeURIComponent(svg),
-            new window.kakao.maps.Size(
-                markerSize,
-                markerSize
-            ),
-            {
-                offset: new window.kakao.maps.Point(
-                    markerSize / 2,
-                    markerSize / 2
-                ),
-            }
-        );
-    }
-
-    function loadTheaterLogoData(
-        brand
-    ) {
-        const cached =
-            theaterLogoDataCacheRef.current.get(
-                brand
-            );
-
-        if (cached) {
-            return cached;
+            return brand === "CGV"
+                ? "CGV"
+                : brand === "LOTTE_CINEMA"
+                    ? "LOTTE_CINEMA"
+                    : "MEGABOX";
         }
 
-        const promise = new Promise(
-            (resolve, reject) => {
-                const image = new Image();
-                image.crossOrigin = "anonymous";
-
-                image.onload = () => {
-                    try {
-                        const sourceWidth =
-                            image.naturalWidth;
-                        const sourceHeight =
-                            image.naturalHeight;
-
-                        if (
-                            !sourceWidth ||
-                            !sourceHeight
-                        ) {
-                            reject(
-                                new Error(
-                                    "영화관 로고 이미지 크기를 확인하지 못했습니다."
-                                )
-                            );
-                            return;
-                        }
-
-                        const canvas =
-                            document.createElement("canvas");
-                        canvas.width = sourceWidth;
-                        canvas.height = sourceHeight;
-
-                        const context =
-                            canvas.getContext("2d", {
-                                willReadFrequently: true,
-                            });
-
-                        if (!context) {
-                            reject(
-                                new Error(
-                                    "영화관 로고 이미지를 처리하지 못했습니다."
-                                )
-                            );
-                            return;
-                        }
-
-                        context.drawImage(
-                            image,
-                            0,
-                            0,
-                            sourceWidth,
-                            sourceHeight
-                        );
-
-                        const imageData =
-                            context.getImageData(
-                                0,
-                                0,
-                                sourceWidth,
-                                sourceHeight
-                            );
-
-                        const pixels =
-                            imageData.data;
-                        let minX = sourceWidth;
-                        let minY = sourceHeight;
-                        let maxX = -1;
-                        let maxY = -1;
-
-                        for (
-                            let y = 0;
-                            y < sourceHeight;
-                            y += 1
-                        ) {
-                            for (
-                                let x = 0;
-                                x < sourceWidth;
-                                x += 1
-                            ) {
-                                const index =
-                                    (y * sourceWidth + x) * 4;
-                                const red = pixels[index];
-                                const green = pixels[index + 1];
-                                const blue = pixels[index + 2];
-
-                                const max = Math.max(
-                                    red,
-                                    green,
-                                    blue
-                                );
-                                const min = Math.min(
-                                    red,
-                                    green,
-                                    blue
-                                );
-                                const saturation =
-                                    max - min;
-
-                                if (
-                                    saturation < 28 &&
-                                    max < 235
-                                ) {
-                                    pixels[index + 3] = 0;
-                                    continue;
-                                }
-
-                                if (
-                                    pixels[index + 3] > 0
-                                ) {
-                                    minX = Math.min(
-                                        minX,
-                                        x
-                                    );
-                                    minY = Math.min(
-                                        minY,
-                                        y
-                                    );
-                                    maxX = Math.max(
-                                        maxX,
-                                        x
-                                    );
-                                    maxY = Math.max(
-                                        maxY,
-                                        y
-                                    );
-                                }
-                            }
-                        }
-
-                        if (
-                            maxX < minX ||
-                            maxY < minY
-                        ) {
-                            reject(
-                                new Error(
-                                    "영화관 로고 영역을 찾지 못했습니다."
-                                )
-                            );
-                            return;
-                        }
-
-                        context.putImageData(
-                            imageData,
-                            0,
-                            0
-                        );
-
-                        const padding = Math.max(
-                            2,
-                            Math.round(
-                                Math.max(
-                                    maxX - minX + 1,
-                                    maxY - minY + 1
-                                ) * 0.04
-                            )
-                        );
-                        const cropX = Math.max(
-                            0,
-                            minX - padding
-                        );
-                        const cropY = Math.max(
-                            0,
-                            minY - padding
-                        );
-                        const cropRight = Math.min(
-                            sourceWidth - 1,
-                            maxX + padding
-                        );
-                        const cropBottom = Math.min(
-                            sourceHeight - 1,
-                            maxY + padding
-                        );
-                        const cropWidth =
-                            cropRight - cropX + 1;
-                        const cropHeight =
-                            cropBottom - cropY + 1;
-                        const cropSize = Math.max(
-                            cropWidth,
-                            cropHeight
-                        );
-
-                        const cropCanvas =
-                            document.createElement("canvas");
-                        cropCanvas.width = cropSize;
-                        cropCanvas.height = cropSize;
-
-                        const cropContext =
-                            cropCanvas.getContext("2d");
-
-                        if (!cropContext) {
-                            reject(
-                                new Error(
-                                    "영화관 로고를 잘라내지 못했습니다."
-                                )
-                            );
-                            return;
-                        }
-
-                        cropContext.drawImage(
-                            canvas,
-                            cropX,
-                            cropY,
-                            cropWidth,
-                            cropHeight,
-                            (cropSize - cropWidth) / 2,
-                            (cropSize - cropHeight) / 2,
-                            cropWidth,
-                            cropHeight
-                        );
-
-                        resolve(
-                            cropCanvas.toDataURL(
-                                "image/png"
-                            )
-                        );
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-
-                image.onerror = () =>
-                    reject(
-                        new Error(
-                            "영화관 로고 이미지를 불러오지 못했습니다."
-                        )
-                    );
-
-                image.src = getTheaterLogoUrl(
-                    brand
-                );
-            }
-        );
-
-        theaterLogoDataCacheRef.current.set(
-            brand,
-            promise
-        );
-
-        return promise;
-    }
-
-    async function getTheaterMarkerImage(
-        brand,
-        selected,
-        markerSize
-    ) {
-        const cacheKey =
-            brand +
-            ":" +
-            (selected ? "selected" : "normal") +
-            ":" +
-            markerSize;
-
-        const cached =
-            theaterMarkerImageCacheRef.current.get(
-                cacheKey
-            );
-
-        if (cached) {
-            return cached;
-        }
-
-        const logoDataUrl =
-            await loadTheaterLogoData(
-                brand
-            );
-
-        const canvas =
-            document.createElement("canvas");
-        const pixelSize =
-            Math.round(markerSize * 2);
-        canvas.width = pixelSize;
-        canvas.height = pixelSize;
-
-        const context =
-            canvas.getContext("2d");
-
-        if (!context) {
-            throw new Error(
-                "영화관 마커를 생성하지 못했습니다."
+        function getTheaterLogoUrl(
+            brand
+        ) {
+            return (
+                "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/feature/jusang/" +
+                brand +
+                ".png"
             );
         }
 
-        const center =
-            pixelSize / 2;
-        const radius =
-            pixelSize / 2 - 3;
-        const borderWidth =
-            selected ? 6 : 5;
+        function createTransparentMarkerImage(
+            markerSize
+        ) {
+            const svg =
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+                markerSize +
+                '" height="' +
+                markerSize +
+                '" viewBox="0 0 ' +
+                markerSize +
+                " " +
+                markerSize +
+                '"><rect width="' +
+                markerSize +
+                '" height="' +
+                markerSize +
+                '" fill="transparent"/></svg>';
 
-        context.clearRect(
-            0,
-            0,
-            pixelSize,
-            pixelSize
-        );
-
-        context.beginPath();
-        context.arc(
-            center,
-            center,
-            radius,
-            0,
-            Math.PI * 2
-        );
-        context.fillStyle = "#fff";
-        context.fill();
-        context.lineWidth = borderWidth;
-        context.strokeStyle = selected
-            ? "#ffc426"
-            : "#111";
-        context.stroke();
-
-        context.save();
-        context.beginPath();
-        context.arc(
-            center,
-            center,
-            radius - borderWidth / 2,
-            0,
-            Math.PI * 2
-        );
-        context.clip();
-
-        const logoImage =
-            await new Promise(
-                (resolve, reject) => {
-                    const image = new Image();
-                    image.onload = () =>
-                        resolve(image);
-                    image.onerror = () =>
-                        reject(
-                            new Error(
-                                "가공된 영화관 로고를 불러오지 못했습니다."
-                            )
-                        );
-                    image.src = logoDataUrl;
-                }
-            );
-
-        // 가공된 PNG는 실제 로고 영역만 남겨진 정사각형 이미지이므로
-        // 마커 안쪽을 최대한 채우도록 배치합니다.
-        // 검정색 작업용 원/회색 배경은 loadTheaterLogoData()에서 제거됩니다.
-        const innerSize =
-            pixelSize - borderWidth * 2;
-        const logoSize =
-            innerSize * 1.35;
-
-        context.drawImage(
-            logoImage,
-            center - logoSize / 2,
-            center - logoSize / 2,
-            logoSize,
-            logoSize
-        );
-        context.restore();
-
-        const dataUrl =
-            canvas.toDataURL("image/png");
-
-        const markerImage =
-            new window.kakao.maps.MarkerImage(
-                dataUrl,
+            return new window.kakao.maps.MarkerImage(
+                "data:image/svg+xml;charset=UTF-8," +
+                    encodeURIComponent(svg),
                 new window.kakao.maps.Size(
                     markerSize,
                     markerSize
@@ -1530,250 +1118,638 @@ export default function ResidencePreference({
                     ),
                 }
             );
-
-        theaterMarkerImageCacheRef.current.set(
-            cacheKey,
-            markerImage
-        );
-
-        return markerImage;
-    }
-
-    function renderTheaterMarkers(
-        theaterList
-    ) {
-        if (
-            !mapInstanceRef.current ||
-            !window.kakao?.maps
-        ) {
-            return;
         }
 
-        theaterMarkersRef.current.forEach((marker) =>
-            marker.setMap(null)
-        );
-        theaterOverlaysRef.current.forEach((overlay) =>
-            overlay.setMap(null)
-        );
+        function loadTheaterLogoData(
+            brand
+        ) {
+            const cached =
+                theaterLogoDataCacheRef.current.get(
+                    brand
+                );
 
-        theaterMarkersRef.current = [];
-        theaterOverlaysRef.current = [];
+            if (cached) {
+                return cached;
+            }
 
-        theaterList.forEach((theater) => {
+            const promise = new Promise(
+                (resolve, reject) => {
+                    const image = new Image();
+                    image.crossOrigin = "anonymous";
+
+                    image.onload = () => {
+                        try {
+                            const sourceWidth =
+                                image.naturalWidth;
+                            const sourceHeight =
+                                image.naturalHeight;
+
+                            if (
+                                !sourceWidth ||
+                                !sourceHeight
+                            ) {
+                                reject(
+                                    new Error(
+                                        "영화관 로고 이미지 크기를 확인하지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            const canvas =
+                                document.createElement("canvas");
+                            canvas.width = sourceWidth;
+                            canvas.height = sourceHeight;
+
+                            const context =
+                                canvas.getContext("2d", {
+                                    willReadFrequently: true,
+                                });
+
+                            if (!context) {
+                                reject(
+                                    new Error(
+                                        "영화관 로고 이미지를 처리하지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            context.drawImage(
+                                image,
+                                0,
+                                0,
+                                sourceWidth,
+                                sourceHeight
+                            );
+
+                            const imageData =
+                                context.getImageData(
+                                    0,
+                                    0,
+                                    sourceWidth,
+                                    sourceHeight
+                                );
+
+                            const pixels =
+                                imageData.data;
+                            let minX = sourceWidth;
+                            let minY = sourceHeight;
+                            let maxX = -1;
+                            let maxY = -1;
+
+                            for (
+                                let y = 0;
+                                y < sourceHeight;
+                                y += 1
+                            ) {
+                                for (
+                                    let x = 0;
+                                    x < sourceWidth;
+                                    x += 1
+                                ) {
+                                    const index =
+                                        (y * sourceWidth + x) * 4;
+                                    const red = pixels[index];
+                                    const green = pixels[index + 1];
+                                    const blue = pixels[index + 2];
+
+                                    const max = Math.max(
+                                        red,
+                                        green,
+                                        blue
+                                    );
+                                    const min = Math.min(
+                                        red,
+                                        green,
+                                        blue
+                                    );
+                                    const saturation =
+                                        max - min;
+
+                                    if (
+                                        saturation < 28 &&
+                                        max < 235
+                                    ) {
+                                        pixels[index + 3] = 0;
+                                        continue;
+                                    }
+
+                                    if (
+                                        pixels[index + 3] > 0
+                                    ) {
+                                        minX = Math.min(
+                                            minX,
+                                            x
+                                        );
+                                        minY = Math.min(
+                                            minY,
+                                            y
+                                        );
+                                        maxX = Math.max(
+                                            maxX,
+                                            x
+                                        );
+                                        maxY = Math.max(
+                                            maxY,
+                                            y
+                                        );
+                                    }
+                                }
+                            }
+
+                            if (
+                                maxX < minX ||
+                                maxY < minY
+                            ) {
+                                reject(
+                                    new Error(
+                                        "영화관 로고 영역을 찾지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            context.putImageData(
+                                imageData,
+                                0,
+                                0
+                            );
+
+                            const padding = Math.max(
+                                2,
+                                Math.round(
+                                    Math.max(
+                                        maxX - minX + 1,
+                                        maxY - minY + 1
+                                    ) * 0.04
+                                )
+                            );
+                            const cropX = Math.max(
+                                0,
+                                minX - padding
+                            );
+                            const cropY = Math.max(
+                                0,
+                                minY - padding
+                            );
+                            const cropRight = Math.min(
+                                sourceWidth - 1,
+                                maxX + padding
+                            );
+                            const cropBottom = Math.min(
+                                sourceHeight - 1,
+                                maxY + padding
+                            );
+                            const cropWidth =
+                                cropRight - cropX + 1;
+                            const cropHeight =
+                                cropBottom - cropY + 1;
+                            const cropSize = Math.max(
+                                cropWidth,
+                                cropHeight
+                            );
+
+                            const cropCanvas =
+                                document.createElement("canvas");
+                            cropCanvas.width = cropSize;
+                            cropCanvas.height = cropSize;
+
+                            const cropContext =
+                                cropCanvas.getContext("2d");
+
+                            if (!cropContext) {
+                                reject(
+                                    new Error(
+                                        "영화관 로고를 잘라내지 못했습니다."
+                                    )
+                                );
+                                return;
+                            }
+
+                            cropContext.drawImage(
+                                canvas,
+                                cropX,
+                                cropY,
+                                cropWidth,
+                                cropHeight,
+                                (cropSize - cropWidth) / 2,
+                                (cropSize - cropHeight) / 2,
+                                cropWidth,
+                                cropHeight
+                            );
+
+                            resolve(
+                                cropCanvas.toDataURL(
+                                    "image/png"
+                                )
+                            );
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+
+                    image.onerror = () =>
+                        reject(
+                            new Error(
+                                "영화관 로고 이미지를 불러오지 못했습니다."
+                            )
+                        );
+
+                    image.src = getTheaterLogoUrl(
+                        brand
+                    );
+                }
+            );
+
+            theaterLogoDataCacheRef.current.set(
+                brand,
+                promise
+            );
+
+            return promise;
+        }
+
+        async function getTheaterMarkerImage(
+            brand,
+            selected,
+            markerSize
+        ) {
+            const cacheKey =
+                brand +
+                ":" +
+                (selected ? "selected" : "normal") +
+                ":" +
+                markerSize;
+
+            const cached =
+                theaterMarkerImageCacheRef.current.get(
+                    cacheKey
+                );
+
+            if (cached) {
+                return cached;
+            }
+
+            const logoDataUrl =
+                await loadTheaterLogoData(
+                    brand
+                );
+
+            const canvas =
+                document.createElement("canvas");
+            const pixelSize =
+                Math.round(markerSize * 2);
+            canvas.width = pixelSize;
+            canvas.height = pixelSize;
+
+            const context =
+                canvas.getContext("2d");
+
+            if (!context) {
+                throw new Error(
+                    "영화관 마커를 생성하지 못했습니다."
+                );
+            }
+
+            const center =
+                pixelSize / 2;
+            const radius =
+                pixelSize / 2 - 3;
+            const borderWidth =
+                selected ? 6 : 5;
+
+            context.clearRect(
+                0,
+                0,
+                pixelSize,
+                pixelSize
+            );
+
+            context.beginPath();
+            context.arc(
+                center,
+                center,
+                radius,
+                0,
+                Math.PI * 2
+            );
+            context.fillStyle = "#fff";
+            context.fill();
+            context.lineWidth = borderWidth;
+            context.strokeStyle = selected
+                ? "#ffc426"
+                : "#111";
+            context.stroke();
+
+            context.save();
+            context.beginPath();
+            context.arc(
+                center,
+                center,
+                radius - borderWidth / 2,
+                0,
+                Math.PI * 2
+            );
+            context.clip();
+
+            const logoImage =
+                await new Promise(
+                    (resolve, reject) => {
+                        const image = new Image();
+                        image.onload = () =>
+                            resolve(image);
+                        image.onerror = () =>
+                            reject(
+                                new Error(
+                                    "가공된 영화관 로고를 불러오지 못했습니다."
+                                )
+                            );
+                        image.src = logoDataUrl;
+                    }
+                );
+
+            // 가공된 PNG는 실제 로고 영역만 남겨진 정사각형 이미지이므로
+            // 마커 안쪽을 최대한 채우도록 배치합니다.
+            // 검정색 작업용 원/회색 배경은 loadTheaterLogoData()에서 제거됩니다.
+            const innerSize =
+                pixelSize - borderWidth * 2;
+            const logoSize =
+                innerSize * 1.35;
+
+            context.drawImage(
+                logoImage,
+                center - logoSize / 2,
+                center - logoSize / 2,
+                logoSize,
+                logoSize
+            );
+            context.restore();
+
+            const dataUrl =
+                canvas.toDataURL("image/png");
+
+            const markerImage =
+                new window.kakao.maps.MarkerImage(
+                    dataUrl,
+                    new window.kakao.maps.Size(
+                        markerSize,
+                        markerSize
+                    ),
+                    {
+                        offset: new window.kakao.maps.Point(
+                            markerSize / 2,
+                            markerSize / 2
+                        ),
+                    }
+                );
+
+            theaterMarkerImageCacheRef.current.set(
+                cacheKey,
+                markerImage
+            );
+
+            return markerImage;
+        }
+
+        function renderTheaterMarkers(
+            theaterList
+        ) {
             if (
-                theater.latitude == null ||
-                theater.longitude == null
+                !mapInstanceRef.current ||
+                !window.kakao?.maps
             ) {
                 return;
             }
 
-            const position =
-                new window.kakao.maps.LatLng(
-                    Number(theater.latitude),
-                    Number(theater.longitude)
-                );
+            theaterMarkersRef.current.forEach((marker) =>
+                marker.setMap(null)
+            );
+            theaterOverlaysRef.current.forEach((overlay) =>
+                overlay.setMap(null)
+            );
 
-            const selected =
-                selectedTheaters.includes(
-                    Number(theater.theaterId)
-                );
+            theaterMarkersRef.current = [];
+            theaterOverlaysRef.current = [];
 
-            const brand =
-                getTheaterBrand(theater);
-            const markerSize =
-                selected ? 46 : 42;
+            theaterList.forEach((theater) => {
+                if (
+                    theater.latitude == null ||
+                    theater.longitude == null
+                ) {
+                    return;
+                }
 
-            // 실제 로고가 준비되기 전에도 동일한 크기의 투명 MarkerImage를 사용해
-            // 마우스 이벤트 영역을 유지합니다. 로고가 준비되면 MarkerImage만 교체합니다.
-            const marker =
-                new window.kakao.maps.Marker({
-                    map: mapInstanceRef.current,
-                    position,
-                    image: createTransparentMarkerImage(
-                        markerSize
-                    ),
-                    title: theater.name,
-                    zIndex: selected ? 31 : 21,
-                });
+                const position =
+                    new window.kakao.maps.LatLng(
+                        Number(theater.latitude),
+                        Number(theater.longitude)
+                    );
 
-            getTheaterMarkerImage(
-                brand,
-                selected,
-                markerSize
-            )
-                .then((markerImage) => {
-                    if (marker.getMap()) {
-                        marker.setImage(
-                            markerImage
-                        );
-                    }
-                })
-                .catch(() => {
-                    // 로고 생성에 실패해도 지도와 영화관 위치 표시에는 영향을 주지 않습니다.
-                });
+                const selected =
+                    selectedTheaters.includes(
+                        Number(theater.theaterId)
+                    );
 
-            const distanceText =
-                theater.distance != null
-                    ? theater.distance >= 1000
-                        ? `${(theater.distance / 1000).toFixed(1)}km`
-                        : `${theater.distance}m`
-                    : "";
+                const brand =
+                    getTheaterBrand(theater);
+                const markerSize =
+                    selected ? 46 : 42;
 
-            const createOverlayContent = (below = false) => {
-                const element =
-                    document.createElement("div");
+                // 실제 로고가 준비되기 전에도 동일한 크기의 투명 MarkerImage를 사용해
+                // 마우스 이벤트 영역을 유지합니다. 로고가 준비되면 MarkerImage만 교체합니다.
+                const marker =
+                    new window.kakao.maps.Marker({
+                        map: mapInstanceRef.current,
+                        position,
+                        image: createTransparentMarkerImage(
+                            markerSize
+                        ),
+                        title: theater.name,
+                        zIndex: selected ? 31 : 21,
+                    });
 
-                element.className =
-                    below
-                        ? "map-theater-info below"
-                        : "map-theater-info";
+                getTheaterMarkerImage(
+                    brand,
+                    selected,
+                    markerSize
+                )
+                    .then((markerImage) => {
+                        if (marker.getMap()) {
+                            marker.setImage(
+                                markerImage
+                            );
+                        }
+                    })
+                    .catch(() => {
+                        // 로고 생성에 실패해도 지도와 영화관 위치 표시에는 영향을 주지 않습니다.
+                    });
 
-                const nameElement =
-                    document.createElement("strong");
+                const distanceText =
+                    theater.distance != null
+                        ? theater.distance >= 1000
+                            ? `${(theater.distance / 1000).toFixed(1)}km`
+                            : `${theater.distance}m`
+                        : "";
 
-                nameElement.textContent =
-                    theater.name;
+                const createOverlayContent = (below = false) => {
+                    const element =
+                        document.createElement("div");
 
-                element.appendChild(
-                    nameElement
-                );
+                    element.className =
+                        below
+                            ? "map-theater-info below"
+                            : "map-theater-info";
 
-                if (distanceText) {
-                    const distanceElement =
-                        document.createElement("span");
+                    const nameElement =
+                        document.createElement("strong");
 
-                    distanceElement.textContent =
-                        distanceText;
+                    nameElement.textContent =
+                        theater.name;
 
                     element.appendChild(
-                        distanceElement
-                    );
-                }
-
-                return element;
-            };
-
-            const overlay =
-                new window.kakao.maps.CustomOverlay({
-                    position,
-                    content:
-                        createOverlayContent(),
-                    yAnchor: 1,
-                    zIndex: 40,
-                });
-
-            const belowOverlay =
-                new window.kakao.maps.CustomOverlay({
-                    position,
-                    content:
-                        createOverlayContent(true),
-                    yAnchor: 0,
-                    zIndex: 40,
-                });
-
-            let hideTimer = null;
-
-            const clearHideTimer = () => {
-                if (hideTimer) {
-                    window.clearTimeout(
-                        hideTimer
+                        nameElement
                     );
 
-                    hideTimer = null;
-                }
-            };
+                    if (distanceText) {
+                        const distanceElement =
+                            document.createElement("span");
 
-            const scheduleHide = () => {
-                clearHideTimer();
+                        distanceElement.textContent =
+                            distanceText;
 
-                hideTimer =
-                    window.setTimeout(
-                        () => {
-                            overlay.setMap(null);
-                            belowOverlay.setMap(null);
-                            hideTimer = null;
-                        },
-                        120
-                    );
-            };
-
-            const overlayElement =
-                overlay.getContent();
-            const belowOverlayElement =
-                belowOverlay.getContent();
-
-            overlayElement.addEventListener(
-                "mouseenter",
-                clearHideTimer
-            );
-            belowOverlayElement.addEventListener(
-                "mouseenter",
-                clearHideTimer
-            );
-            overlayElement.addEventListener(
-                "mouseleave",
-                scheduleHide
-            );
-            belowOverlayElement.addEventListener(
-                "mouseleave",
-                scheduleHide
-            );
-
-            window.kakao.maps.event.addListener(
-                marker,
-                "mouseover",
-                () => {
-                    const map =
-                        mapInstanceRef.current;
-
-                    if (!map) {
-                        return;
+                        element.appendChild(
+                            distanceElement
+                        );
                     }
 
+                    return element;
+                };
+
+                const overlay =
+                    new window.kakao.maps.CustomOverlay({
+                        position,
+                        content:
+                            createOverlayContent(),
+                        yAnchor: 1,
+                        zIndex: 40,
+                    });
+
+                const belowOverlay =
+                    new window.kakao.maps.CustomOverlay({
+                        position,
+                        content:
+                            createOverlayContent(true),
+                        yAnchor: 0,
+                        zIndex: 40,
+                    });
+
+                let hideTimer = null;
+
+                const clearHideTimer = () => {
+                    if (hideTimer) {
+                        window.clearTimeout(
+                            hideTimer
+                        );
+
+                        hideTimer = null;
+                    }
+                };
+
+                const scheduleHide = () => {
                     clearHideTimer();
 
-                    const projection =
-                        map.getProjection();
-                    const point =
-                        projection.containerPointFromCoords(
-                            position
+                    hideTimer =
+                        window.setTimeout(
+                            () => {
+                                overlay.setMap(null);
+                                belowOverlay.setMap(null);
+                                hideTimer = null;
+                            },
+                            120
                         );
-                    const showBelow =
-                        point.y < 65;
+                };
 
-                    if (showBelow) {
-                        overlay.setMap(null);
-                        belowOverlay.setPosition(
-                            position
-                        );
-                        belowOverlay.setMap(map);
-                        belowOverlay.setZIndex(40);
-                    } else {
-                        belowOverlay.setMap(null);
-                        overlay.setPosition(
-                            position
-                        );
-                        overlay.setMap(map);
-                        overlay.setZIndex(40);
+                const overlayElement =
+                    overlay.getContent();
+                const belowOverlayElement =
+                    belowOverlay.getContent();
+
+                overlayElement.addEventListener(
+                    "mouseenter",
+                    clearHideTimer
+                );
+                belowOverlayElement.addEventListener(
+                    "mouseenter",
+                    clearHideTimer
+                );
+                overlayElement.addEventListener(
+                    "mouseleave",
+                    scheduleHide
+                );
+                belowOverlayElement.addEventListener(
+                    "mouseleave",
+                    scheduleHide
+                );
+
+                window.kakao.maps.event.addListener(
+                    marker,
+                    "mouseover",
+                    () => {
+                        const map =
+                            mapInstanceRef.current;
+
+                        if (!map) {
+                            return;
+                        }
+
+                        clearHideTimer();
+
+                        const projection =
+                            map.getProjection();
+                        const point =
+                            projection.containerPointFromCoords(
+                                position
+                            );
+                        const showBelow =
+                            point.y < 65;
+
+                        if (showBelow) {
+                            overlay.setMap(null);
+                            belowOverlay.setPosition(
+                                position
+                            );
+                            belowOverlay.setMap(map);
+                            belowOverlay.setZIndex(40);
+                        } else {
+                            belowOverlay.setMap(null);
+                            overlay.setPosition(
+                                position
+                            );
+                            overlay.setMap(map);
+                            overlay.setZIndex(40);
+                        }
                     }
-                }
-            );
+                );
 
-            window.kakao.maps.event.addListener(
-                marker,
-                "mouseout",
-                scheduleHide
-            );
+                window.kakao.maps.event.addListener(
+                    marker,
+                    "mouseout",
+                    scheduleHide
+                );
 
-            theaterMarkersRef.current.push(
-                marker
-            );
-            theaterOverlaysRef.current.push(
-                overlay,
-                belowOverlay
-            );
-        });
-    }
+                theaterMarkersRef.current.push(
+                    marker
+                );
+                theaterOverlaysRef.current.push(
+                    overlay,
+                    belowOverlay
+                );
+            });
+        }
+
+        renderTheaterMarkers(theaters);
+    }, [selectedTheaters, theaters]);
 
     function toggleTheater(
         theaterId
@@ -2213,8 +2189,7 @@ export default function ResidencePreference({
                 <div className="theater-list">
                     {theaters.slice(0, 12).map(
                         (
-                            theater,
-                            index
+                            theater
                         ) => {
                             const selected =
                                 selectedTheaters.includes(
@@ -2393,7 +2368,7 @@ export default function ResidencePreference({
                     </div>
 
                     <div className="preference-seat-grid">
-                        {ROWS.map((row, rowIndex) => (
+                        {ROWS.map((row) => (
                             <div className="preference-seat-row" key={row}>
                                 <div className="preference-seat-cluster side-left">
                                     {[1, 2, 3].map((number) => (

@@ -19,7 +19,13 @@ beforeEach(() => {
         maps: {
             load: vi.fn((callback) => callback()),
             LatLng: class { constructor(latitude, longitude) { this.latitude = latitude; this.longitude = longitude; } },
-            Map: vi.fn(class {}),
+            Map: vi.fn(class { addControl() {} }),
+            ZoomControl: vi.fn(class {}),
+            ControlPosition: { RIGHT: "RIGHT" },
+            event: {
+                addListener: vi.fn(),
+                removeListener: vi.fn(),
+            },
         },
     });
 });
@@ -31,7 +37,7 @@ afterEach(() => {
 });
 
 test("saved seat priorities restore immediately and remain editable", () => {
-    const { container } = render(
+    const { container, unmount } = render(
         <StrictMode>
             <ResidencePreference
                 key={user.id}
@@ -54,8 +60,8 @@ test("saved seat priorities restore immediately and remain editable", () => {
             );
 
     expect(getSelectedPositions()).toEqual([
+        "양옆 1번",
         "중앙 5번",
-        "사이드 1번",
     ]);
 
     expect(getSelectedPositions()).toHaveLength(2);
@@ -78,12 +84,19 @@ test("saved seat priorities restore immediately and remain editable", () => {
     );
 
     fireEvent.click(
-        screen.getByRole("button", {
-            name: /사이드 2번/,
-        })
+        screen.getAllByRole("button", {
+            name: /양옆 2번/,
+        })[0]
     );
 
     expect(getSelectedPositions()).toHaveLength(3);
+
+    // StrictMode re-runs effects; each drag listener must be removed by identity.
+    unmount();
+    expect(window.kakao.maps.event.addListener).toHaveBeenCalledTimes(2);
+    expect(window.kakao.maps.event.removeListener.mock.calls).toEqual(
+        window.kakao.maps.event.addListener.mock.calls
+    );
 });
 
 test("a different member starts with that member's address and preferences", () => {
@@ -112,7 +125,7 @@ test("same side number reacts on both left and right, while center zones stay in
 
     const sideOneButtons = [
         ...container.querySelectorAll(
-            '.seat-zone-button[aria-label="사이드 1번"]'
+            '.seat-zone-button[aria-label="양옆 1번"]'
         ),
     ];
     const centerFourButtons = [
