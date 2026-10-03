@@ -72,8 +72,7 @@ export default function TicketsPage() {
                 {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
-                    <div className={`${styles.ticketGroups}${expandedTicketId ? ` ${styles.hasExpandedTicket}` : ""}`}>
-                        {expandedTicketId && <div className={styles.ticketBackdrop} aria-hidden="true" />}
+                    <div className={styles.ticketGroups}>
                         {Object.entries(
                             tickets.reduce((groups, ticket) => {
                                 const dateKey = ticket.startTime
@@ -123,22 +122,7 @@ export default function TicketsPage() {
                                                     </button>
                                                 </article>
 
-                                                {expanded && (
-                                                    <div className={styles.ticketDropdown}>
-                                                        <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
-                                                        <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
-                                                        <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
-                                                        <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
-                                                        <p>QR: {ticket.qrCode}</p>
-                                                        <p>상태: {formatTicketStatus(ticket.status)}</p>
-                                                        {ticket.groupId && (
-                                                            <Link
-                                                                className={glass.button}
-                                                                to={`/booking/restore?group=${ticket.groupId}`}
-                                                            >
-                                                                예약 상세 및 전체 취소
-                                                            </Link>
-                                                        )}
+
                                                     </div>
                                                 )}
                                             </div>
@@ -150,6 +134,50 @@ export default function TicketsPage() {
                     </div>
                 )}
             </div>
+        {expandedTicketId && (() => {
+            const selectedTicket = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+            if (!selectedTicket) return null;
+
+            return (
+                <div
+                    className={styles.ticketModalBackdrop}
+                    role="presentation"
+                    onClick={() => setExpandedTicketId(null)}
+                >
+                    <section
+                        className={styles.ticketModal}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="티켓 상세"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            className={styles.ticketModalClose}
+                            aria-label="티켓 상세 닫기"
+                            onClick={() => setExpandedTicketId(null)}
+                        >
+                            ×
+                        </button>
+                        <h2>{selectedTicket.movieTitle}</h2>
+                        <p><InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} /></p>
+                        <p>{formatDate(selectedTicket.startTime)} ~ {formatDate(selectedTicket.endTime)}</p>
+                        <p>좌석: {selectedTicket.seats?.join(", ") || "-"}</p>
+                        <p>티켓 번호: <strong>{selectedTicket.ticketNumber}</strong></p>
+                        <p>QR: {selectedTicket.qrCode}</p>
+                        <p>상태: {formatTicketStatus(selectedTicket.status)}</p>
+                        {selectedTicket.groupId && (
+                            <Link
+                                className={glass.button}
+                                to={`/booking/restore?group=${selectedTicket.groupId}`}
+                            >
+                                예약 상세 및 전체 취소
+                            </Link>
+                        )}
+                    </section>
+                </div>
+            );
+        })()}
         </section>
     );
 }
