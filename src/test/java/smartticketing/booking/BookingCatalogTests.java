@@ -72,6 +72,21 @@ class BookingCatalogTests {
         assertThat(service.theaters("없는 극장", 0, 20).items()).isEmpty();
     }
 
+    @Test void brandFilterAppliesBeforePaginationAndCount() {
+        theater("CGV 지점", true);
+        var first = theater("롯데 A", true); first.setBrand(TheaterBrand.LOTTE_CINEMA);
+        var second = theater("롯데 B", true); second.setBrand(TheaterBrand.LOTTE_CINEMA);
+        var closed = theater("롯데 C", false); closed.setBrand(TheaterBrand.LOTTE_CINEMA);
+        em.flush(); em.clear();
+        var page = service.theaters("서울", 0, 1, TheaterBrand.LOTTE_CINEMA);
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.items()).extracting(i -> i.id()).containsExactly(first.getId());
+        assertThat(service.theaters("서울", 1, 1, TheaterBrand.LOTTE_CINEMA).items())
+                .extracting(i -> i.id()).containsExactly(second.getId());
+        assertThat(service.theaters("", 0, 20, TheaterBrand.MEGABOX).items()).isEmpty();
+        assertThat(service.theaters("", 0, 20).totalElements()).isEqualTo(3);
+    }
+
     @Test void inactiveAndMissingDetailsAreNotFoundAndInvalidInputIsRejected() {
         var movie = movie(77, false); var theater = theater("폐점", false);
         assertThatThrownBy(() -> service.movie(movie.getId())).isInstanceOf(ResponseStatusException.class);

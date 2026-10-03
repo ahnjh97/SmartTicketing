@@ -43,13 +43,14 @@ class AdminSecurityTests {
                 .withBean(JwtDecoder.class, () -> mock(JwtDecoder.class))
                 .withBean(AdminBookingService.class, () -> mock(AdminBookingService.class))
                 .withBean(AdminDataService.class, () -> mock(AdminDataService.class))
+                .withBean(AdminTaskService.class, () -> mock(AdminTaskService.class))
                 .withBean(ShowtimeScheduleSeedService.class, () -> mock(ShowtimeScheduleSeedService.class))
                 .withBean(ShowtimeInventoryService.class, () -> mock(ShowtimeInventoryService.class))
                 .withBean(MovieImportService.class, () -> mock(MovieImportService.class))
                 .withBean(SeoulTheaterCollectionService.class, () -> mock(SeoulTheaterCollectionService.class))
                 .run(context -> {
                     var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
-                    for (String path : new String[]{"/api/admin/data/summary", "/api/admin/data/movies", "/api/admin/data/showtimes/1/seats"}) {
+                    for (String path : new String[]{"/api/admin/data/collection-status", "/api/admin/data/task", "/api/admin/data/summary", "/api/admin/data/movies", "/api/admin/data/showtimes/1/seats"}) {
                         mvc.perform(get(path)).andExpect(status().isUnauthorized());
                         mvc.perform(get(path).with(jwt().jwt(j -> j.subject("2").claim("admin", true))))
                                 .andExpect(status().isForbidden());

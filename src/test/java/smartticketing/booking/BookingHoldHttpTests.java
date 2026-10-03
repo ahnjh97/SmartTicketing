@@ -51,7 +51,7 @@ class BookingHoldHttpTests {
     private WebApplicationContextRunner runner(TemporaryMysqlDatabase db, Clock clock, Validator validator) {
         return new WebApplicationContextRunner()
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
-                        BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, CurrentUser.class,
+                        BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, AdminMaintenanceGate.class, CurrentUser.class,
                         BookingPaymentController.class, BookingPaymentService.class, TicketController.class, TicketService.class, NotificationService.class,
                         BookingSmartController.class, BookingSmartService.class, BookingRecoveryService.class,
                         smartticketing.controller.BookingRecoveryController.class, smartticketing.controller.NotificationController.class,

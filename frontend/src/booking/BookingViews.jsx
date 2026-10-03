@@ -46,8 +46,8 @@ export function BookingConfirmation({ booking }) {
             <QueryStatus query={theaterMode ? theater : detail} />{theaterMode && <QueryStatus query={movies} />}<QueryStatus query={shows} />
             {valid && (entry !== 'THEATER_SMART' || smartReady) ? <>
                 <p><InlineDetails items={[selectedMovie?.title, date]} /></p>
-                {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endsNextDay && '익일 '}{selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
-                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만{from > until && ' (다음 날)'}</>, `총 ${party}명`]} /></p>}
+                {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
+                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만</>, `총 ${party}명`]} /></p>}
                 <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점, 결제, 대기 신청은 실행되지 않았습니다.</p>
                 {!user && <Link to="/login">로그인하고 이 선택으로 돌아오기</Link>}
             </> : (shows.loading || detail.loading || theater.loading || movies.loading) ? null
@@ -56,12 +56,16 @@ export function BookingConfirmation({ booking }) {
         </section>);
 }
 export function TheaterBooking({ booking }) {
-    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences, selectedShow, valid, smartReady, enter } = booking;
+    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, brand, selectBrand, list, theater, movies, selectedMovieExists, preferences, selectedShow, valid, smartReady, enter } = booking;
+    const brands = { CGV: 'CGV', LOTTE_CINEMA: '롯데시네마', MEGABOX: '메가박스' };
     return (<>
+            <div className={styles.brandTabs} role="tablist" aria-label="영화관 브랜드">
+                {Object.entries(brands).map(([key, label]) => <button key={key} type="button" role="tab" data-brand={key} aria-selected={brand === key} onClick={() => selectBrand(key)}>{label}</button>)}
+            </div>
             <div className={styles.theaterToolbar}>
                 <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
                     <label className={ui.srOnly} htmlFor="theater-query">극장 이름 또는 주소 검색</label>
-                    <input id="theater-query" value={search} maxLength={100} onChange={e => update({ q: e.target.value, page: 0 })} placeholder="극장명 검색" />
+                    <input id="theater-query" value={search} maxLength={100} onChange={e => update({ q: e.target.value, page: 0 })} placeholder={`${brands[brand]} 지점 검색`} />
                     <button className={ui.primary} type="submit">검색</button>
                 </form>
                 <GlassButton className={styles.mapToggle} aria-expanded={params.get('map') === '1'} onClick={() => update({ map: params.get('map') === '1' ? null : '1' })} aria-label={`지도 ${params.get('map') === '1' ? '닫기' : '열기'}`}>지도</GlassButton>
@@ -75,13 +79,13 @@ export function TheaterBooking({ booking }) {
             {params.get('map') === '1' && <BookingMap theaters={list.data?.items || []} onSelect={selectTheater} />}
             {(!theaterId || search) && <>
                 <QueryStatus query={list} empty={list.data?.items.length === 0} />
-                {!theaterId && <p className={styles.note}>검색 또는 선호 극장에서 극장을 선택해주세요.</p>}
+                {!theaterId && <p className={styles.note}>{brands[brand]} 지점을 선택해주세요. 선호 극장에서도 바로 선택할 수 있습니다.</p>}
                 <div className={styles.theaters}>{list.data?.items.map(t => <GlassButton key={t.id} aria-pressed={theaterId === String(t.id)} onClick={() => selectTheater(t.id)}><strong>{t.name}</strong><small>{t.address}</small></GlassButton>)}</div>
                 <Pagination data={list.data} page={page} onChange={value => update({ page: value })} />
             </>}
             {theaterId && <>
                 <QueryStatus query={theater} />
-                {theater.data && <div className={styles.selectedTheater}><strong>{theater.data.name}</strong><span>{theater.data.address}</span><GlassButton onClick={() => update({ theater: null, movie: null, showtime: null })}>극장 변경</GlassButton></div>}
+                {theater.data && <div className={styles.selectedTheater}><strong>{theater.data.name}</strong><span>{theater.data.address}</span><GlassButton onClick={() => update({ brand, theater: null, movie: null, showtime: null })}>극장 변경</GlassButton></div>}
                 <BookingDates booking={booking} />
                 {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
                 <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>

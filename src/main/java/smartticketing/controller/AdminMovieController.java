@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AdminMovieController {
 
     private final MovieImportService movieImportService;
+    private final smartticketing.service.AdminTaskService tasks;
 
     public AdminMovieController(
-            MovieImportService movieImportService) {
+            MovieImportService movieImportService, smartticketing.service.AdminTaskService tasks) {
         this.movieImportService = movieImportService;
+        this.tasks = tasks;
     }
 
     // 없는 영화와 메타데이터를 아직 확인하지 않은 영화만 수집/보완한다.
@@ -26,7 +28,6 @@ public class AdminMovieController {
             @RequestParam(defaultValue = "false") boolean refresh) {
 
 
-        MovieImportResult result = movieImportService.importConfiguredMovies(refresh);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(tasks.submit("영화 수집", task -> task.result(movieImportService.importConfiguredMovies(refresh))));
     }
 }

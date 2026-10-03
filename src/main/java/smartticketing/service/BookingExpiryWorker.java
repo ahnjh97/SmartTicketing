@@ -13,13 +13,17 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "booking.expiry.enabled", havingValue = "true", matchIfMissing = true)
 public class BookingExpiryWorker {
     private final BookingHoldService holds;
-    public BookingExpiryWorker(BookingHoldService holds) { this.holds = holds; }
+    private final AdminMaintenanceGate gate;
+    public BookingExpiryWorker(BookingHoldService holds, AdminMaintenanceGate gate) { this.holds = holds; this.gate = gate; }
 
     @EventListener(ApplicationReadyEvent.class)
     public void restartRecovery() { recover(); }
 
     @Scheduled(fixedDelayString = "${booking.expiry.delay-ms:10000}")
     public void recover() {
+        gate.background(this::recoverAvailable);
+    }
+    private void recoverAvailable() {
         for (Long id : holds.expiredGroupIds(100)) {
             try { holds.expire(id); }
             catch (RuntimeException failure) {

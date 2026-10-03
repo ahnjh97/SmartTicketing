@@ -32,7 +32,7 @@ export default function useBookingPage(mode) {
         }
         return next;
     }), [setParams]);
-    const selectTheater = useCallback(id => update({ theater: id, movie: null, showtime: null }), [update]);
+    const selectTheater = useCallback(id => update({ theater: id, brand: null, q: null, page: 0, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
         const refreshClock = () => setNow(Date.now());
@@ -43,10 +43,14 @@ export default function useBookingPage(mode) {
         return () => { clearInterval(timer); window.removeEventListener('resize', resize); window.removeEventListener('focus', refreshClock); document.removeEventListener('visibilitychange', refreshClock); };
     }, []);
     useEffect(() => { rememberBooking(`${theaterMode ? '/theaters' : '/movies'}?${params}`); }, [params, theaterMode]);
-    const catalogList = useCatalog(theaterMode ? 'theaters' : 'movies', { page, size: 20, ...(theaterMode ? { query: search } : { landscapeOnly: true }) });
+    const theater = useCatalog(theaterMode && theaterId ? `theaters/${theaterId}` : null);
+    const brands = ['CGV', 'LOTTE_CINEMA', 'MEGABOX'];
+    const brand = (theaterId && brands.includes(theater.data?.brand) ? theater.data.brand : null)
+        || (brands.includes(params.get('brand')) ? params.get('brand') : 'CGV');
+    const selectBrand = value => update({ brand: value, theater: null, movie: null, showtime: null, q: null, page: 0 });
+    const catalogList = useCatalog(theaterMode ? (theaterId && theater.loading ? null : 'theaters') : 'movies', { page, size: 20, ...(theaterMode ? { query: search, brand } : { landscapeOnly: true }) });
     const list = !theaterMode && catalogList.data ? { ...catalogList, data: { ...catalogList.data,
         items: catalogList.data.items.filter(movie => movie.backdropUrl?.trim()) } } : catalogList;
-    const theater = useCatalog(theaterMode && theaterId ? `theaters/${theaterId}` : null);
     const movies = useCatalog(theaterMode && theaterId && dateValid ? `theaters/${theaterId}/movies` : null, { date });
     const detail = useCatalog(!theaterMode && movieId ? `movies/${movieId}` : null);
     const selectedMovieExists = theaterMode ? movies.data?.items.some(m => String(m.movieId) === movieId) : Boolean(detail.data);
@@ -72,5 +76,5 @@ export default function useBookingPage(mode) {
             return next;
         });
     };
-    return { theaterMode, user, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, rangeValid, page, search, entry, entryValid, update, selectTheater, list, theater, movies, detail, shows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
+    return { theaterMode, user, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
 }

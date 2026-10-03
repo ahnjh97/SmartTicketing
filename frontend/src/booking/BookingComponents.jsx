@@ -23,7 +23,7 @@ export function ShowtimeCard({ show, selected, label, onClick }) {
     const Tag = onClick ? 'button' : 'div';
     return <Tag className={ui.showtime} aria-pressed={onClick ? selected : undefined} onClick={onClick}>
         <small>{show.screenName}</small>
-        <strong>{show.startTime.slice(11, 16)} → {show.endsNextDay && '익일 '}{show.endTime.slice(11, 16)}</strong>
+        <strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong>
         <small>{show.startTime.slice(0, 10)}</small>
         <InlineDetails items={[`${show.availableSeats} / ${show.totalSeats}석`, label]} />
     </Tag>;

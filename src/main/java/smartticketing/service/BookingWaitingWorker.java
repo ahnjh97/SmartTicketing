@@ -12,11 +12,15 @@ import org.springframework.stereotype.Component;
 public class BookingWaitingWorker {
     private static final Logger log = LoggerFactory.getLogger(BookingWaitingWorker.class);
     private final BookingWaitingDispatcher dispatcher;
-    public BookingWaitingWorker(BookingWaitingDispatcher dispatcher) { this.dispatcher = dispatcher; }
+    private final AdminMaintenanceGate gate;
+    public BookingWaitingWorker(BookingWaitingDispatcher dispatcher, AdminMaintenanceGate gate) { this.dispatcher = dispatcher; this.gate = gate; }
 
     @EventListener(ApplicationReadyEvent.class)
     @Scheduled(fixedDelayString="${booking.waiting.delay-ms:3000}")
     public void sweep() {
+        gate.background(this::sweepAvailable);
+    }
+    private void sweepAvailable() {
         for (var show : dispatcher.pendingShows()) {
             try { dispatcher.dispatch(show); }
             catch (RuntimeException failure) { log.warn("Waiting allocation deferred: show={}, error={}", show, failure.getClass().getSimpleName()); }

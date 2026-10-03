@@ -16,11 +16,17 @@ public class AdminDataController {
     private final ShowtimeInventoryService inventory;
     private final MovieImportService movies;
     private final SeoulTheaterCollectionService theaters;
+    private final AdminTaskService tasks;
 
     public AdminDataController(AdminDataService data, ShowtimeScheduleSeedService schedule,
-                               ShowtimeInventoryService inventory, MovieImportService movies, SeoulTheaterCollectionService theaters) {
-        this.data = data; this.schedule = schedule; this.inventory = inventory; this.movies = movies; this.theaters = theaters;
+                               ShowtimeInventoryService inventory, MovieImportService movies, SeoulTheaterCollectionService theaters, AdminTaskService tasks) {
+        this.data = data; this.schedule = schedule; this.inventory = inventory; this.movies = movies; this.theaters = theaters; this.tasks = tasks;
     }
+
+    @GetMapping("/task") public AdminTaskService.Status task(@RequestParam(required=false) String id) { return tasks.status(id); }
+
+    @GetMapping("/collection-status")
+    public List<CollectionCount> collectionStatus() { return data.collectionStatus(); }
 
     @GetMapping("/summary")
     public Map<String, Long> summary() {
@@ -30,12 +36,16 @@ public class AdminDataController {
     public Map<String, Object> browse(@RequestParam(required=false) Long theaterId, @RequestParam(required=false) Long movieId) {
         return data.browse(theaterId, movieId);
     }
+    @GetMapping("/dates")
+    public List<Map<String, Object>> dates(@RequestParam long theaterId, @RequestParam long movieId) {
+        return data.dates(theaterId, movieId);
+    }
     @GetMapping("/{kind}")
     public Map<String, Object> list(@PathVariable String kind, @RequestParam(defaultValue="") String search,
             @RequestParam(required=false) Long movieId, @RequestParam(required=false) Long theaterId,
             @RequestParam(required=false) @org.springframework.format.annotation.DateTimeFormat(iso=org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue="0") int page) {
-        return data.list(new Scope(kind, "filtered", null, search, movieId, theaterId, date), page);
+            @RequestParam(defaultValue="0") int page, @RequestParam(required=false) String movieStatus) {
+        return data.list(new Scope(kind, "filtered", null, search, movieId, theaterId, date, movieStatus), page);
     }
     @GetMapping("/showtimes/{id}/seats")
     public List<Map<String, Object>> seats(@PathVariable long id) {
@@ -46,33 +56,37 @@ public class AdminDataController {
         return data.preview(scope);
     }
     @PostMapping("/delete")
-    public Preview delete(@RequestBody DeleteRequest request) {
-        var result = data.delete(request);
-        log.info("[관리자 데이터 삭제] 종류={} 범위={} 대상={} 영향={}", request.scope().kind(), request.scope().mode(), result.targetCount(), result.counts());
-        return result;
-    }
-    @PatchMapping("/{kind}/{id}")
-    public Map<String, Boolean> edit(@PathVariable String kind, @PathVariable long id, @RequestBody Edit edit) {
-        data.edit(kind, id, edit); return Map.of("updated", true);
+    public AdminTaskService.Status delete(@RequestBody DeleteRequest request) {
+        return tasks.delete(request);
     }
     @PostMapping("/prepare-schedule")
-    public Map<String, Long> prepare() {
+    public AdminTaskService.Status prepare() {
+        return tasks.submit("시간표·좌석 보충", task -> {
         long shows = 0, screens = 0, seats = 0;
         var plan = schedule.preparePlan();
-        for (long id : schedule.findActiveTheaterIds()) {
+        var ids = schedule.findActiveTheaterIds(); int completed = 0;
+        for (long id : ids) {
+            task.progress(completed, ids.size(), "영화관 #" + id + " 시간표 생성 중");
             var r = schedule.seedTheater(id, plan); shows += r.createdShowtimes(); screens += r.createdScreens();
+            completed++;
         }
-        for (long id : inventory.pendingScreenIds()) seats += inventory.prepare(id).createdShowtimeSeats();
-        return Map.of("showtimes", shows, "screens", screens, "showtime_seats", seats);
+        var pending = inventory.pendingScreenIds(); completed = 0;
+        for (long id : pending) {
+            task.progress(completed, pending.size(), "상영관 #" + id + " 좌석 보충 중");
+            seats += inventory.prepare(id).createdShowtimeSeats(); completed++;
+        }
+        task.progress(completed, pending.size(), "좌석 보충 완료");
+        task.result(Map.of("showtimes", shows, "screens", screens, "showtime_seats", seats));
+        });
     }
 
     @PostMapping("/collect-movies")
-    public smartticketing.dto.movie.MovieImportResult collectMovies(@RequestParam(defaultValue="false") boolean refresh) {
-        return movies.importConfiguredMovies(refresh);
+    public AdminTaskService.Status collectMovies(@RequestParam(defaultValue="false") boolean refresh) {
+        return tasks.submit("영화 수집", task -> { task.progress(0, 0, "외부 영화 정보 수집 중"); task.result(movies.importConfiguredMovies(refresh)); });
     }
     @PostMapping("/collect-theaters")
-    public Map<String, Object> collectTheaters(@RequestParam(defaultValue="false") boolean refresh) {
-        return theaters.collectSeoulTheaters(refresh);
+    public AdminTaskService.Status collectTheaters(@RequestParam(defaultValue="false") boolean refresh) {
+        return tasks.submit("영화관 수집", task -> { task.progress(0, 0, "외부 영화관 정보 수집 중"); task.result(theaters.collectSeoulTheaters(refresh)); });
     }
 
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)

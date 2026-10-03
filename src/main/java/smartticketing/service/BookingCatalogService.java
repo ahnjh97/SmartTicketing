@@ -33,17 +33,22 @@ public class BookingCatalogService {
     public MovieDetail movie(Long id) { return MovieDetail.from(requireMovie(id)); }
 
     public Page<TheaterItem> theaters(String query, int page, int size) {
+        return theaters(query, page, size, null);
+    }
+
+    public Page<TheaterItem> theaters(String query, int page, int size, smartticketing.entity.enums.TheaterBrand brand) {
         int offset = offset(page, size);
         String term = query == null ? "" : query.trim();
         if (term.length() > 100) throw new IllegalArgumentException("검색어는 100자 이하여야 합니다.");
         // 와일드카드 자체를 검색할 수 있게 이스케이프한다.
         String pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
         String where = " where t.active = true and (t.name like :pattern escape '!' or t.address like :pattern escape '!')";
-        var items = em.createQuery("from Theater t" + where + " order by t.name, t.id", Theater.class)
-                .setParameter("pattern", pattern).setFirstResult(offset).setMaxResults(size)
-                .getResultList().stream().map(TheaterItem::from).toList();
-        long total = em.createQuery("select count(t) from Theater t" + where, Long.class)
-                .setParameter("pattern", pattern).getSingleResult();
+        if (brand != null) where += " and t.brand=:brand";
+        var rows = em.createQuery("from Theater t" + where + " order by t.name, t.id", Theater.class).setParameter("pattern", pattern);
+        var count = em.createQuery("select count(t) from Theater t" + where, Long.class).setParameter("pattern", pattern);
+        if (brand != null) { rows.setParameter("brand", brand); count.setParameter("brand", brand); }
+        var items = rows.setFirstResult(offset).setMaxResults(size).getResultList().stream().map(TheaterItem::from).toList();
+        long total = count.getSingleResult();
         return new Page<>(items, page, size, total);
     }
 

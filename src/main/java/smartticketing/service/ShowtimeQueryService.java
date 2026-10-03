@@ -35,7 +35,7 @@ public class ShowtimeQueryService {
                 and s.status = :status and s.startTime >= :from and s.startTime < :until
                 and s.startTime > :now order by m.id
                 """, Movie.class).setParameter("theater", theaterId).setParameter("status", ShowtimeStatus.SCHEDULED)
-                .setParameter("from", date.atStartOfDay()).setParameter("until", date.plusDays(1).atStartOfDay())
+                .setParameter("from", CinemaDay.start(date)).setParameter("until", CinemaDay.start(date.plusDays(1)))
                 .setParameter("now", now).getResultList();
         return new Items<>(movies.stream().map(m -> new MovieItem(m.getId(), m.getTitle(), m.getPosterUrl(),
                 m.getRunningTime(), m.getRating())).toList(), offset(now));
@@ -52,8 +52,8 @@ public class ShowtimeQueryService {
             throw new IllegalArgumentException("movieId 또는 theaterId가 필요합니다.");
         if (movieId != null) catalog.requireMovie(movieId);
         if (theaterId != null) catalog.requireTheater(theaterId);
-        var from = startFrom == null ? date.atStartOfDay() : date.atTime(startFrom);
-        var until = startUntil == null ? date.plusDays(1).atStartOfDay() : date.atTime(startUntil);
+        var from = startFrom == null ? CinemaDay.start(date) : CinemaDay.time(date, startFrom);
+        var until = startUntil == null ? CinemaDay.start(date.plusDays(1)) : CinemaDay.time(date, startUntil);
         if (!until.isAfter(from)) until = until.plusDays(1);
         var now = LocalDateTime.now(clock);
         String filters = (movieId == null ? "" : " and m.id = :movie")

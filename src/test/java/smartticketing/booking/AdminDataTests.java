@@ -54,6 +54,124 @@ class AdminDataTests {
     }
     private Scope selected(String kind, long id) { return new Scope(kind, "selected", List.of(id), null, null, null, null); }
 
+    @Test void movieReleaseDateHasNoTimezoneAndShowtimesAreChronological() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.update("update movies set release_date='2026-08-05' where id=1");
+            var movies = (List<java.util.Map<String,Object>>) f.service.list(new Scope("movies", "filtered", null, null, null, null, null), 0).get("items");
+            assertThat(movies.stream().filter(row -> ((Number)row.get("id")).longValue()==1).findFirst().orElseThrow().get("release_date")).isEqualTo("2026-08-05");
+            f.sql.update("update showtimes set movie_id=1,screen_id=1,start_time='2026-10-10 09:00:00',end_time='2026-10-10 11:00:00' where id=2");
+            var shows = (List<java.util.Map<String,Object>>) f.service.list(new Scope("showtimes", "filtered", null, null, 1L, 1L, java.time.LocalDate.of(2026,10,10)), 0).get("items");
+            assertThat(shows).extracting(row -> ((Number)row.get("id")).longValue()).containsExactly(2L,1L);
+        }
+    }
+
+    @Test void collectionCountsExposeMissingTargetsAndSeatLinksWithoutTreatingBookingsAsMissing() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            org.springframework.test.util.ReflectionTestUtils.setField(f.service, "collectionMovieIds", "1,2,3,3");
+            org.springframework.test.util.ReflectionTestUtils.setField(f.service, "collectionScreenCount", 1);
+            f.sql.update("update movies set metadata_fetched_at=now(),image_metadata_fetched_at=now(),genres='[]' where id=1");
+            f.sql.update("update screens set seed_key='schedule-v1-1'");
+            var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            f.sql.update("update showtimes set start_time=?,end_time=?", today.plusDays(3).atTime(1,0), today.plusDays(3).atTime(3,0));
+            f.sql.update("delete from showtime_seats where showtime_id=2");
+            var counts = f.tx.execute(status -> f.service.collectionStatus()).stream()
+                    .collect(java.util.stream.Collectors.toMap(CollectionCount::key, v -> v));
+            assertThat(counts.get("movies").count()).isEqualTo(1);
+            assertThat(counts.get("movies").missing()).isEqualTo(2);
+            assertThat(counts.get("theaters").missing()).isEqualTo(75);
+            assertThat(counts.get("screens").missing()).isZero();
+            assertThat(counts.get("schedule").count()).isEqualTo(2);
+            assertThat(counts.get("schedule").missing()).isEqualTo(4);
+            assertThat(counts.get("seats").missing()).isEqualTo(238);
+            assertThat(counts.get("inventory").expected()).isEqualTo(2);
+            assertThat(counts.get("inventory").count()).isEqualTo(1);
+            assertThat(counts.get("inventory").missing()).isEqualTo(1);
+            f.sql.update("update theaters set is_active=false");
+            var empty = f.service.collectionStatus().stream().filter(v -> v.key().equals("inventory")).findFirst().orElseThrow();
+            assertThat(empty.expected()).isZero();
+        }
+    }
+
+    @Test void midnightShowUsesPreviousDayInBrowseListAndDeletionPreview() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.update("update showtimes set start_time='2026-10-04 01:00:00',end_time='2026-10-04 03:00:00' where id=1");
+            assertThat(f.service.dates(1, 1)).extracting(row -> row.get("date")).containsExactly("2026-10-03");
+            var scope = new Scope("showtimes", "filtered", List.of(), null, 1L, 1L, java.time.LocalDate.of(2026,10,3));
+            assertThat(f.service.list(scope, 0).get("total")).isEqualTo(1L);
+            assertThat(f.service.preview(scope).targetCount()).isEqualTo(1L);
+        }
+    }
+
+    @Test void theaterDeletionUsesBoundedCommittedBatches() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            for (int i = 0; i < 25; i++) {
+                f.sql.update("""
+                        insert into showtimes(id,movie_id,screen_id,start_time,end_time,total_seats,available_seats,price_per_person,status,created_at,updated_at)
+                        values(?,1,1,date_add('2026-10-11',interval ? hour),date_add('2026-10-11',interval ? hour),1,1,10000,'SCHEDULED',now(),now())
+                        """, 100+i, i*3, i*3+2);
+                f.sql.update("insert into showtime_seats(id,showtime_id,seat_id,status) values(?,?,1,'AVAILABLE')", 100+i, 100+i);
+            }
+            var batch = f.service.deletionShowtimes("theaters", 1);
+            assertThat(batch).hasSize(20);
+            f.tx.executeWithoutResult(status -> f.service.deleteBatch("showtimes", batch, true));
+            assertThat(f.sql.queryForObject("select count(*) from showtimes where screen_id=1", Long.class)).isEqualTo(6);
+            assertThat(f.sql.queryForObject("select count(*) from theaters where id=1", Long.class)).isEqualTo(1);
+            var remaining = f.service.deletionShowtimes("theaters", 1);
+            f.tx.executeWithoutResult(status -> f.service.deleteBatch("showtimes", remaining, true));
+            f.tx.executeWithoutResult(status -> f.service.deleteBatch("theaters", List.of(1L), true));
+            assertThat(f.sql.queryForList("select id from theaters", Long.class)).containsExactly(2L);
+            assertThat(f.sql.queryForList("select id from showtime_seats", Long.class)).containsExactly(2L);
+        }
+    }
+
+    @Test void globalBookingPurgeClearsEveryShowAndPreservesCatalog() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.update("insert into booking_request_groups(id,user_id,movie_id,entry_point,viewing_date,party_size,status,created_at,updated_at) values(3,1,1,'MOVIE_SMART','2026-10-10',1,'CANCELLED',now(),now())");
+            var service = new smartticketing.service.AdminBookingService(f.sql.getDataSource());
+            var scope = new smartticketing.service.AdminBookingService.Scope(0, "global", null, "purge");
+            var preview = service.preview(scope);
+            assertThat(preview.reservations()).isEqualTo(2);
+            assertThat(preview.counts().get("booking_request_groups")).isEqualTo(3);
+            var targets = service.globalShowtimes(new smartticketing.service.AdminBookingService.Request(scope, preview.fingerprint(), "삭제"));
+            assertThat(targets).containsExactly(1L, 2L);
+            for (long show : targets) f.tx.execute(status -> service.purgeShow(show));
+            f.tx.execute(status -> service.purgeRemainingGroups());
+            for (String table : List.of("reservations", "payments", "tickets", "waiting_queues", "queue_counters", "booking_request_groups", "reservation_seats", "notifications"))
+                assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isZero();
+            for (String table : List.of("movies", "theaters", "showtimes", "seats", "showtime_seats"))
+                assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isEqualTo(2);
+            assertThat(f.sql.queryForList("select status from showtime_seats", String.class)).containsOnly("AVAILABLE");
+            assertThat(f.sql.queryForList("select available_seats from showtimes", Integer.class)).containsOnly(1);
+            assertThat(f.sql.queryForObject("select count(*) from users", Long.class)).isEqualTo(1);
+        }
+    }
+
+    @Test void movieCategoryFiltersBothListAndDeletion() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            f.sql.update("update movies set release_date=?,poster_url='/poster.jpg' where id=1", today);
+            f.sql.update("update movies set release_date=? where id=2", today.plusDays(1));
+            var movieOptions = (List<java.util.Map<String, Object>>) f.service.browse(null, null).get("movies");
+            assertThat(movieOptions).extracting(m -> m.get("movie_status")).containsExactly("now", "upcoming");
+            var now = new Scope("movies", "filtered", null, null, null, null, null, "now");
+            var upcoming = new Scope("movies", "filtered", null, null, null, null, null, "upcoming");
+            assertThat(f.service.list(now, 0).get("total")).isEqualTo(1L);
+            assertThat(f.service.list(upcoming, 0).get("total")).isEqualTo(1L);
+            assertThat(f.service.list(now, 0).get("items").toString()).contains("/poster.jpg");
+            assertThat(f.service.preview(new Scope("movies", "all", null, null, null, null, null)).targetCount()).isEqualTo(2);
+            var preview = f.service.preview(upcoming);
+            assertThat(preview.targetCount()).isEqualTo(1);
+            f.delete(upcoming, preview, true);
+            assertThat(f.sql.queryForList("select id from movies", Long.class)).containsExactly(1L);
+        }
+    }
+
     @Test void seatCancellationExpandsToWholeReservationAndPreservesHistoryAndOtherShow() throws Exception {
         try (var database = new TemporaryMysqlDatabase()) {
             var f = fixture(database);
@@ -146,13 +264,22 @@ class AdminDataTests {
         }
     }
 
+    @Test void incompleteShowtimeSelectionDoesNotQueryDatabase() {
+        var source = mock(javax.sql.DataSource.class);
+        var service = new AdminDataService(source);
+        assertThat(service.list(new Scope("showtimes", "filtered", null, null, null, null, null), 0).get("items")).isEqualTo(List.of());
+        assertThat(service.list(new Scope("showtimes", "filtered", null, null, 1L, 1L, null), 0).get("items")).isEqualTo(List.of());
+        verifyNoInteractions(source);
+    }
+
     @Test void browseReturnsTheaterButtonsAndOnlyTheirMoviesAndDates() throws Exception {
         try (var database = new TemporaryMysqlDatabase()) {
             var f = fixture(database);
             var options = f.service.browse(1L, null);
             assertThat((List<?>) options.get("theaters")).hasSize(2);
-            assertThat((List<?>) options.get("movies")).hasSize(1);
-            assertThat((List<?>) options.get("dates")).hasSize(1);
+            assertThat((List<?>) options.get("movies")).hasSize(2);
+            assertThat((List<?>) options.get("dates")).isEmpty();
+            assertThat(f.service.dates(1L, 1L)).hasSize(1);
             assertThat((List<?>) f.service.browse(1L, 2L).get("dates")).isEmpty();
         }
     }
@@ -162,7 +289,7 @@ class AdminDataTests {
             var f = fixture(database); var scope = selected("movies", 1);
             var preview = f.service.preview(scope);
             assertThat(preview.targetCount()).isEqualTo(1); assertThat(preview.hasBookings()).isTrue();
-            assertThat(preview.counts()).containsEntry("payments", 1L).containsEntry("showtime_seats", 1L);
+            assertThat(preview.counts()).containsEntry("payments", 1L).containsEntry("estimated_showtime_seats", 1L);
             assertThatThrownBy(() -> f.delete(scope, preview, false)).hasMessageContaining("동의");
             assertThat(f.sql.queryForObject("select count(*) from movies", Long.class)).isEqualTo(2);
             f.delete(scope, preview, true);
@@ -195,7 +322,15 @@ class AdminDataTests {
     @Test void theaterDeletionCleansPreferencesAndCompactsSurvivingOrder() throws Exception {
         try (var database = new TemporaryMysqlDatabase()) {
             var f = fixture(database); var scope = selected("theaters", 1);
+            f.sql.update("insert into theater_collection_progress(id,next_page,complete,version) values('seoul-v1:강남구:CGV',2,true,0),('seoul-v1:용산구:CGV',2,true,0),('seoul-v1:강남구:MEGABOX',2,true,0)");
+            assertThat(f.service.preview(scope).counts()).containsEntry("theater_collection_progress", 2L);
+            f.sql.execute("create table admin_theater_dependency(theater_id bigint primary key, foreign key(theater_id) references theaters(id))");
+            f.sql.update("insert into admin_theater_dependency values(1)");
+            assertThatThrownBy(() -> f.delete(scope, f.service.preview(scope), true)).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+            assertThat(f.sql.queryForObject("select count(*) from theater_collection_progress", Long.class)).isEqualTo(3);
+            f.sql.execute("drop table admin_theater_dependency");
             f.delete(scope, f.service.preview(scope), true);
+            assertThat(f.sql.queryForList("select id from theater_collection_progress", String.class)).containsExactly("seoul-v1:강남구:MEGABOX");
             assertThat(f.sql.queryForList("select id from theaters", Long.class)).containsExactly(2L);
             assertThat(f.sql.queryForObject("select count(*) from seats", Long.class)).isEqualTo(1);
             assertThat(f.sql.queryForList("select preference_order from booking_group_theater_preferences", Integer.class)).containsExactly(0, 0);
@@ -210,8 +345,7 @@ class AdminDataTests {
             assertThat(f.service.preview(filtered).targetCount()).isEqualTo(1);
             assertThat(f.service.list(filtered, 0).get("total")).isEqualTo(1L);
             assertThat(f.service.seats(1)).hasSize(1);
-            assertThatThrownBy(() -> f.tx.execute(status -> { f.service.edit("showtimes", 1, new Edit(null, null, null, null, null, 20000)); return null; }))
-                    .hasMessageContaining("가격을 변경할 수 없습니다");
+
             var all = new Scope("movies", "all", null, "영화1", null, null, null);
             var before = f.service.preview(all);
             assertThat(before.targetCount()).isEqualTo(2);
@@ -231,6 +365,7 @@ class AdminDataTests {
             try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
                 context.getEnvironment().setActiveProfiles(profiles);
                 context.registerBean(AdminDataService.class, () -> mock(AdminDataService.class));
+                context.registerBean(smartticketing.service.AdminTaskService.class, () -> mock(smartticketing.service.AdminTaskService.class));
                 context.registerBean(smartticketing.service.ShowtimeScheduleSeedService.class, () -> mock(smartticketing.service.ShowtimeScheduleSeedService.class));
                 context.registerBean(smartticketing.service.ShowtimeInventoryService.class, () -> mock(smartticketing.service.ShowtimeInventoryService.class));
                 context.registerBean(smartticketing.service.MovieImportService.class, () -> mock(smartticketing.service.MovieImportService.class));

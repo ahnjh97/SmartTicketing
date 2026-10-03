@@ -89,6 +89,18 @@ class TheaterCollectionTests {
         assertThat(service.collectSeoulTheaters()).containsEntry("apiCallCount", 75);
     }
 
+    @Test void normalCollectionReplaysInvalidatedBrandAndThenSkipsItAgain() {
+        server.expect(times(75), anything()).andRespond(withSuccess(EMPTY, MediaType.APPLICATION_JSON));
+        service.collectSeoulTheaters();
+        states.keySet().removeIf(key -> key.endsWith(":CGV"));
+        server.reset();
+        server.expect(times(25), request -> assertThat(URLDecoder.decode(request.getURI().getRawQuery(), StandardCharsets.UTF_8)).contains("CGV"))
+                .andRespond(withSuccess(EMPTY, MediaType.APPLICATION_JSON));
+        assertThat(service.collectSeoulTheaters()).containsEntry("apiCallCount", 25).containsEntry("skippedQueryCount", 50);
+        assertThat(service.collectSeoulTheaters()).containsEntry("apiCallCount", 0);
+        verify(writer, never()).reset(anyList());
+    }
+
     @Test void excludedFacilitiesDoNotReachWriterOrStopPagination() {
         server.expect(anything()).andRespond(withSuccess("""
                 {"meta":{"is_end":false},"documents":[

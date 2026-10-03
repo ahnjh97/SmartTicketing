@@ -87,11 +87,11 @@ public class BookingSmartService {
         var preferences = List.copyOf(group.getSeatPreferences());
         if (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART && theaters.isEmpty())
             return Search.failure("NO_THEATER_SCOPE", "저장된 선호극장이 없습니다. 선호극장을 설정한 뒤 새 요청으로 진행해주세요.");
-        var from = group.getViewingDate().atStartOfDay(); var until = from.plusDays(1);
+        var from = CinemaDay.start(group.getViewingDate()); var until = from.plusDays(1);
         boolean movie = group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART;
         if (movie) {
-            from = group.getViewingDate().atTime(group.getStartTimeFrom());
-            until = group.getViewingDate().atTime(group.getStartTimeTo());
+            from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom());
+            until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
             if (!until.isAfter(from)) until = until.plusDays(1);
         }
         var query = em.createQuery("""

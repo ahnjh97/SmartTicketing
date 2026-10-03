@@ -127,9 +127,9 @@ public class BookingWaitingService {
         }
         var choices = new ArrayList<WaitingResponse.Choice>();
         if (group.getStatus() == BookingGroupStatus.ACTIVE) {
-            var from = group.getViewingDate().atStartOfDay(); var until = from.plusDays(1);
+            var from = CinemaDay.start(group.getViewingDate()); var until = from.plusDays(1);
             if (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART) {
-                from = group.getViewingDate().atTime(group.getStartTimeFrom()); until = group.getViewingDate().atTime(group.getStartTimeTo());
+                from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom()); until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
                 if (!until.isAfter(from)) until = until.plusDays(1);
             }
             var candidates = em.createQuery("select s from Showtime s where s.movie.id=:m and s.startTime>=:from and s.startTime<:until and s.startTime>:now order by s.startTime,s.id", Showtime.class)

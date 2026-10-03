@@ -22,8 +22,9 @@ public class BookingCatalogController {
 
     @GetMapping("/theaters")
     public Page<TheaterItem> theaters(@RequestParam(defaultValue = "") String query,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return catalog.theaters(query, page, size);
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) smartticketing.entity.enums.TheaterBrand brand) {
+        return brand == null ? catalog.theaters(query, page, size) : catalog.theaters(query, page, size, brand);
     }
 
     @GetMapping("/theaters/{id}")

@@ -57,6 +57,27 @@
     padding:22px;
     margin-bottom:20px
 }
+.admin-list-heading{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.admin-movie-selector-heading{margin-bottom:10px}
+.admin-browser .admin-movie-selector-heading h3{margin:0}
+.admin-movie-tabs{margin:0}
+.admin-movie-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;margin-top:16px}
+.admin-data .admin-movie-card{position:relative;display:flex;flex-direction:column;gap:7px;min-width:0;padding:10px;border:1px solid var(--booking-border);border-radius:10px;cursor:pointer;background:var(--booking-muted-surface)}
+.admin-movie-card.is-selected{border-color:var(--booking-accent);box-shadow:inset 0 0 0 1px var(--booking-accent)}
+.admin-movie-card>input{position:absolute;top:16px;left:16px;z-index:1;accent-color:var(--booking-accent)}
+.admin-movie-poster{display:flex;align-items:center;justify-content:center;aspect-ratio:2/3;width:100%;max-width:100px;align-self:center;overflow:hidden;border-radius:6px;background:var(--booking-soft);color:var(--booking-muted);font-size:12px}
+.admin-movie-poster img{width:100%;height:100%;object-fit:cover}
+.admin-movie-card strong{font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.admin-movie-card small{font-size:11px;color:var(--booking-muted)}
+.admin-data .admin-movie-card{gap:3px;padding:8px}
+.admin-modal{position:fixed;inset:0;margin:auto;width:min(620px,calc(100vw - 32px));max-height:85dvh;overflow:auto;box-sizing:border-box;padding:22px;border:1px solid var(--booking-border);border-radius:14px;background:var(--booking-surface);color:var(--booking-ink);box-shadow:0 24px 80px #0008}
+.admin-modal::backdrop{background:#0009;backdrop-filter:blur(3px)}
+.admin-modal-wide{width:min(1050px,calc(100vw - 32px))}
+.admin-data .admin-modal-close{float:right;padding:0;width:28px;height:28px;margin:0 0 8px 12px;font-size:22px}
+.admin-modal .admin-impact{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin:12px 0}
+.admin-modal .admin-impact>div{padding:8px}
+.admin-modal .admin-actions{margin-top:12px}
+.admin-modal p{font-size:13px;margin:8px 0}
 .admin-summary{
     display:grid;
     grid-template-columns:repeat(6,minmax(0,1fr));
@@ -177,17 +198,82 @@
     font-weight:700
 }
 .admin-tabs{
-    display:flex;
-    gap:8px;
-    padding-bottom:20px;
-    border-bottom:1px solid var(--booking-border)
+    display:inline-flex;
+    max-width:100%;
+    gap:4px;
+    padding:4px;
+    border:1px solid var(--booking-border);
+    border-radius:12px;
+    background:var(--booking-surface)
 }
-.admin-tabs [aria-selected=true]{
-    background:var(--booking-accent);
-    color:var(--booking-on-accent);
-    border-color:var(--booking-accent)
+.admin-data .admin-tabs button{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-width:0;
+    padding:10px 16px;
+    border:0;
+    background:transparent;
+    color:var(--booking-muted);
+    font-weight:600
+}
+.admin-tabs svg{width:18px;height:18px;flex-shrink:0}
+.admin-data .admin-tabs button[aria-selected=true]{
+    background:var(--booking-soft);
+    color:var(--booking-accent);
+    box-shadow:0 1px 4px rgb(0 0 0 / 18%)
 }
 .admin-browser{display:grid;gap:16px;margin:20px 0}
+.admin-theater-selector{
+    min-width:0
+}
+.admin-brand-tabs{
+    display:flex;
+    width:fit-content;
+    max-width:100%;
+    padding:0 4px;
+    border-radius:10px;
+    overflow:hidden;
+    background:var(--booking-muted-surface);
+    border:1px solid var(--booking-border)
+}
+.admin-data .admin-brand-tabs button{
+    position:relative;
+    min-width:0;
+    min-height:42px;
+    padding:10px 18px;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    color:var(--booking-muted);
+    font-size:14px;
+    font-weight:700;
+    transition:background .15s,color .15s
+}
+.admin-data .admin-brand-tabs button:hover:not(:disabled){
+    background:var(--booking-soft);
+    color:var(--booking-ink)
+}
+.admin-data .admin-brand-tabs button[aria-selected=true]{
+    background:var(--booking-surface);
+    color:var(--booking-ink)
+}
+.admin-brand-tabs button::after{
+    content:'';
+    position:absolute;
+    inset:auto 14px 0;
+    height:4px;
+    border-radius:4px 4px 0 0;
+    background:transparent
+}
+.admin-brand-tabs [data-brand=CGV]{--admin-brand-color:#ef6568}
+.admin-brand-tabs [data-brand=LOTTE_CINEMA]{--admin-brand-color:#efb75f}
+.admin-brand-tabs [data-brand=MEGABOX]{--admin-brand-color:#b49aff}
+.admin-brand-tabs button[aria-selected=true]::after{background:var(--admin-brand-color)}
+.admin-data .admin-brand-tabs button:focus-visible{outline-offset:-4px}
+.admin-branch-panel{padding:14px 0 0}
+.admin-data .admin-branch-label{margin:0 0 10px;font-size:12px;font-weight:600}
 .admin-browser h3{font-size:13px;margin:0 0 8px;color:var(--booking-muted)}
 .admin-choice-list{display:flex;flex-wrap:wrap;gap:8px;max-height:180px;overflow-y:auto;padding:3px}
 .admin-choice-list button[aria-pressed=true]{background:var(--booking-accent);color:var(--booking-on-accent);border-color:var(--booking-accent)}
@@ -265,7 +351,8 @@
     border-color:#744239
 }
 .admin-delete-preview{
-    border-color:#a55649
+    border-color:#a55649;
+    scroll-margin-top:100px
 }
 .admin-impact{
     display:grid;
@@ -419,6 +506,9 @@
     }
 }
 @media(max-width:480px){
+    .admin-data .admin-tabs button{padding:9px;gap:5px;font-size:12px}
+    .admin-tabs svg{width:16px;height:16px}
+    .admin-data .admin-brand-tabs button{padding:10px 12px;font-size:12px}
     .admin-summary{
         grid-template-columns:repeat(2,minmax(0,1fr))
     }
@@ -435,3 +525,21 @@
         gap:10px
     }
 }
+
+.admin-collection-status{margin:0 0 20px}
+.admin-status-heading{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.admin-status-heading h2{margin:0;font-size:14px}
+.admin-status-heading>span{font-size:12px;color:var(--booking-muted)}
+.admin-status-heading button{margin-left:auto;padding:5px 9px;font-size:12px}
+.admin-status-counts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.admin-status-count{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--booking-border);border-radius:8px;background:var(--booking-soft);font-size:12px;color:var(--booking-muted)}
+.admin-status-count strong{font-size:16px;color:var(--booking-ink);font-variant-numeric:tabular-nums}
+.admin-status-count strong small{font-size:11px;font-weight:400;color:var(--booking-muted)}
+.admin-status-count .admin-status-missing{color:#df8149;font-weight:600}
+@media(max-width:1000px){.admin-status-counts{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:540px){.admin-status-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Disabled buttons keep native click protection; their wrapper receives hover/focus. */
+.admin-tooltip:has(> button:disabled){cursor:not-allowed}
+.admin-tooltip>button:disabled{pointer-events:none}
+.admin-status-heading>.admin-tooltip{margin-left:auto}

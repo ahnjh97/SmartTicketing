@@ -15,9 +15,13 @@ export function validRange(from, until) {
     const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
     return (!from && !until) || (time.test(from) && time.test(until) && from !== until);
 }
+export function cinemaTime(date, time) {
+    const timestamp = new Date(`${date}T${time}:00+09:00`).getTime();
+    return timestamp + (time < '04:00' ? 86400000 : 0);
+}
 export function futureRange(date, from, until, now = Date.now()) {
     return Boolean(halfHour(from) && halfHour(until) && validRange(from, until)
-        && new Date(`${date}T${from}:00+09:00`).getTime() > now);
+        && cinemaTime(date, from) > now);
 }
 export function availability(show, party) {
     if (!show.layoutComplete) return '배치 미확인';

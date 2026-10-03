@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { cinemaTime } from './state.js';
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './TimeRangeMenu.module.css';
 
@@ -16,10 +17,13 @@ export default function TimeRangeMenu({ date, now, from, until, update }) {
     const panel = useRef(null);
     useEffect(() => { if (open) panel.current?.focus(); }, [open]);
     const start = /^(?:[01]\d|2[0-3]):(00|30)$/.test(from) ? Number(from.slice(0, 2)) * 60 + Number(from.slice(3)) : null;
-    const startValid = start !== null && Date.parse(date + 'T' + from + ':00+09:00') > now;
+    const startValid = start !== null && cinemaTime(date, from) > now;
+    const orderedSlots = slots.map(s => ({ ...s, day: s.time < '04:00' ? 1 : 0 }))
+        .sort((a, b) => (a.minute + a.day * 1440) - (b.minute + b.day * 1440));
     const options = open === 'until'
-        ? startValid ? [0, 1].flatMap(day => slots.filter(s => s.minute + day * 1440 > start && s.minute + day * 1440 < start + 1440).map(s => ({ ...s, day }))) : []
-        : slots.filter(s => Date.parse(date + 'T' + s.time + ':00+09:00') > now).map(s => ({ ...s, day: 0 }));
+        ? startValid ? [...orderedSlots, { minute: 240, time: '04:00', period: 0, day: 1 }]
+            .filter(s => s.time !== from && Date.parse(date + 'T' + s.time + ':00+09:00') + s.day * 86400000 > cinemaTime(date, from)) : []
+        : orderedSlots.filter(s => cinemaTime(date, s.time) > now);
     const groups = [...new Set(options.map(s => s.day + ':' + s.period))];
     const current = groups.includes(view) ? view : groups[0];
     function close() { setOpen(null); (open === 'from' ? startButton : endButton).current?.focus(); }
@@ -27,7 +31,7 @@ export default function TimeRangeMenu({ date, now, from, until, update }) {
         setOpen(open === field ? null : field);
         const value = field === 'from' ? from : until;
         const minute = /^(?:[01]\d|2[0-3]):(00|30)$/.test(value) ? Number(value.slice(0, 2)) * 60 + Number(value.slice(3)) : null;
-        setView(minute === null ? null : (field === 'until' && until < from ? 1 : 0) + ':' + Math.floor(minute / 360));
+        setView(minute === null ? null : (value < '04:00' ? 1 : 0) + ':' + Math.floor(minute / 360));
     }
     function choose(slot) {
         if (open === 'from') {
@@ -42,7 +46,7 @@ export default function TimeRangeMenu({ date, now, from, until, update }) {
             </GlassButton>
             <span aria-hidden="true">~</span>
             <GlassButton ref={endButton} aria-label="종료시간 선택" disabled={!startValid} aria-expanded={open === 'until'} aria-controls={id} onClick={() => toggle('until')}>
-                <small>종료</small><strong>{until ? (until < from ? '익일 ' : '') + until : '시간 선택'}</strong><span aria-hidden="true">⌄</span>
+                <small>종료</small><strong>{until || '시간 선택'}</strong><span aria-hidden="true">⌄</span>
             </GlassButton>
         </div>
         {open && <section ref={panel} tabIndex={-1} id={id} className={styles.panel} aria-label={open === 'from' ? '시작시간 후보' : '종료시간 후보'}>
@@ -51,11 +55,10 @@ export default function TimeRangeMenu({ date, now, from, until, update }) {
             {[0, 1].map(day => {
                 const dayGroups = groups.filter(g => g.startsWith(day + ':'));
                 return dayGroups.length > 0 && <div className={styles.groups} key={day} aria-label={day ? '다음 날 시간대' : '선택 날짜 시간대'}>
-                    {open === 'until' && <small>{day ? '다음 날' : '선택 날짜'}</small>}
-                    {dayGroups.map(g => <button key={g} type="button" aria-pressed={g === current} onClick={() => setView(g)}>{day ? '익일 ' : ''}{periods[Number(g.split(':')[1])]}</button>)}
+                    {dayGroups.map(g => <button key={g} type="button" aria-pressed={g === current} onClick={() => setView(g)}>{periods[Number(g.split(':')[1])]}</button>)}
                 </div>;
             })}
-            <div className={styles.slots}>{options.filter(s => s.day + ':' + s.period === current).map(s => <button type="button" key={s.day + ':' + s.time} aria-pressed={(open === 'from' ? from : until) === s.time} onClick={() => choose(s)}>{s.day ? '익일 ' : ''}{s.time}</button>)}</div>
+            <div className={styles.slots}>{options.filter(s => s.day + ':' + s.period === current).map(s => <button type="button" key={s.day + ':' + s.time} aria-pressed={(open === 'from' ? from : until) === s.time} onClick={() => choose(s)}>{s.time}</button>)}</div>
             {!options.length && <p role="status">선택 가능한 시간이 없습니다. 날짜 또는 시작 시간을 다시 선택해주세요.</p>}
         </section>}
         {(from || until) && <button className={styles.reset} type="button" onClick={() => { update({ from: null, until: null }); setOpen(null); startButton.current?.focus(); }}>시간 초기화</button>}

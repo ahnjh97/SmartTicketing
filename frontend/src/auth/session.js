@@ -35,6 +35,7 @@ export function expireSession(requestToken) {
 export function needsPreferenceSetup(user) {
     return Boolean(
         user
+        && user.admin !== true
         && (
             !user.birthDate
             || !user.address?.trim()

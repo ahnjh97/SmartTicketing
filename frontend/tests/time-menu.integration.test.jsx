@@ -26,8 +26,8 @@ test('closed control is compact; only future half-hour choices appear and end fo
 test('night range explicitly chooses next-day slots and never permits an equal bound', () => {
     render(<Example initial={{ from: '23:30' }} />);
     fireEvent.click(screen.getByRole('button', { name: '종료시간 선택' }));
-    expect(screen.queryByRole('button', { name: '익일 23:30', exact: true })).toBe(null);
-    fireEvent.click(screen.getByRole('button', { name: '익일 00:30', exact: true }));
+    expect(screen.queryByRole('button', { name: '23:30', exact: true })).toBe(null);
+    fireEvent.click(screen.getByRole('button', { name: '00:30', exact: true }));
     expect(screen.getByRole('status').textContent).toContain('"until":"00:30"');
     fireEvent.click(screen.getByRole('button', { name: '시간 초기화' }));
     expect(screen.getByRole('button', { name: '종료시간 선택' }).disabled).toBe(true);
@@ -35,15 +35,18 @@ test('night range explicitly chooses next-day slots and never permits an equal b
 test('tomorrow offers midnight; escape closes without committing a range', () => {
     render(<Example date="2026-10-02" />);
     fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
-    expect(screen.getByRole('button', { name: '00:00', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '04:00', exact: true })).toBeTruthy();
     const panel = screen.getByRole('region', { name: '시작시간 후보' });
-    expect(within(panel).getAllByRole('button').filter(b => /^\d\d:\d\d$/.test(b.textContent))).toHaveLength(12);
+    expect(within(panel).getAllByRole('button').filter(b => /^\d\d:\d\d$/.test(b.textContent))).toHaveLength(4);
     fireEvent.keyDown(panel, { key: 'Escape' });
     expect(screen.queryByRole('region')).toBe(null);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '시작시간 선택' }));
 });
-test('after the last half-hour today there are no selectable slots', () => {
+test('after midnight remains selectable as the previous nights schedule', () => {
     render(<Example now={Date.parse('2026-10-01T23:45:00+09:00')} />);
     fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
-    expect(screen.getByText(/선택 가능한 시간이 없습니다/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '00:30', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: '01:30', exact: true }));
+    expect(screen.getByRole('status').textContent).toContain('"from":"00:30"');
+    expect(screen.getByRole('status').textContent).toContain('"until":"01:30"');
 });

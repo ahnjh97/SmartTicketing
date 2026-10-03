@@ -94,7 +94,11 @@ public class SeoulTheaterCollectionService {
         return result;
     }
 
-    private String key(String district, TheaterBrand brand) { return "seoul-v1:" + district + ":" + brand; }
+    static List<String> collectionKeys() {
+        return SEOUL_DISTRICTS.stream().flatMap(d -> Arrays.stream(TheaterBrand.values()).map(b -> key(d, b))).toList();
+    }
+
+    private static String key(String district, TheaterBrand brand) { return "seoul-v1:" + district + ":" + brand; }
 
     private SearchPage search(String query, TheaterBrand brand, String district, int page) {
         Map<String, Object> response = restClient.get()

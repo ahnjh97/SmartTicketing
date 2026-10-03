@@ -69,7 +69,7 @@ export default function SmartBooking({ booking }) {
                 <section className={styles.selection} aria-label="스마트예매 조건">
                     <div className={styles.movie}><span>{movieMode ? '영화별 스마트예매' : '극장별 스마트예매'}</span><h3>{booking.selectedMovie?.title || '선택한 영화'}</h3>
                         <p><InlineDetails items={[flow.group?.viewingDate || booking.date, ...(movieMode
-                            ? [`${booking.from} 이상 ~ ${booking.until} 미만${booking.from > booking.until ? ' (익일)' : ''}`]
+                            ? [`${booking.from} 이상 ~ ${booking.until} 미만`]
                             : [booking.theater.data?.name || '선택한 극장', booking.selectedShow?.startTime.slice(11,16) || '회차 확인 중'])]} /></p></div>
                     <AudienceFields {...audience} onChange={changeAudience} disabled={flow.busy || Boolean(flow.group)}/>
                     {movieMode && party !== Number(flow.group?.partySize || booking.party) && <p className={styles.error}>선택한 총 {flow.group?.partySize || booking.party}명에 맞춰 성인과 청소년 인원을 나눠주세요.</p>}

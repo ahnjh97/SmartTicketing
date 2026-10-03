@@ -58,7 +58,7 @@ export default function ManualBooking({ booking }) {
                 <aside className={styles.summary} aria-label="선택한 예매 정보">
                     <p className={styles.eyebrow}>YOUR MOVIE</p><h3>{movie?.title}</h3><p>{movie?.rating || '등급 미확인'}</p>
                     <div className={styles.summaryDetails}><InlineDetails items={[theater.data?.name, show.screenName]} /><strong>{booking.date}</strong>
-                        <span>{show.startTime.slice(11,16)} → {show.endsNextDay && '익일 '}{show.endTime.slice(11,16)}</span></div>
+                        <span>{show.startTime.slice(11,16)} → {show.endTime.slice(11,16)}</span></div>
                     <div className={styles.chips}>{selected.length ? selected.map(id => { const seat = seats.data?.seats.find(item => item.id === id); return <span key={id}>{seat ? `${seat.row}${seat.number}` : '확인 중'}</span>; }) : <p>마음에 드는 좌석을 선택하세요</p>}</div>
                     <p><InlineDetails items={[`성인 ${audience.adultCount}명`, `청소년 ${audience.youthCount}명`]} /></p>
                     {party < 1 || party > 6 ? <p className={styles.error}>총인원을 1~6명으로 선택해주세요.</p> : null}

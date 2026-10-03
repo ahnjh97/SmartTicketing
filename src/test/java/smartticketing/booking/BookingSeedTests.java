@@ -33,13 +33,13 @@ class BookingSeedTests {
         return em.createQuery("from ShowtimeSeat where showtime.id = :id order by seat.id", ShowtimeSeat.class).setParameter("id", showtime.getId()).getResultList();
     }
 
-    @Test void generatesSevenDaysWithExactLayoutPriceAndReproducibleScenarios() {
+    @Test void generatesThreeDaysWithExactLayoutPriceAndReproducibleScenarios() {
         var result = seed(CLOCK).seed(List.of(theater.getId()));
         assertThat(result.createdScreens()).isEqualTo(3);
         assertThat(result.createdSeats()).isEqualTo(360);
-        assertThat(result.createdShowtimes()).isEqualTo(21);
-        assertThat(result.createdShowtimeSeats()).isEqualTo(2520);
-        assertThat(showtimes().stream().map(s -> s.getStartTime().toLocalDate()).distinct()).hasSize(7);
+        assertThat(result.createdShowtimes()).isEqualTo(9);
+        assertThat(result.createdShowtimeSeats()).isEqualTo(1080);
+        assertThat(showtimes().stream().map(s -> s.getStartTime().toLocalDate()).distinct()).hasSize(3);
         for (var showtime : showtimes()) {
             assertThat(showtime.getPricePerPerson()).isEqualTo(10000);
             assertThat(Duration.between(showtime.getStartTime(), showtime.getEndTime()).toMinutes()).isEqualTo(120);
@@ -86,7 +86,7 @@ class BookingSeedTests {
         var ids = showtimes().stream().map(Showtime::getId).toList();
         var later = seed(Clock.offset(CLOCK, Duration.ofDays(1))).seed(List.of(theater.getId()));
         assertThat(later.createdShowtimes()).isEqualTo(3);
-        assertThat(showtimes().stream().map(Showtime::getId)).containsAll(ids).hasSize(24);
+        assertThat(showtimes().stream().map(Showtime::getId)).containsAll(ids).hasSize(12);
     }
 
     @Test void missingRuntimeIsReportedWithoutInventedSchedules() {

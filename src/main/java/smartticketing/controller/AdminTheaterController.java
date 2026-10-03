@@ -10,11 +10,13 @@ import org.springframework.web.bind.annotation.*;
 public class AdminTheaterController {
 
     private final SeoulTheaterCollectionService collectionService;
+    private final smartticketing.service.AdminTaskService tasks;
 
     public AdminTheaterController(
-            SeoulTheaterCollectionService collectionService
+            SeoulTheaterCollectionService collectionService, smartticketing.service.AdminTaskService tasks
     ) {
         this.collectionService = collectionService;
+        this.tasks = tasks;
     }
 
     @PostMapping("/collect-seoul")
@@ -22,6 +24,6 @@ public class AdminTheaterController {
             @RequestParam(defaultValue = "false") boolean refresh
     ) {
 
-        return ResponseEntity.ok(collectionService.collectSeoulTheaters(refresh));
+        return ResponseEntity.ok(tasks.submit("영화관 수집", task -> task.result(collectionService.collectSeoulTheaters(refresh))));
     }
 }

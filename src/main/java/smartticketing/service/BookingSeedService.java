@@ -88,8 +88,8 @@ public class BookingSeedService {
                 var existing = em.createQuery("select s from Showtime s where s.screen.id = :screen and s.startTime < :end and s.endTime > :start", Showtime.class)
                         .setParameter("screen", screen.getId())
                         .setParameter("start", now.toLocalDate().atStartOfDay().minusMinutes(20))
-                        .setParameter("end", now.toLocalDate().plusDays(7).atStartOfDay().plusMinutes(20)).getResultList();
-                for (int day = 0; day < 7; day++) {
+                        .setParameter("end", now.toLocalDate().plusDays(3).atStartOfDay().plusMinutes(20)).getResultList();
+                for (int day = 0; day < 3; day++) {
                     LocalDate date = now.toLocalDate().plusDays(day);
                     LocalDateTime start = date.atTime(10, 0);
                     int offset = Math.floorMod(date.toEpochDay() + theater.getId(), movies.size());

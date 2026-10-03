@@ -31,7 +31,7 @@ export default function ReservationPanel({ flow, onRestart }) {
         <div className={styles.ticket} data-confirmed={confirmed}>
             <div className={styles.ticketHeading}><span>SMART TICKETING</span><span>{r.status}</span></div>
             <h3>{r.movieTitle}</h3><p><InlineDetails items={[r.theaterName, r.screenName]} /></p>
-            <p><InlineDetails items={[r.startTime.slice(0,10), <>{r.startTime.slice(11,16)} → {r.endTime.slice(0,10) !== r.startTime.slice(0,10) && '익일 '}{r.endTime.slice(11,16)}</>]} /></p>
+            <p><InlineDetails items={[r.startTime.slice(0,10), <>{r.startTime.slice(11,16)} → {r.endTime.slice(11,16)}</>]} /></p>
             <div className={styles.ticketSeats}><span>SEATS</span><strong>{r.seatLabels.join(', ')}</strong></div>
             <div className={styles.total}><span>{r.status === 'CANCELLED' ? '예약 금액' : '서버 확정 금액'}</span><strong>{r.totalAmount.toLocaleString('ko-KR')}<small>원</small></strong></div>
             {ticket && <p className={styles.ticketNumber}>티켓 번호 <strong>{ticket.ticketNumber}</strong></p>}

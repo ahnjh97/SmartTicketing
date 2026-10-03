@@ -39,7 +39,7 @@ public class ShowtimeScheduleSeedService {
     public ShowtimeScheduleSeedService(
             EntityManager em,
             @Value("${showtime.seed.screen-count:10}") int screenCount,
-            @Value("${showtime.seed.days:7}") int days) {
+            @Value("${showtime.seed.days:3}") int days) {
         this.em = em;
         this.screenCount = screenCount;
         this.days = days;

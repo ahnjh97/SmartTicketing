@@ -123,7 +123,7 @@ test('movie restores conditions, poster, midnight bounds and honest confirmation
     expect(screen.getByText('조회상 선택 가능')).toBeTruthy();
     expect(screen.getByLabelText('총인원').value).toBe('2');
     expect(screen.getByAltText('서울의 밤 배경')).toBeTruthy();
-    expect(screen.getByText('23:00 → 익일 01:00')).toBeTruthy();
+    expect(screen.getByText('23:00 → 01:00')).toBeTruthy();
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom=22%3A00&startUntil=02%3A00'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '스마트예매' }));
     await screen.findByRole('heading', { name: '좋은 자리는, 알아서.' });
@@ -146,9 +146,38 @@ test('late showtime response cannot overwrite a newer movie selection', async ()
     await act(async () => resolveOld(json({ items: [{ ...show, screenName: '오래된 회차' }] })));
     expect(screen.queryByText(/오래된 회차/)).toBe(null);
 });
+test('brand tabs filter branches and clear previous booking selections', async () => {
+    fetch.mockImplementation(url => {
+        if (url === '/api/theaters/71') return Promise.resolve(json({ ...theater, brand: 'LOTTE_CINEMA' }));
+        if (url.startsWith('/api/theaters?')) {
+            const brand = new URL(url, 'http://localhost').searchParams.get('brand');
+            return Promise.resolve(json({ items: [{ ...theater, name: `${brand} 지점` }], page: 0, size: 20, totalElements: 1 }));
+        }
+        return baseFetch(url);
+    });
+    mount(`/theaters?theater=71&movie=41&showtime=91&q=old&page=2&date=${seoulDate()}`);
+    await waitFor(() => expect(screen.getByRole('tab', { name: '롯데시네마' }).getAttribute('aria-selected')).toBe('true'));
+    fireEvent.click(screen.getByRole('tab', { name: '메가박스' }));
+    await screen.findByRole('button', { name: /MEGABOX 지점/ });
+    const params = new URL(screen.getByTestId('url').textContent, 'http://localhost').searchParams;
+    expect(params.get('brand')).toBe('MEGABOX');
+    expect(params.get('page')).toBe('0');
+    for (const key of ['theater', 'movie', 'showtime', 'q']) expect(params.has(key)).toBe(false);
+    expect(screen.queryByRole('button', { name: /LOTTE_CINEMA 지점/ })).toBe(null);
+});
+
+test('changing a directly opened theater retains its brand', async () => {
+    fetch.mockImplementation(url => url === '/api/theaters/71'
+        ? Promise.resolve(json({ ...theater, brand: 'MEGABOX' })) : baseFetch(url));
+    mount('/theaters?theater=71');
+    fireEvent.click(await screen.findByRole('button', { name: '극장 변경' }));
+    expect(screen.getByRole('tab', { name: '메가박스' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?') && url.includes('brand=MEGABOX'))).toBe(true));
+});
+
 test('theater entry restores IDs and row panel without collecting party', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 익일 01:00');
+    await screen.findByText('23:00 → 01:00');
     expect(screen.queryByLabelText('총인원')).toBe(null);
     expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
@@ -251,7 +280,7 @@ test('quick theater search ignores the older result even if cancellation is igno
 
 test('date change clears movie and showtime, preserves the theater and seven dates', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 익일 01:00');
+    await screen.findByText('23:00 → 01:00');
     const buttons = screen.getAllByRole('button').filter(b => /^\d{4}-\d{2}-\d{2}$/.test(b.getAttribute('aria-label') || ''));
     expect(buttons).toHaveLength(7);
     fireEvent.click(buttons[1]);
@@ -260,7 +289,7 @@ test('date change clears movie and showtime, preserves the theater and seven dat
     expect(url.searchParams.has('movie')).toBe(false);
     expect(url.searchParams.has('showtime')).toBe(false);
     expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /23:00 → 익일 01:00/, pressed: true })).toBe(null);
+    expect(screen.queryByRole('button', { name: /23:00 → 01:00/, pressed: true })).toBe(null);
     expect((await screen.findByRole('button', { name: '일반예매' })).disabled).toBe(true);
 });
 
@@ -275,11 +304,22 @@ test('OAuth callback restores the same saved booking and strips token from addre
 
 test('guest manual entry requires login and never promises newly sold-out inventory', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 익일 01:00');
+    await screen.findByText('23:00 → 01:00');
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, availableSeats: 0 }] })) : baseFetch(url));
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
     await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/);
     expect(screen.queryByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/)).toBe(null);
+});
+
+test('administrator without preference information can open theater pages directly', async () => {
+    localStorage.setItem('accessToken', 'admin-test-token');
+    fetch.mockImplementation(url => url === '/api/users/me'
+        ? Promise.resolve(json({ id: 1, nickname: '관리자', admin: true, preferredTheaters: [], preferredSeats: [] }))
+        : baseFetch(url));
+    mount('/theaters');
+    await screen.findByRole('button', { name: /서울 극장/ });
+    expect(screen.getByTestId('url').textContent).toBe('/theaters');
+    expect(screen.queryByRole('heading', { name: '선호 정보 설정' })).toBe(null);
 });
 
 test('incomplete member deep link survives required preference setup', async () => {

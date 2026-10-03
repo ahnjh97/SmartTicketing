@@ -230,14 +230,14 @@ public class BookingHoldService {
         if (!group.getMovie().getId().equals(show.getMovie().getId())) reject(400, "그룹의 영화와 회차가 다릅니다.");
         if (group.getSelectedShowtime() != null) {
             if (!group.getSelectedShowtime().getId().equals(show.getId())
-                    || !group.getViewingDate().equals(show.getStartTime().toLocalDate()))
+                    || !group.getViewingDate().equals(CinemaDay.date(show.getStartTime())))
                 reject(400, "그룹에서 선택한 회차 및 날짜와 다릅니다.");
         } else {
             if (group.getStartTimeFrom() == null || group.getStartTimeTo() == null
                     || group.getStartTimeFrom().equals(group.getStartTimeTo()))
                 reject(409, "관람 요청의 시간 범위를 확인할 수 없습니다.");
-            var from = group.getViewingDate().atTime(group.getStartTimeFrom());
-            var until = group.getViewingDate().atTime(group.getStartTimeTo());
+            var from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom());
+            var until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
             if (!until.isAfter(from)) until = until.plusDays(1);
             if (show.getStartTime().isBefore(from) || !show.getStartTime().isBefore(until))
                 reject(400, "요청 시간 범위 밖의 회차입니다.");

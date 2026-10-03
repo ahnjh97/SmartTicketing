@@ -51,6 +51,22 @@ class ShowtimeQueryTests {
                 .setParameter("key", "booking-v1-" + scenario).getResultList().getFirst();
     }
 
+    @Test void dawnShowBelongsToPreviousBookingDayAndKeepsActualTimestamp() {
+        var show = showtime("normal");
+        show.setStartTime(LocalDateTime.of(2026, 10, 4, 1, 0));
+        show.setEndTime(LocalDateTime.of(2026, 10, 4, 3, 0));
+        em.flush(); em.clear();
+        var date = LocalDate.of(2026, 10, 3);
+        assertThat(query.showtimes(movieId, theaterId, date, null, null).items())
+                .anySatisfy(item -> { assertThat(item.id()).isEqualTo(show.getId());
+                    assertThat(item.startTime().toLocalDate()).isEqualTo(date.plusDays(1)); });
+        assertThat(query.showtimes(movieId, theaterId, date.plusDays(1), null, null).items())
+                .noneMatch(item -> item.id().equals(show.getId()));
+        assertThat(query.showtimes(movieId, theaterId, date, LocalTime.MIDNIGHT, LocalTime.of(2, 0)).items())
+                .extracting(item -> item.id()).contains(show.getId());
+        assertThat(query.theaterMovies(theaterId, date).items()).extracting(item -> item.movieId()).contains(movieId);
+    }
+
     @Test void overnightRangeIncludesLowerAndExcludesUpperWithSeoulDates() {
         var first = showtime("normal"); var second = showtime("sold-out"); var excluded = showtime("fragmented");
         first.setStartTime(LocalDateTime.of(2026, 10, 1, 22, 0));
@@ -66,7 +82,7 @@ class ShowtimeQueryTests {
         assertThat(result.items().getFirst().startTime().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
         assertThat(result.items().getFirst().pricePerPerson()).isEqualTo(10000);
         assertThat(query.showtimes(null, theaterId, LocalDate.of(2026, 10, 1), null, null).items())
-                .extracting(i -> i.id()).containsExactly(first.getId());
+                .extracting(i -> i.id()).containsExactly(first.getId(), second.getId(), excluded.getId());
     }
 
     @Test void bothPagesReadSameInventoryWithConstantQueryCount() {

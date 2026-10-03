@@ -30,6 +30,17 @@ class ShowtimeScheduleSeedTests {
     }
     @AfterEach void rollback() { if (em.getTransaction().isActive()) em.getTransaction().rollback(); em.close(); }
 
+    @Test void threeDayPlanIncludesLastNightsShowsAfterMidnight() {
+        em.createQuery("update Movie set runningTime=135").executeUpdate();
+        var service = new ShowtimeScheduleSeedService(em, 10, 3);
+        var today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        assertThat(service.preparePlan().lineups().keySet()).containsExactlyInAnyOrder(today, today.plusDays(1), today.plusDays(2));
+        service.seedTheater(theaterId);
+        var starts = em.createQuery("select startTime from Showtime", LocalDateTime.class).getResultList();
+        assertThat(starts).isNotEmpty().allMatch(start -> !start.toLocalDate().isBefore(today) && start.isBefore(today.plusDays(3).atTime(4, 0)));
+        assertThat(starts.stream().map(LocalDateTime::toLocalDate).distinct()).contains(today.plusDays(1), today.plusDays(2), today.plusDays(3));
+    }
+
     @Test void batchesHundredsOfShowsAndRepeatUsesFourReadsWithoutInserts() {
         var service = new ShowtimeScheduleSeedService(em, 10, 7);
         long started = System.nanoTime();

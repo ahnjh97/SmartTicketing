@@ -14,6 +14,7 @@ test('today bounds exclude the current and past minute, tomorrow and midnight cr
     assert.equal(futureRange('2026-10-01', '15:37', '19:00', now), false);
     assert.equal(futureRange('2026-10-01', '16:00', '19:00', now), true);
     assert.equal(futureRange('2026-10-01', '23:30', '00:30', now), true);
+    assert.equal(futureRange('2026-10-01', '00:30', '02:00', now), true);
     assert.equal(futureRange('2026-10-02', '00:00', '01:00', now), true);
     assert.equal(futureRange('2026-09-30', '23:00', '22:00', now), false);
     assert.equal(futureRange('2026-10-01', '23:59', '00:00', Date.parse('2026-10-01T23:59:01+09:00')), false);
