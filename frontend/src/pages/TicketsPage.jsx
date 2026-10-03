@@ -3,8 +3,6 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import { Link } from 'react-router-dom';
 import glass from '../components/GlassButton.module.css';
-import RecoveryInbox from '../booking/RecoveryInbox.jsx';
-import useAuth from '../hooks/useAuth.js';
 import styles from './TicketsPage.module.css';
 
 function formatDate(value) {
@@ -12,7 +10,6 @@ function formatDate(value) {
 }
 
 export default function TicketsPage() {
-    const { user } = useAuth();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -37,7 +34,6 @@ export default function TicketsPage() {
     return (
         <section className={styles.page}>
             <h1>내 티켓</h1>
-            <div className={styles.panel}><RecoveryInbox key={user?.id}/></div>
             <div className={styles.panel}>
                 <h2>발급된 티켓</h2>
                 {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
