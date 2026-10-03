@@ -208,30 +208,18 @@
     aspect-ratio: 1;
     align-items: center;
     justify-content: center;
-    flex-direction: column;
     box-sizing: border-box;
     border: 1px solid #d5d5d5;
     border-radius: 2px;
-    background: #fafafa;
-    text-align: center;
-}
-
-.ticketQrPlaceholder span {
-    margin: 0;
-    color: inherit;
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: .04em;
-}
-
-.ticketQrPlaceholder small {
-    max-width: 80%;
+    background: #fff;
     overflow: hidden;
-    margin-top: 6px;
-    color: #999;
-    font-size: 8px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding: 0;
+}
+
+.ticketQrPlaceholder svg {
+    display: block;
+    width: 168px;
+    height: 168px;
 }
 
 .ticketNumber {
