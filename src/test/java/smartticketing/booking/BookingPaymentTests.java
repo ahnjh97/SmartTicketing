@@ -34,7 +34,9 @@ class BookingPaymentTests {
     static TicketService tickets(EntityManager em) {
         var repos = new JpaRepositoryFactory(em);
         return new TicketService(repos.getRepository(TicketRepository.class), repos.getRepository(ReservationRepository.class),
-                repos.getRepository(ReservationSeatRepository.class), notifications(em));
+                repos.getRepository(ReservationSeatRepository.class), notifications(em),
+                org.mockito.Mockito.mock(org.springframework.data.redis.core.StringRedisTemplate.class),
+                org.mockito.Mockito.mock(org.springframework.transaction.support.TransactionTemplate.class));
     }
     static NotificationService notifications(EntityManager em) {
         var repos = new JpaRepositoryFactory(em);

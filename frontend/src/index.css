@@ -207,6 +207,90 @@ h2 {
     color: #222222;
 }
 
+.profile-social-providers {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-social-provider {
+    min-width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+}
+
+.profile-social-provider.google {
+    width: 72px;
+    min-width: 72px;
+    height: 34px;
+    padding: 0;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.profile-social-provider.naver {
+    width: 72px;
+    min-width: 72px;
+    height: 34px;
+    padding: 0;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.profile-social-provider.kakao {
+    width: 75px;
+    min-width: 75px;
+    height: 34px;
+    background: transparent;
+    color: #222222;
+    overflow: visible;
+}
+
+.profile-social-provider .social-logo {
+    width: 19px;
+    height: 19px;
+}
+
+.profile-social-provider .social-wordmark {
+    display: block;
+    width: auto;
+    height: 24px;
+    object-fit: contain;
+}
+
+.profile-social-provider .google-logo {
+    width: auto;
+    height: 24px;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    transform: translateY(9px);
+}
+
+.profile-social-provider .naver-logo {
+    width: auto;
+    height: 24px;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none;
+    transform: translateY(8px);
+}
+
+.profile-social-provider .kakao-logo {
+    width: 75px;
+    transform: translateY(8px);
+}
+
+
+
+
 .divider {
     display: flex;
 

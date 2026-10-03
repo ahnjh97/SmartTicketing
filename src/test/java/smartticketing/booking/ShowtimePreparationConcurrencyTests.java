@@ -34,7 +34,7 @@ class ShowtimePreparationConcurrencyTests {
                         em.getTransaction().begin(); ready.countDown();
                         assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
                         try {
-                            int created = new ShowtimeScheduleSeedService(em, 1, 2).seedTheater(theaterId).createdShowtimes();
+                            int created = new ShowtimeScheduleSeedService(em, 1, 2, "").seedTheater(theaterId).createdShowtimes();
                             em.getTransaction().commit(); return created;
                         } catch (RuntimeException failure) {
                             if (em.getTransaction().isActive()) em.getTransaction().rollback();

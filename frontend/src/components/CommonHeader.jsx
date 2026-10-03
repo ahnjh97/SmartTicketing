@@ -51,6 +51,27 @@ export default function CommonHeader({
         : matchPath(`${PAGE_PATHS.theaters}/*`, pathname) ? "theaters" : null;
     const navigationDisabled = disabled || Boolean(user && setupRequired);
 
+    function renderGuestItems() {
+        return (
+            <>
+                <NavLink
+                    to={PAGE_PATHS.login}
+                    className="common-header-link common-header-signup"
+                    onClick={handleNavigation}
+                >
+                    로그인
+                </NavLink>
+                <NavLink
+                    to={PAGE_PATHS.signup}
+                    className={`common-header-link ${glass.button}`}
+                    onClick={handleNavigation}
+                >
+                    회원가입
+                </NavLink>
+            </>
+        );
+    }
+
     useEffect(() => {
         if (!user || disabled) {
             setUnreadCount(0);
@@ -339,12 +360,7 @@ export default function CommonHeader({
                         ))}
                     </nav>
                     <nav ref={accountRef} className="common-header-account" aria-label="회원 메뉴">
-                        {user ? renderAccountItems() : (
-                            <>
-                                <NavLink to={PAGE_PATHS.login} className={`common-header-link ${glass.button}`} onClick={handleNavigation}>로그인</NavLink>
-                                <NavLink to={PAGE_PATHS.signup} className="common-header-link common-header-signup" onClick={handleNavigation}>회원가입</NavLink>
-                            </>
-                        )}
+                        {user ? renderAccountItems() : renderGuestItems()}
                     </nav>
                 </div>
 
@@ -412,6 +428,13 @@ export default function CommonHeader({
                                 <strong>내 티켓</strong>
                                 <span>{tickets.length}개</span>
                             </div>
+                            <Link
+                                to={PAGE_PATHS.tickets}
+                                className="common-header-ticket-list-link"
+                                onClick={handleNavigation}
+                            >
+                                목록
+                            </Link>
                         </div>
                         <div className="common-header-popover-body">
                             {ticketLoading ? (
@@ -438,7 +461,7 @@ export default function CommonHeader({
             )}
 
             {menuOpen && <nav id="common-header-mobile-menu" className="common-header-mobile-menu" aria-label="전체 메뉴">
-                {renderAccountItems()}
+                {user ? renderAccountItems() : renderGuestItems()}
             </nav>}
         </header>
     );

@@ -12,6 +12,37 @@ export default function ProfilePage() {
     const routeNavigate = useNavigate();
     const navigate = (page) => routeNavigate(PAGE_PATHS[page]);
 
+    function renderSocialLogo(provider) {
+        const logos = {
+            google: {
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Google_2015_logo.svg",
+                alt: "Google",
+                className: "social-logo social-wordmark google-logo",
+            },
+            naver: {
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Naver_Logotype.svg",
+                alt: "NAVER",
+                className: "social-logo social-wordmark naver-logo",
+            },
+            kakao: {
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Kakao_CI_yellow.svg",
+                alt: "Kakao",
+                className: "social-logo social-wordmark kakao-logo",
+            },
+        };
+
+        const logo = logos[provider];
+        if (!logo) return null;
+
+        return (
+            <img
+                src={logo.src}
+                alt={logo.alt}
+                className={logo.className}
+            />
+        );
+    }
+
     async function logout() {
         try { await logoutSession(); }
         catch (error) { console.error("로그아웃 요청 실패", error); }
@@ -46,7 +77,22 @@ export default function ProfilePage() {
                     <div><span>생년월일</span><strong>{user.birthDate ?? "미등록"}</strong></div>
                     <div>
                         <span>로그인 연동</span>
-                        <strong>{user.linkedProviders?.length ? user.linkedProviders.join(", ") : "일반 회원"}</strong>
+                        {user.linkedProviders?.length ? (
+                            <div className="profile-social-providers" aria-label="연동된 소셜 계정">
+                                {user.linkedProviders.map((provider) => {
+                                    const normalizedProvider = String(provider).toLowerCase();
+                                    return (
+                                        <span
+                                            key={normalizedProvider}
+                                            className={"profile-social-provider " + normalizedProvider}
+                                            title={normalizedProvider.toUpperCase()}
+                                        >
+                                            {renderSocialLogo(normalizedProvider)}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        ) : <strong>일반 회원</strong>}
                     </div>
                     <div>
                         <span>선호 영화관</span>

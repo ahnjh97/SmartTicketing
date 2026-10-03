@@ -290,7 +290,7 @@ test('date change clears movie and showtime, preserves the theater and seven dat
     expect(url.searchParams.has('showtime')).toBe(false);
     expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /23:00 → 01:00/, pressed: true })).toBe(null);
-    expect((await screen.findByRole('button', { name: '일반예매' })).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: '일반예매' })).toBe(null);
 });
 
 test('OAuth callback restores the same saved booking and strips token from address', async () => {
@@ -367,3 +367,16 @@ test('movie details retain main metadata with spaced fields instead of middle do
     expect(screen.getByText('배우 이름')).toBeTruthy();
     expect(screen.getByRole('region', { name: '서울의 밤 영화 소개' }).textContent).not.toContain('·');
 });
+
+ test('theater movies follow main popularity while retaining brand selection', async () => {
+    fetch.mockImplementation(url => url.startsWith('/api/theaters/71/movies?')
+        ? Promise.resolve(json({ items: [{ ...movie, movieId: 42, title: '두 번째 영화' }, { ...movie, movieId: 41 }] })) : baseFetch(url));
+    mount('/theaters?theater=71');
+    await screen.findByRole('region', { name: '두 번째 영화 상영 시간' });
+    await waitFor(() => {
+        const rows = screen.getByRole('region', { name: '상영 회차' }).querySelectorAll('li');
+        expect(rows[0].textContent).toContain('서울의 밤');
+        expect(rows[1].textContent).toContain('두 번째 영화');
+    });
+    expect(screen.getByRole('tab', { name: 'CGV' })).toBeTruthy();
+ });

@@ -70,6 +70,7 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/login/**",
                                 "/api/main",
+                                "/api/tickets/verify/**",
                                 "/error"
                         ).permitAll()
 
@@ -125,7 +126,8 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(
                 List.of(
-                        "http://localhost:5173"
+                        "http://localhost:5173",
+                        "https://ahnjh97.github.io"
                 )
         );
 

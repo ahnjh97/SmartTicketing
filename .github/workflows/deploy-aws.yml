@@ -1,0 +1,37 @@
+name: Deploy SmartTicketing to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: aws-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/smartticketing-key.pem
+          chmod 600 ~/.ssh/smartticketing-key.pem
+          ssh-keyscan -H "$AWS_HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/smartticketing-key.pem "$AWS_USERNAME@$AWS_HOST" <<'EOF'
+            set -e
+            cd ~/SmartTicketing
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            docker compose up -d --build
+            docker image prune -f
+          EOF

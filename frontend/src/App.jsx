@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AuthProvider from "./auth/AuthProvider.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
-import EmptyPage from "./pages/EmptyPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import BookingPage from "./pages/BookingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -16,6 +15,7 @@ import OAuthCallbackPage from "./pages/OAuthCallbackPage.jsx";
 import BookingRestorePage from './pages/BookingRestorePage.jsx';
 import TicketsPage from "./pages/TicketsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
+import TicketVerifyPage from "./pages/TicketVerifyPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
 import AdminRouteGuard from "./components/AdminRouteGuard.jsx";
 import AdminDataPage from "./pages/AdminDataPage.jsx";
@@ -24,6 +24,7 @@ export default function App() {
     return (
         <AuthProvider>
             <Routes>
+                <Route path="/ticket/verify/:qrCode" element={<TicketVerifyPage />} />
                 <Route element={<AppLayout />}>
                     <Route path={PAGE_PATHS.login} element={<LoginPage />} />
                     <Route path={PAGE_PATHS.findAccount} element={<FindAccountPage />} />
