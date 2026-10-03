@@ -242,29 +242,23 @@ h2 {
     height: 19px;
 }
 
-.google-wordmark {
-    display: inline-flex;
-    align-items: center;
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: -0.4px;
-    line-height: 1;
+.profile-social-provider .social-logo {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
-.google-blue { color: #4285F4; }
-.google-red { color: #EA4335; }
-.google-yellow { color: #FBBC05; }
-.google-green { color: #34A853; }
-.naver-wordmark {
-    display: inline-flex;
-    align-items: center;
+.profile-social-provider .google-logo {
+    width: 62px;
+    height: 20px;
+}
+
+.profile-social-provider .naver-logo {
     color: #03C75A;
-    font-family: Arial, sans-serif;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: -0.7px;
-    line-height: 1;
+}
+
+.profile-social-provider .kakao-logo {
+    color: #222;
 }
 
 
