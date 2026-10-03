@@ -15,6 +15,18 @@ function formatDate(value) {
         : "-";
 }
 
+function formatTime(value) {
+    return value
+        ? new Date(value)
+            .toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+            })
+            .toLowerCase()
+        : "-";
+}
+
 function formatTicketStatus(status) {
     switch (status) {
         case "VALID":
@@ -158,35 +170,42 @@ export default function TicketsPage() {
                                 <span className={styles.ticketStatus}>{formatTicketStatus(selectedTicket.status)}</span>
                             </div>
 
-                            <div className={styles.ticketCardMovie}>
-                                <h2>{selectedTicket.movieTitle}</h2>
-                                <p><InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} /></p>
-                            </div>
+                            <div className={styles.ticketCardContent}>
+                                <div className={styles.ticketCardLeft}>
+                                    <div className={styles.ticketCardMovie}>
+                                        <span className={styles.ticketInfoLabel}>MOVIE</span>
+                                        <h2>{selectedTicket.movieTitle}</h2>
+                                    </div>
 
-                            <div className={styles.ticketCardInfo}>
-                                <div>
-                                    <span>DATE</span>
-                                    <strong>{formatDate(selectedTicket.startTime)}</strong>
+                                    <div className={styles.ticketCardInfo}>
+                                        <div>
+                                            <span>THEATER</span>
+                                            <strong>
+                                                <InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} />
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span>SEAT</span>
+                                            <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
+                                        </div>
+                                        <div>
+                                            <span>TIME</span>
+                                            <strong>
+                                                {formatTime(selectedTicket.startTime)} ~ {formatTime(selectedTicket.endTime)}
+                                            </strong>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <span>SEAT</span>
-                                    <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
-                                </div>
-                            </div>
 
-                            <div className={styles.ticketCardDivider}>
-                                <span />
-                                <span />
-                            </div>
-
-                            <div className={styles.ticketCardBottom}>
-                                <div>
-                                    <span>티켓 번호</span>
-                                    <strong>{selectedTicket.ticketNumber}</strong>
-                                </div>
-                                <div className={styles.ticketQrPlaceholder}>
-                                    <span>QR</span>
-                                    <small>{selectedTicket.qrCode}</small>
+                                <div className={styles.ticketCardRight}>
+                                    <div className={styles.ticketQrPlaceholder}>
+                                        <span>QR</span>
+                                        <small>{selectedTicket.qrCode}</small>
+                                    </div>
+                                    <div className={styles.ticketNumber}>
+                                        <span>TICKET NO.</span>
+                                        <strong>{selectedTicket.ticketNumber}</strong>
+                                    </div>
                                 </div>
                             </div>
                         </div>
