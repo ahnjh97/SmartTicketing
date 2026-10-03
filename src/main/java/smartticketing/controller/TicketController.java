@@ -1,6 +1,7 @@
 package smartticketing.controller;
 
 import smartticketing.dto.ticket.TicketResponse;
+import smartticketing.dto.ticket.TicketVerifyResponse;
 import smartticketing.service.TicketService;
 import smartticketing.util.CurrentUser;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,11 @@ public class TicketController {
     public TicketController(TicketService s, CurrentUser c) {
         service = s;
         current = c;
+    }
+
+    @PostMapping("/verify/{qrCode}")
+    public ResponseEntity<TicketVerifyResponse> verify(@PathVariable String qrCode) {
+        return ResponseEntity.ok(service.verifyAndUse(qrCode));
     }
 
     @GetMapping
