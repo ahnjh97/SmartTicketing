@@ -6,7 +6,15 @@ import glass from '../components/GlassButton.module.css';
 import styles from './TicketsPage.module.css';
 
 function formatDate(value) {
-    return value ? new Date(value).toLocaleString("ko-KR") : "-";
+    return value
+        ? new Date(value).toLocaleString("ko-KR", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+        : "-";
 }
 
 function formatDateOnly(value) {
