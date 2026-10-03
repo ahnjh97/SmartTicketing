@@ -13,28 +13,36 @@ export default function ProfilePage() {
     const navigate = (page) => routeNavigate(PAGE_PATHS[page]);
 
     function renderSocialLogo(provider) {
-        if (provider === "google") {
-            return (
-                <svg className="social-logo google-logo" viewBox="0 0 74 24" aria-label="Google">
-                    <text x="0" y="18" fontFamily="Arial, sans-serif" fontSize="18" fontWeight="600" letterSpacing="-0.5">
-                        <tspan fill="#4285F4">G</tspan><tspan fill="#EA4335">o</tspan><tspan fill="#FBBC05">o</tspan><tspan fill="#4285F4">g</tspan><tspan fill="#34A853">l</tspan><tspan fill="#EA4335">e</tspan>
-                    </text>
-                </svg>
-            );
-        }
-        if (provider === "naver") {
-            return (
-                <svg className="social-logo naver-logo" viewBox="0 0 24 24" aria-label="Naver">
-                    <path fill="currentColor" d="M4 4h5.1l5.8 8V4H20v16h-5.1L9 12v8H4V4Z"/>
-                </svg>
-            );
-        }
+        const logos = {
+            google: {
+                src: "https://upload.wikimedia.org/wikipedia/commons/e/ee/Google_2026_logo.svg",
+                alt: "Google",
+                className: "social-logo social-wordmark google-logo",
+            },
+            naver: {
+                src: "https://upload.wikimedia.org/wikipedia/commons/2/23/Naver_Logotype.svg",
+                alt: "NAVER",
+                className: "social-logo social-wordmark naver-logo",
+            },
+            kakao: {
+                src: "https://upload.wikimedia.org/wikipedia/commons/d/de/Kakao_CI_yellow.svg",
+                alt: "Kakao",
+                className: "social-logo social-wordmark kakao-logo",
+            },
+        };
+
+        const logo = logos[provider];
+        if (!logo) return null;
+
         return (
-            <svg className="social-logo kakao-logo" viewBox="0 0 24 24" aria-label="Kakao">
-                <path fill="currentColor" d="M12 4C7 4 3 7.1 3 11.1c0 2.5 1.7 4.7 4.2 5.9L6.2 20.5c-.1.3.2.5.5.3l4-2.5c.4.1.9.1 1.3.1 5 0 9-3.1 9-7.1S17 4 12 4Z"/>
-            </svg>
+            <img
+                src={logo.src}
+                alt={logo.alt}
+                className={logo.className}
+            />
         );
     }
+
     async function logout() {
         try { await logoutSession(); }
         catch (error) { console.error("로그아웃 요청 실패", error); }
