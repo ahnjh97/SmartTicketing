@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/SmartTicketing/',
   plugins: [react()],
   envDir: fileURLToPath(new URL('..', import.meta.url)),
   envPrefix: 'VITE_',
