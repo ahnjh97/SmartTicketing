@@ -271,7 +271,7 @@ h2 {
     background: transparent !important;
     border: 0;
     box-shadow: none;
-    transform: translateY(5px);
+    transform: translateY(9px);
 }
 
 .profile-social-provider .naver-logo {
@@ -280,12 +280,12 @@ h2 {
     background: transparent !important;
     border: 0;
     box-shadow: none;
-    transform: translateY(2px);
+    transform: translateY(8px);
 }
 
 .profile-social-provider .kakao-logo {
     width: 75px;
-    transform: translateY(2px);
+    transform: translateY(8px);
 }
 
 
