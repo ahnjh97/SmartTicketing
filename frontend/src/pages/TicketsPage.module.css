@@ -81,7 +81,7 @@
     position: relative;
     overflow: hidden;
     border: 1px solid #d9d9d9;
-    border-radius: 20px;
+    border-radius: 6px;
     background: #fff;
     color: #171717;
     box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
@@ -91,17 +91,31 @@
 .ticketCard::after {
     content: "";
     position: absolute;
-    top: 104px;
-    z-index: 3;
-    width: 22px;
-    height: 22px;
-    border: 1px solid var(--booking-border);
+    top: 50%;
+    z-index: 4;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d9d9d9;
     border-radius: 50%;
-    background: rgb(0 0 0 / 45%);
+    background: rgb(0 0 0 / 55%);
+    transform: translateY(-50%);
 }
+.ticketCard::before { left: -15px; }
+.ticketCard::after { right: -15px; }
 
-.ticketCard::before { left: -12px; }
-.ticketCard::after { right: -12px; }
+.ticketCardHeader {
+    position: relative;
+}
+.ticketCardHeader::after {
+    content: "ADMIT ONE  •  MOVIE TICKET";
+    position: absolute;
+    right: 26px;
+    bottom: 7px;
+    color: #b0b0b0;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: .16em;
+}
 
 .ticketCardHeader {
     display: flex;
@@ -135,7 +149,7 @@
 
 .ticketCardLeft {
     min-width: 0;
-    padding: 34px 32px;
+    padding: 38px 34px;
 }
 
 .ticketCardRight {
@@ -147,7 +161,7 @@
     flex-direction: column;
     gap: 16px;
     padding: 30px 24px;
-    border-left: 1px dashed var(--booking-border);
+    border-left: 2px dashed #cfcfcf;
 }
 
 .ticketStubLabel {
@@ -191,8 +205,8 @@
 
 .ticketCardInfo strong {
     display: block;
-    color: #fff;
-    font-size: 14px;
+    color: #171717;
+    font-size: 15px;
     line-height: 1.5;
     word-break: break-word;
 }
@@ -205,9 +219,9 @@
     justify-content: center;
     flex-direction: column;
     box-sizing: border-box;
-    border: 1px dashed var(--booking-border);
-    border-radius: 10px;
-    background: var(--booking-soft);
+    border: 1px solid #d5d5d5;
+    border-radius: 2px;
+    background: #fafafa;
     text-align: center;
 }
 
@@ -297,4 +311,39 @@
     .ticketQrPlaceholder {
         width: 110px;
     }
+}
+
+.ticketCardInfo > div {
+    position: relative;
+    padding-bottom: 16px;
+}
+.ticketCardInfo > div::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-bottom: 1px solid #eeeeee;
+}
+.ticketCardInfo > div:last-child::after {
+    display: none;
+}
+.ticketCardMovie {
+    position: relative;
+    margin-bottom: 24px;
+    padding-bottom: 22px;
+    border-bottom: 2px solid #171717;
+}
+.ticketCardMovie::after {
+    content: "SMART TICKETING";
+    position: absolute;
+    right: 0;
+    bottom: 7px;
+    color: #aaa;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: .14em;
+}
+.ticketNumber strong {
+    letter-spacing: .12em;
 }
