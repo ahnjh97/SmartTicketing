@@ -22,6 +22,11 @@ public class TicketController {
         current = c;
     }
 
+    @PostMapping("/verify/complete/{qrCode}")
+    public ResponseEntity<TicketVerifyResponse> completeVerify(@PathVariable String qrCode) {
+        return ResponseEntity.ok(service.useNow(qrCode));
+    }
+
     @PostMapping("/verify/{qrCode}")
     public ResponseEntity<TicketVerifyResponse> verify(@PathVariable String qrCode) {
         return ResponseEntity.ok(service.verifyAndUse(qrCode));
