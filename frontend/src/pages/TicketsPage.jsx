@@ -153,21 +153,54 @@ export default function TicketsPage() {
                         >
                             ×
                         </button>
-                        <h2>{selectedTicket.movieTitle}</h2>
-                        <p><InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} /></p>
-                        <p>{formatDate(selectedTicket.startTime)} ~ {formatDate(selectedTicket.endTime)}</p>
-                        <p>좌석: {selectedTicket.seats?.join(", ") || "-"}</p>
-                        <p>티켓 번호: <strong>{selectedTicket.ticketNumber}</strong></p>
-                        <p>QR: {selectedTicket.qrCode}</p>
-                        <p>상태: {formatTicketStatus(selectedTicket.status)}</p>
-                        {selectedTicket.groupId && (
-                            <Link
-                                className={glass.button}
-                                to={`/booking/restore?group=${selectedTicket.groupId}`}
-                            >
-                                예약 상세 및 전체 취소
-                            </Link>
-                        )}
+
+                        <div className={styles.ticketCard}>
+                            <div className={styles.ticketCardHeader}>
+                                <span className={styles.ticketLabel}>MOVIE TICKET</span>
+                                <span className={styles.ticketStatus}>{formatTicketStatus(selectedTicket.status)}</span>
+                            </div>
+
+                            <div className={styles.ticketCardMovie}>
+                                <h2>{selectedTicket.movieTitle}</h2>
+                                <p><InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} /></p>
+                            </div>
+
+                            <div className={styles.ticketCardInfo}>
+                                <div>
+                                    <span>DATE</span>
+                                    <strong>{formatDate(selectedTicket.startTime)}</strong>
+                                </div>
+                                <div>
+                                    <span>SEAT</span>
+                                    <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
+                                </div>
+                            </div>
+
+                            <div className={styles.ticketCardDivider}>
+                                <span />
+                                <span />
+                            </div>
+
+                            <div className={styles.ticketCardBottom}>
+                                <div>
+                                    <span>티켓 번호</span>
+                                    <strong>{selectedTicket.ticketNumber}</strong>
+                                </div>
+                                <div className={styles.ticketQrPlaceholder}>
+                                    <span>QR</span>
+                                    <small>{selectedTicket.qrCode}</small>
+                                </div>
+                            </div>
+
+                            {selectedTicket.groupId && (
+                                <Link
+                                    className={glass.button}
+                                    to={`/booking/restore?group=${selectedTicket.groupId}`}
+                                >
+                                    예약 상세 및 전체 취소
+                                </Link>
+                            )}
+                        </div>
                     </section>
                 </div>
             );
