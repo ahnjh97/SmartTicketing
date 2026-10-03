@@ -72,7 +72,8 @@ export default function TicketsPage() {
                 {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
-                    <div className={styles.ticketGroups}>
+                    <div className={`${styles.ticketGroups}${expandedTicketId ? ` ${styles.hasExpandedTicket}` : ""}`}>
+                        {expandedTicketId && <div className={styles.ticketBackdrop} aria-hidden="true" />}
                         {Object.entries(
                             tickets.reduce((groups, ticket) => {
                                 const dateKey = ticket.startTime
@@ -92,7 +93,7 @@ export default function TicketsPage() {
                                         const expanded = expandedTicketId === ticket.ticketId;
 
                                         return (
-                                            <div key={ticket.ticketId} className={styles.ticketItem}>
+                                            <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
                                                 <article
                                                     className={`${styles.ticket}${expanded ? ` ${styles.expanded}` : ""}`}
                                                 >
