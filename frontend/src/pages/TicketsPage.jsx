@@ -125,6 +125,9 @@ export default function TicketsPage() {
         }, 3000);
     };
 
+    const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? new Date(ticket.startTime).toLocaleDateString("sv-SE") : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+    const filteredTickets = selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && new Date(ticket.startTime).toLocaleDateString("sv-SE") === selectedDate);
+
     return (
         <section className={styles.page}>
             <h1>내 티켓</h1>
