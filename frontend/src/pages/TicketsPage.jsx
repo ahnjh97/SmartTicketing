@@ -142,11 +142,6 @@ export default function TicketsPage() {
         return () => window.clearInterval(timer);
     }, [verificationPhase]);
 
-    return () => {
-            mounted = false;
-        };
-    }, []);
-
     return (
         <section className={styles.page}>
             <h1>내 티켓</h1>
