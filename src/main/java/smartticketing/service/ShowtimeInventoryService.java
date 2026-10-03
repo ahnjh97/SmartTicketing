@@ -33,6 +33,54 @@ public class ShowtimeInventoryService {
                 """, Long.class).getResultList();
     }
 
+    /** 재시작 때도 누락 복구는 유지하되, 완성된 상영관의 개별 트랜잭션/잠금은 생략한다. */
+    @Transactional(readOnly = true)
+    public List<Long> pendingScreenIds() {
+        var pending = new java.util.TreeSet<Long>();
+        var layouts = new java.util.LinkedHashMap<Long, LayoutSnapshot>();
+        em.createQuery("""
+                select sc.id, s.id, s.active,
+                    case when s.seatRow = 'A' and s.seatNumber = 3
+                        and s.adjacencySegment = 'center' and s.positionInSegment = 1 then true else false end
+                from Screen sc left join Seat s on s.screen = sc
+                where sc.active = true and sc.theater.active = true and sc.seedKey like 'schedule-v1-%'
+                order by sc.id
+                """, Object[].class).getResultList().forEach(row -> {
+            var layout = layouts.computeIfAbsent((Long) row[0], ignored -> new LayoutSnapshot());
+            if (row[1] != null) {
+                layout.total++;
+                layout.legacyBoundary |= Boolean.TRUE.equals(row[3]);
+                if (Boolean.TRUE.equals(row[2])) layout.activeSeats.add((Long) row[1]);
+            }
+        });
+        var candidates = new java.util.ArrayList<java.util.Map.Entry<Long, LayoutSnapshot>>();
+        layouts.forEach((id, layout) -> {
+            if (layout.total == 0 || (layout.total == 120 && layout.legacyBoundary)) pending.add(id);
+            else if (!layout.activeSeats.isEmpty()) candidates.add(java.util.Map.entry(id, layout));
+        });
+        // 활성 좌석 ID로 (showtime_id, seat_id) 인덱스만 읽고 상영관별 첫 누락에서 멈춘다.
+        var now = LocalDateTime.now(clock);
+        var query = em.createQuery("""
+                select sh.id from Showtime sh where sh.screen.id = :screen and sh.status = :status
+                and sh.startTime > :now and
+                (select count(i) from ShowtimeSeat i where i.showtime = sh and i.seat.id in :seats) < :expected
+                """, Long.class).setParameter("status", ShowtimeStatus.SCHEDULED)
+                .setParameter("now", now).setMaxResults(1);
+        for (var candidate : candidates) {
+            var missing = query.setParameter("screen", candidate.getKey())
+                    .setParameter("seats", candidate.getValue().activeSeats)
+                    .setParameter("expected", (long) candidate.getValue().activeSeats.size()).getResultList();
+            if (!missing.isEmpty()) pending.add(candidate.getKey());
+        }
+        return List.copyOf(pending);
+    }
+
+    private static final class LayoutSnapshot {
+        int total;
+        boolean legacyBoundary;
+        final java.util.ArrayList<Long> activeSeats = new java.util.ArrayList<>();
+    }
+
     // 상영관별 트랜잭션으로 초기 수백만 좌석 연결을 작은 단위로 처리한다.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Result prepare(Long screenId) {
@@ -120,6 +168,15 @@ public class ShowtimeInventoryService {
                     show.setAvailableSeats(available);
                     updatedShows++;
                 }
+            }
+            // 엔티티/영속성 컨텍스트는 유지하면서 회차별 UPDATE의 JDBC 왕복을 묶는다.
+            var session = em.unwrap(org.hibernate.Session.class);
+            var previousBatchSize = session.getJdbcBatchSize();
+            try {
+                session.setJdbcBatchSize(100);
+                em.flush();
+            } finally {
+                session.setJdbcBatchSize(previousBatchSize);
             }
         }
         return new Result(createdSeats, createdInventory, updatedShows, updatedSeats);

@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import smartticketing.entity.Movie;
 import smartticketing.entity.Screen;
 import smartticketing.entity.Showtime;
 import smartticketing.entity.Theater;
@@ -53,17 +52,41 @@ public class ShowtimeScheduleSeedService {
 
     @Transactional
     public Result seedTheater(Long theaterId) {
+        return seedTheater(theaterId, null);
+    }
+
+    /** 실행 중에만 공유하는 편성 스냅샷. 다음 실행에서는 영화 변경을 다시 반영한다. */
+    @Transactional(readOnly = true)
+    public SchedulePlan preparePlan() {
+        List<ScheduledMovie> movies = em.createQuery("""
+                        select m.id, m.tmdbMovieId, m.releaseDate, m.runningTime from Movie m
+                        where m.active = true and m.releaseDate is not null and m.runningTime > 0
+                        """, Object[].class).getResultList().stream()
+                .map(row -> new ScheduledMovie((Long) row[0], (Long) row[1], (LocalDate) row[2], (Integer) row[3]))
+                .toList();
+        var now = LocalDateTime.now(SEOUL);
+        var lineups = new java.util.HashMap<LocalDate, List<ScheduledMovie>>();
+        for (int day = 0; day < days; day++) {
+            var date = now.toLocalDate().plusDays(day);
+            lineups.put(date, lineupOf(movies, date));
+        }
+        return new SchedulePlan(now, java.util.Map.copyOf(lineups), movies.isEmpty());
+    }
+
+    public record ScheduledMovie(Long id, Long tmdbMovieId, LocalDate releaseDate, int runningTime) {}
+    public record SchedulePlan(LocalDateTime now, java.util.Map<LocalDate, List<ScheduledMovie>> lineups, boolean noMovies) {}
+
+    @Transactional
+    public Result seedTheater(Long theaterId, SchedulePlan plan) {
         Theater theater = em.find(Theater.class, theaterId, LockModeType.PESSIMISTIC_WRITE);
         if (theater == null || !theater.isActive()) return new Result(0, 0);
 
-        List<Movie> movies = em.createQuery(
-                        "select m from Movie m where m.active = true and m.releaseDate is not null and m.runningTime > 0",
-                        Movie.class)
-                .getResultList();
-        if (movies.isEmpty()) return new Result(0, 0);
+        // 단독 호출도 극장 잠금 후 스냅샷을 읽어 동시 생성 시 기존 회차를 볼 수 있게 한다.
+        if (plan == null || !plan.now().toLocalDate().equals(LocalDate.now(SEOUL))) plan = preparePlan();
+        if (plan.noMovies()) return new Result(0, 0);
 
         LocalDateTime now = LocalDateTime.now(SEOUL);
-        LocalDate today = now.toLocalDate();
+        LocalDate today = plan.now().toLocalDate();
         int created = 0;
         int createdScreens = 0;
         var existingScreens = em.createQuery("select s from Screen s where s.theater.id = :id", Screen.class)
@@ -76,8 +99,7 @@ public class ShowtimeScheduleSeedService {
                 .setParameter("to", today.plusDays(days + 1L).atStartOfDay()).getResultList()
                 .forEach(row -> startsByScreen.computeIfAbsent((Long) row[0], ignored -> new HashSet<>())
                         .add((LocalDateTime) row[1]));
-        var lineups = new java.util.HashMap<LocalDate, List<Movie>>();
-        for (int day = 0; day < days; day++) lineups.put(today.plusDays(day), lineupOf(movies, today.plusDays(day)));
+        var lineups = plan.lineups();
         var pending = new java.util.ArrayList<NewShowtime>();
 
         for (int screenNo = 1; screenNo <= screenCount; screenNo++) {
@@ -95,19 +117,19 @@ public class ShowtimeScheduleSeedService {
 
             for (int day = 0; day < days; day++) {
                 LocalDate date = today.plusDays(day);
-                List<Movie> lineup = lineups.get(date);
+                List<ScheduledMovie> lineup = lineups.get(date);
                 if (lineup.isEmpty()) continue;
 
                 int base = Math.floorMod(theater.getKakaoPlaceId().hashCode(), lineup.size());
-                Movie movie = lineup.get((base + screenNo - 1) % lineup.size());
+                ScheduledMovie movie = lineup.get((base + screenNo - 1) % lineup.size());
 
                 LocalDateTime start = date.atTime(FIRST_START).plusMinutes(startOffset);
                 LocalDateTime lastEnd = date.plusDays(1).atTime(LAST_END);
                 for (int round = 0; round < ROUNDS; round++) {
-                    LocalDateTime end = start.plusMinutes(movie.getRunningTime() + AD_MINUTES);
+                    LocalDateTime end = start.plusMinutes(movie.runningTime() + AD_MINUTES);
                     if (end.isAfter(lastEnd)) break;   // 새벽 3시 30분 넘게 끝나면 그날 상영 종료
                     if (start.isAfter(now) && !existingStarts.contains(start)) {
-                        pending.add(new NewShowtime(screen.getId(), movie.getId(), start, end));
+                        pending.add(new NewShowtime(screen.getId(), movie.id(), start, end));
                     }
                     start = roundUpTo5(end.plusMinutes(CLEANING_MINUTES));
                 }
@@ -121,13 +143,13 @@ public class ShowtimeScheduleSeedService {
         return new Result(createdScreens, created);
     }
 
-    private List<Movie> lineupOf(List<Movie> movies, LocalDate date) {
+    private List<ScheduledMovie> lineupOf(List<ScheduledMovie> movies, LocalDate date) {
         return movies.stream()
-                .filter(m -> !m.getReleaseDate().isAfter(date))
-                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()
-                        .thenComparing(Movie::getTmdbMovieId))
+                .filter(m -> !m.releaseDate().isAfter(date))
+                .sorted(Comparator.comparing(ScheduledMovie::releaseDate).reversed()
+                        .thenComparing(ScheduledMovie::tmdbMovieId))
                 .limit(LINEUP_SIZE)
-                .sorted(Comparator.comparing(Movie::getTmdbMovieId))
+                .sorted(Comparator.comparing(ScheduledMovie::tmdbMovieId))
                 .toList();
     }
 

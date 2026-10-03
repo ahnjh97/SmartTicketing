@@ -44,6 +44,7 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
                     .setProperty("hibernate.connection.url", "jdbc:mysql://127.0.0.1:3306/" + name)
                     .setProperty("hibernate.connection.username", user)
                     .setProperty("hibernate.connection.password", password)
+                    .setProperty("hibernate.connection.rewriteBatchedStatements", "true")
                     .setProperty("hibernate.hbm2ddl.auto", "update")
                     .setProperty("hibernate.hbm2ddl.halt_on_error", "true")
                     .setProperty("hibernate.show_sql", "false");

@@ -61,6 +61,22 @@ class ShowtimeScheduleSeedTests {
         assertThat(service.seedTheater(theaterId)).isEqualTo(new ShowtimeScheduleSeedService.Result(0, 0));
     }
 
+    @Test void sharesLineupAcrossTheatersAndReloadsMoviesOnNextRun() {
+        var second = new Theater(); second.setName("두 번째 극장"); second.setBrand(TheaterBrand.CGV);
+        second.setAddress("서울"); second.setKakaoPlaceId(UUID.randomUUID().toString()); em.persist(second);
+        var secondId = second.getId(); em.flush(); em.clear();
+        var service = new ShowtimeScheduleSeedService(em, 1, 2);
+        statements.clear();
+        var plan = service.preparePlan();
+        em.clear(); // 실제 호출처럼 편성 조회 트랜잭션의 엔티티를 재사용하지 않는다.
+        assertThat(service.seedTheater(theaterId, plan).createdShowtimes()).isPositive();
+        assertThat(service.seedTheater(secondId, plan).createdShowtimes()).isPositive();
+        assertThat(statements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from movies"))).hasSize(1);
+        var movie = em.createQuery("from Movie", Movie.class).getSingleResult();
+        movie.setActive(false); em.flush(); em.clear();
+        assertThat(service.preparePlan().noMovies()).isTrue();
+    }
+
     @Test void preservesEditedShowsAndDoesNotAdoptSameNamedScreen() {
         var screen = new Screen(); screen.setTheater(em.find(Theater.class, theaterId)); screen.setName("1관"); em.persist(screen);
         var service = new ShowtimeScheduleSeedService(em, 2, 7);

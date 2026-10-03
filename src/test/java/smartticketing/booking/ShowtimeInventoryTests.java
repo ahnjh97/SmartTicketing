@@ -192,6 +192,85 @@ class ShowtimeInventoryTests {
         assertThat(inventory(showId).getLast().getSeat().getAdjacencySegment()).isEqualTo("custom");
     }
 
+    @Test void bulkDiscoveryRepairsMissingRowsAndNewShowsWithoutCachingCompletion() {
+        var first = show(1, ShowtimeStatus.SCHEDULED);
+        assertThat(service.pendingScreenIds()).containsExactly(screen.getId());
+        service.prepare(screen.getId());
+        assertThat(service.pendingScreenIds()).isEmpty();
+        var rows = inventory(first.getId());
+        rows.getFirst().setStatus(SeatStatus.BLOCKED);
+        em.remove(rows.getLast()); em.flush();
+        assertThat(service.pendingScreenIds()).containsExactly(screen.getId());
+        service.prepare(screen.getId());
+        assertThat(first.getAvailableSeats()).isEqualTo(119);
+        assertThat(service.pendingScreenIds()).isEmpty();
+        show(4, ShowtimeStatus.SCHEDULED);
+        assertThat(service.pendingScreenIds()).containsExactly(screen.getId());
+        service.prepare(screen.getId());
+        assertThat(service.pendingScreenIds()).isEmpty();
+    }
+
+    @Test void bulkDiscoveryHonorsOwnershipActivityAndLegacyLayout() {
+        show(1, ShowtimeStatus.SCHEDULED); service.prepare(screen.getId());
+        var id = screen.getId();
+        legacyLayout(id);
+        assertThat(service.pendingScreenIds()).containsExactly(id);
+        service.prepare(id);
+        assertThat(service.pendingScreenIds()).isEmpty();
+        var managed = em.find(Screen.class, id);
+        em.createNativeQuery("DELETE FROM showtime_seats").executeUpdate();
+        managed.setActive(false); em.flush();
+        assertThat(service.pendingScreenIds()).isEmpty();
+        managed.setActive(true); managed.setSeedKey(null); em.flush();
+        assertThat(service.pendingScreenIds()).isEmpty();
+        managed.setSeedKey("schedule-v1-1"); managed.getTheater().setActive(false); em.flush();
+        assertThat(service.pendingScreenIds()).isEmpty();
+    }
+
+    @Test void bulkDiscoveryIgnoresPastCancelledAndInactiveSeats() {
+        var future = show(1, ShowtimeStatus.SCHEDULED);
+        service.prepare(screen.getId());
+        show(-1, ShowtimeStatus.SCHEDULED);
+        show(4, ShowtimeStatus.CANCELLED);
+        var rows = inventory(future.getId());
+        rows.getLast().getSeat().setActive(false);
+        em.remove(rows.getLast()); em.flush();
+        assertThat(service.pendingScreenIds()).isEmpty();
+        rows.getLast().getSeat().setActive(true); em.flush();
+        assertThat(service.pendingScreenIds()).containsExactly(screen.getId());
+    }
+
+    @Test void newShowCountersAreBatchedAndSessionSettingIsRestored() {
+        var shows = new ArrayList<Showtime>();
+        for (int i = 0; i < 10; i++) {
+            var sh = show(1 + i * 3, ShowtimeStatus.SCHEDULED);
+            sh.setTotalSeats(0); sh.setAvailableSeats(0); shows.add(sh);
+        }
+        em.flush(); statements.clear();
+        var session = em.unwrap(org.hibernate.Session.class);
+        var batchSize = session.getJdbcBatchSize();
+        assertThat(service.prepare(screen.getId())).isEqualTo(new ShowtimeInventoryService.Result(120, 1200, 10));
+        assertThat(session.getJdbcBatchSize()).isEqualTo(batchSize);
+        assertThat(shows).allMatch(sh -> sh.getTotalSeats() == 120 && sh.getAvailableSeats() == 120);
+        assertThat(statements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).startsWith("update showtimes "))).hasSize(1);
+        em.clear();
+        assertThat(em.createQuery("from Showtime", Showtime.class).getResultList())
+                .allMatch(sh -> sh.getTotalSeats() == 120 && sh.getAvailableSeats() == 120);
+    }
+
+    @Test void unrelatedInventoryCannotHideMissingActiveSeat() {
+        var sh = show(1, ShowtimeStatus.SCHEDULED); service.prepare(screen.getId());
+        em.remove(inventory(sh.getId()).getLast());
+        var other = new Screen(); other.setTheater(screen.getTheater()); other.setName("수동 상영관"); em.persist(other);
+        var seat = new Seat(); seat.setScreen(other); seat.setSeatRow("Z"); seat.setSeatNumber(1);
+        seat.setSeatPosition(SeatPosition.SIDE_REAR); em.persist(seat);
+        var extra = new ShowtimeSeat(); extra.setShowtime(sh); extra.setSeat(seat); em.persist(extra); em.flush();
+        assertThat(service.pendingScreenIds()).containsExactly(screen.getId());
+        assertThat(service.prepare(screen.getId()).createdShowtimeSeats()).isEqualTo(1);
+        assertThat(service.pendingScreenIds()).isEmpty();
+        assertThat(sh.getTotalSeats()).isEqualTo(120);
+    }
+
     @Test void measuresInitialAndRepeatPreparationForTwentyScreens() {
         var screenIds = new ArrayList<Long>();
         var theater = screen.getTheater();
@@ -215,7 +294,13 @@ class ShowtimeInventoryTests {
         for (Long id : screenIds) assertThat(service.prepare(id)).isEqualTo(new ShowtimeInventoryService.Result(0, 0, 0));
         em.flush();
         long repeatMs = (System.nanoTime() - started) / 1_000_000;
+        int repeatQueries = statements.size();
         assertThat(statements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).startsWith("insert "));
-        System.out.printf("INVENTORY_PERFORMANCE screens=20 shows=980 inventory=117600 initialMs=%d repeatMs=%d repeatInserts=0%n", initialMs, repeatMs);
+        statements.clear(); started = System.nanoTime();
+        assertThat(service.pendingScreenIds()).isEmpty();
+        long bulkRepeatMs = (System.nanoTime() - started) / 1_000_000;
+        assertThat(statements).hasSize(21);
+        assertThat(statements).allMatch(sql -> sql.toLowerCase(Locale.ROOT).startsWith("select "));
+        System.out.printf("INVENTORY_PERFORMANCE screens=20 shows=980 inventory=117600 initialMs=%d repeatMs=%d repeatQueries=%d bulkRepeatMs=%d bulkRepeatQueries=%d%n", initialMs, repeatMs, repeatQueries, bulkRepeatMs, statements.size());
     }
 }

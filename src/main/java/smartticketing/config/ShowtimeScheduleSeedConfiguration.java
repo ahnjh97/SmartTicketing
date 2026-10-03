@@ -29,8 +29,9 @@ public class ShowtimeScheduleSeedConfiguration {
         public void run(ApplicationArguments args) {
             long startedAt = System.currentTimeMillis();
             int total = 0, screens = 0;
+            var plan = seed.preparePlan();
             for (Long theaterId : seed.findActiveTheaterIds()) {
-                var result = seed.seedTheater(theaterId);
+                var result = seed.seedTheater(theaterId, plan);
                 total += result.createdShowtimes();
                 screens += result.createdScreens();
             }
@@ -38,7 +39,9 @@ public class ShowtimeScheduleSeedConfiguration {
             log.info("[DB 데이터] screens 삽입 {}건 | showtimes 삽입 {}건 | 시간표 {}ms",
                     screens, total, scheduleFinishedAt - startedAt);
             int seats = 0, showtimeSeats = 0, updatedShows = 0, updatedSeats = 0;
-            var screenIds = inventory.screenIds();
+            var screenIds = inventory.pendingScreenIds();
+            log.info("[DB 준비] 좌석 보충·배치 확인 대상 상영관 {}개 | 대상 조회 {}ms",
+                    screenIds.size(), System.currentTimeMillis() - scheduleFinishedAt);
             int completed = 0;
             long lastProgressAt = scheduleFinishedAt;
             for (Long screenId : screenIds) {
@@ -57,7 +60,8 @@ public class ShowtimeScheduleSeedConfiguration {
             }
             log.info("[DB 데이터] seats 삽입 {}건, 배치 수정 {}건 | showtime_seats 삽입 {}건 | showtimes 좌석 수 수정 {}건 | 좌석 준비 {}ms",
                     seats, updatedSeats, showtimeSeats, updatedShows, System.currentTimeMillis() - scheduleFinishedAt);
-            log.info("[DB 준비 완료] 시간표·좌석 준비 {}초", (System.currentTimeMillis() - startedAt) / 1000);
+            log.info("[DB 준비 완료] 대상 상영관 {}/{}개 | 시간표·좌석 준비 {}초", completed, screenIds.size(),
+                    (System.currentTimeMillis() - startedAt) / 1000);
         }
     }
 }

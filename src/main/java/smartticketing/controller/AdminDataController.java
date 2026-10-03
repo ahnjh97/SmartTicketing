@@ -58,10 +58,11 @@ public class AdminDataController {
     @PostMapping("/prepare-schedule")
     public Map<String, Long> prepare() {
         long shows = 0, screens = 0, seats = 0;
+        var plan = schedule.preparePlan();
         for (long id : schedule.findActiveTheaterIds()) {
-            var r = schedule.seedTheater(id); shows += r.createdShowtimes(); screens += r.createdScreens();
+            var r = schedule.seedTheater(id, plan); shows += r.createdShowtimes(); screens += r.createdScreens();
         }
-        for (long id : inventory.screenIds()) seats += inventory.prepare(id).createdShowtimeSeats();
+        for (long id : inventory.pendingScreenIds()) seats += inventory.prepare(id).createdShowtimeSeats();
         return Map.of("showtimes", shows, "screens", screens, "showtime_seats", seats);
     }
 
