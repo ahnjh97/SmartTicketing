@@ -1,7 +1,6 @@
 package smartticketing.service;
 
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -15,35 +14,50 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+/**
+ * 모든 활성 극장에 1관~N관과 오늘 포함 N일의 상영 회차를 만든다. (좌석은 만들지 않음)
+ * 인기 순위는 설정값(tmdb.audience-seeds)으로 정하므로 누가 실행해도 같은 극장·날짜면 같은 시간표가 나온다.
+ */
 @Slf4j
 @Service
 public class ShowtimeScheduleSeedService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final int ROUNDS = 7;
-    private static final int LINEUP_SIZE = 10;
-    private static final int AD_MINUTES = 10;
-    private static final int CLEANING_MINUTES = 20;
-    private static final LocalTime FIRST_START = LocalTime.of(8, 0);
-    private static final LocalTime LAST_END = LocalTime.of(3, 30); // 다음 날 마지막 상영 종료 시각
+    private static final int[] QUOTAS = {12, 10, 7, 7, 7, 3, 3, 3, 3, 3}; // 순위별 하루 최대 회차 (1위~10위)
+    private static final int AD_MINUTES = 10;                         // 광고
+    private static final int CLEANING_MINUTES = 20;                   // 청소
+    private static final LocalTime FIRST_START = LocalTime.of(8, 0);  // 첫 회차 기준 시각
+    private static final LocalTime LAST_END = LocalTime.of(3, 0);     // 마지막 회차 종료 한도 (다음 날 03:00)
+    private static final int PLANNED_SEATS = 120;                     // 좌석 120석 기준
     private static final int PRICE = 10_000;
 
     private final EntityManager em;
     private final int screenCount;
     private final int days;
+    private final Map<Long, Long> audienceSeeds;
+    public record SeedResult(int createdScreens, int createdShowtimes) {}
 
     public ShowtimeScheduleSeedService(
             EntityManager em,
             @Value("${showtime.seed.screen-count:10}") int screenCount,
-            @Value("${showtime.seed.days:7}") int days) {
+            @Value("${showtime.seed.days:7}") int days,
+            @Value("${tmdb.audience-seeds:}") String audienceSeeds) {
         this.em = em;
         this.screenCount = screenCount;
         this.days = days;
+        // "1368337:11857193,..." 형태를 {TMDB 번호: 누적관객수}로 바꿈
+        this.audienceSeeds = Arrays.stream(audienceSeeds.split(","))
+                .map(String::trim)
+                .filter(entry -> entry.contains(":"))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(pair -> Long.valueOf(pair[0].trim()), pair -> Long.valueOf(pair[1].trim())));
     }
 
     public List<Long> findActiveTheaterIds() {
@@ -51,101 +65,144 @@ public class ShowtimeScheduleSeedService {
                 .getResultList();
     }
 
+    // 극장 하나씩 저장하고 비워서 메모리를 아낀다
     @Transactional
-    public Result seedTheater(Long theaterId) {
-        Theater theater = em.find(Theater.class, theaterId, LockModeType.PESSIMISTIC_WRITE);
-        if (theater == null || !theater.isActive()) return new Result(0, 0);
+    public SeedResult seedTheater(Long theaterId) {
+        Theater theater = em.find(Theater.class, theaterId);
+        if (theater == null || !theater.isActive()) return new SeedResult(0, 0);
 
         List<Movie> movies = em.createQuery(
                         "select m from Movie m where m.active = true and m.releaseDate is not null and m.runningTime > 0",
                         Movie.class)
                 .getResultList();
-        if (movies.isEmpty()) return new Result(0, 0);
+        if (movies.isEmpty()) return new SeedResult(0, 0);
 
         LocalDateTime now = LocalDateTime.now(SEOUL);
         LocalDate today = now.toLocalDate();
-        int created = 0;
-        int createdScreens = 0;
-        var existingScreens = em.createQuery("select s from Screen s where s.theater.id = :id", Screen.class)
-                .setParameter("id", theaterId).getResultList();
-        var startsByScreen = new java.util.HashMap<Long, Set<LocalDateTime>>();
-        em.createQuery("""
-                select s.screen.id, s.startTime from Showtime s where s.screen.theater.id = :theater
-                and s.startTime >= :from and s.startTime < :to
-                """, Object[].class).setParameter("theater", theaterId).setParameter("from", today.atStartOfDay())
-                .setParameter("to", today.plusDays(days + 1L).atStartOfDay()).getResultList()
-                .forEach(row -> startsByScreen.computeIfAbsent((Long) row[0], ignored -> new HashSet<>())
-                        .add((LocalDateTime) row[1]));
-        var lineups = new java.util.HashMap<LocalDate, List<Movie>>();
-        for (int day = 0; day < days; day++) lineups.put(today.plusDays(day), lineupOf(movies, today.plusDays(day)));
-        var pending = new java.util.ArrayList<NewShowtime>();
 
+        // 1관~N관 준비 (만들기 전 개수와 비교해 새로 만든 상영관 수 계산)
+        long screensBefore = em.createQuery(
+                        "select count(s) from Screen s where s.theater.id = :theater and s.seedKey like 'schedule-v1-%'", Long.class)
+                .setParameter("theater", theaterId)
+                .getSingleResult();
+        List<Screen> screens = new ArrayList<>();
         for (int screenNo = 1; screenNo <= screenCount; screenNo++) {
-            Screen screen = findOrCreateScreen(theater, screenNo, existingScreens);
-            if (screen == null) continue;
-            if (screen.getId() == null) {
-                em.persist(screen);
-                createdScreens++;
-            }
+            Screen screen = findOrCreateScreen(theater, screenNo);
+            if (screen != null) screens.add(screen);
+        }
+        int createdScreens = (int) Math.max(0, screens.size() - screensBefore);
+        if (screens.isEmpty()) return new SeedResult(createdScreens, 0);
 
-            Set<LocalDateTime> existingStarts = startsByScreen.getOrDefault(screen.getId(), Set.of());
+        // 이 극장에 이미 만든 회차 시작 시각
+        List<LocalDateTime> existingStarts = em.createQuery(
+                        "select s.startTime from Showtime s where s.screen.id in :screens and s.startTime >= :from and s.startTime < :to",
+                        LocalDateTime.class)
+                .setParameter("screens", screens.stream().map(Screen::getId).toList())
+                .setParameter("from", today.atStartOfDay())
+                .setParameter("to", today.plusDays(days + 1L).atStartOfDay())
+                .getResultList();
 
-            // 첫 회차 시작: 08:00 + 극장·상영관 기준 0~50분
-            int startOffset = Math.floorMod((theater.getKakaoPlaceId() + "|" + screenNo).hashCode(), 6) * 10;
+        int created = 0;
+        for (int day = 0; day < days; day++) {
+            LocalDate date = today.plusDays(day);
+            LocalDateTime dayStart = date.atTime(FIRST_START);
+            LocalDateTime dayEnd = date.plusDays(1).atTime(LAST_END);
 
-            for (int day = 0; day < days; day++) {
-                LocalDate date = today.plusDays(day);
-                List<Movie> lineup = lineups.get(date);
-                if (lineup.isEmpty()) continue;
+            // 이미 시간표가 있는 날은 건너뜀 (다시 만들면 기존 회차와 겹칠 수 있음)
+            if (existingStarts.stream().anyMatch(t -> !t.isBefore(dayStart) && t.isBefore(dayEnd))) continue;
 
-                int base = Math.floorMod(theater.getKakaoPlaceId().hashCode(), lineup.size());
-                Movie movie = lineup.get((base + screenNo - 1) % lineup.size());
+            List<Movie> lineup = lineupOf(movies, date);
+            if (lineup.isEmpty()) continue;
 
-                LocalDateTime start = date.atTime(FIRST_START).plusMinutes(startOffset);
-                LocalDateTime lastEnd = date.plusDays(1).atTime(LAST_END);
-                for (int round = 0; round < ROUNDS; round++) {
-                    LocalDateTime end = start.plusMinutes(movie.getRunningTime() + AD_MINUTES);
-                    if (end.isAfter(lastEnd)) break;   // 새벽 3시 30분 넘게 끝나면 그날 상영 종료
-                    if (start.isAfter(now) && !existingStarts.contains(start)) {
-                        pending.add(new NewShowtime(screen.getId(), movie.getId(), start, end));
-                    }
-                    start = roundUpTo5(end.plusMinutes(CLEANING_MINUTES));
-                }
-            }
+            created += scheduleDay(theater, screens, lineup, dayStart, dayEnd, now);
         }
         em.flush();
-        // IDENTITY 개별 INSERT 대신 극장별 최대 500회차씩 한 번에 저장한다.
-        for (int offset = 0; offset < pending.size(); offset += 500)
-            created += insertShowtimes(pending.subList(offset, Math.min(offset + 500, pending.size())), now);
         em.clear();
-        return new Result(createdScreens, created);
+        return new SeedResult(createdScreens, created);
     }
 
+    // 그날까지 개봉한 영화 중 인기순 10편 (설정값 누적관객수 → 개봉일 최신 → TMDB 번호 순)
     private List<Movie> lineupOf(List<Movie> movies, LocalDate date) {
         return movies.stream()
                 .filter(m -> !m.getReleaseDate().isAfter(date))
-                .sorted(Comparator.comparing(Movie::getReleaseDate).reversed()
+                .sorted(Comparator.comparing((Movie m) -> popularity(m), Comparator.reverseOrder())
+                        .thenComparing(Movie::getReleaseDate, Comparator.reverseOrder())
                         .thenComparing(Movie::getTmdbMovieId))
-                .limit(LINEUP_SIZE)
-                .sorted(Comparator.comparing(Movie::getTmdbMovieId))
+                .limit(QUOTAS.length)
                 .toList();
     }
 
+    private Long popularity(Movie movie) {
+        return audienceSeeds.getOrDefault(movie.getTmdbMovieId(), 0L);
+    }
+
+    // n위 영화가 n관 첫 회차를 차지한 뒤, 순위 순서대로 3시 전에 끝나는 관 중 가장 빨리 비는 관에 한 회차씩 추가
+    private int scheduleDay(Theater theater, List<Screen> screens, List<Movie> lineup,
+                            LocalDateTime dayStart, LocalDateTime dayEnd, LocalDateTime now) {
+        // 관마다 다음 회차 시작 가능 시각 (첫 회차: 08:00 + 극장·상영관 기준 0~50분)
+        LocalDateTime[] next = new LocalDateTime[screens.size()];
+        for (int i = 0; i < next.length; i++) {
+            next[i] = dayStart.plusMinutes(Math.floorMod((theater.getKakaoPlaceId() + "|" + (i + 1)).hashCode(), 6) * 10);
+        }
+
+        int[] placed = new int[lineup.size()];   // 영화별 배치한 회차 수
+        int created = 0;
+        boolean progress = true;
+        while (progress) {
+            progress = false;
+            for (int rank = 0; rank < lineup.size(); rank++) {
+                if (placed[rank] >= QUOTAS[rank]) continue;
+                int minutes = lineup.get(rank).getRunningTime() + AD_MINUTES;
+
+                // 첫 회차는 자기 관(n위 → n관), 이후는 가장 빨리 비는 관 (같으면 번호가 작은 관)
+                int screen = (placed[rank] == 0 && rank < next.length) ? rank : -1;
+                if (screen < 0) {
+                    for (int i = 0; i < next.length; i++) {
+                        if (!next[i].plusMinutes(minutes).isAfter(dayEnd) && (screen < 0 || next[i].isBefore(next[screen]))) screen = i;
+                    }
+                }
+                if (screen < 0 || next[screen].plusMinutes(minutes).isAfter(dayEnd)) {
+                    placed[rank] = QUOTAS[rank];   // 3시 전에 끝낼 관이 없으면 이 영화는 그만
+                    continue;
+                }
+
+                LocalDateTime start = next[screen];
+                LocalDateTime end = start.plusMinutes(minutes);
+                if (start.isAfter(now)) {
+                    createShowtime(screens.get(screen), lineup.get(rank), start, end, now);
+                    created++;
+                }
+                next[screen] = roundUpTo5(end.plusMinutes(CLEANING_MINUTES));   // 같은 관은 종료 + 청소 뒤에만
+                placed[rank]++;
+                progress = true;
+            }
+        }
+        return created;
+    }
+
+    // 5분 단위로 올림 (예: 11:23 → 11:25)
     private LocalDateTime roundUpTo5(LocalDateTime time) {
         return time.plusMinutes(Math.floorMod(-time.getMinute(), 5)).withSecond(0).withNano(0);
     }
 
-    private Screen findOrCreateScreen(Theater theater, int screenNo, List<Screen> existingScreens) {
+    // 1관~N관: 표식(seedKey)으로 찾고, 같은 이름의 기존 상영관은 건드리지 않음
+    private Screen findOrCreateScreen(Theater theater, int screenNo) {
         String name = screenNo + "관";
         String key = "schedule-v1-" + screenNo;
-        List<Screen> matches = existingScreens.stream()
-                .filter(s -> key.equals(s.getSeedKey()) || name.equals(s.getName())).toList();
+        List<Screen> matches = em.createQuery(
+                        "select s from Screen s where s.theater.id = :theater and (s.seedKey = :key or s.name = :name)",
+                        Screen.class)
+                .setParameter("theater", theater.getId())
+                .setParameter("key", key)
+                .setParameter("name", name)
+                .getResultList();
 
         if (matches.isEmpty()) {
             Screen screen = new Screen();
             screen.setTheater(theater);
             screen.setName(name);
             screen.setSeedKey(key);
+            em.persist(screen);
             return screen;
         }
         return matches.stream()
@@ -157,23 +214,17 @@ public class ShowtimeScheduleSeedService {
                 });
     }
 
-    private int insertShowtimes(List<NewShowtime> shows, LocalDateTime now) {
-        var tuples = new java.util.ArrayList<String>();
-        for (int i = 0; i < shows.size(); i++)
-            tuples.add("(:screen" + i + ",:movie" + i + ",:start" + i + ",:end" + i
-                    + ",0,0,:price,'SCHEDULED',:now,:now)");
-        var insert = em.createNativeQuery("""
-                INSERT INTO showtimes (screen_id,movie_id,start_time,end_time,total_seats,available_seats,
-                    price_per_person,status,created_at,updated_at) VALUES
-                """ + String.join(",", tuples)).setParameter("price", PRICE).setParameter("now", now);
-        for (int i = 0; i < shows.size(); i++) {
-            var show = shows.get(i);
-            insert.setParameter("screen" + i, show.screen()).setParameter("movie" + i, show.movie())
-                    .setParameter("start" + i, show.start()).setParameter("end" + i, show.end());
-        }
-        return insert.executeUpdate();
+    private void createShowtime(Screen screen, Movie movie, LocalDateTime start, LocalDateTime end, LocalDateTime now) {
+        Showtime showtime = new Showtime();
+        showtime.setScreen(screen);
+        showtime.setMovie(movie);
+        showtime.setStartTime(start);
+        showtime.setEndTime(end);
+        showtime.setPricePerPerson(PRICE);
+        showtime.setTotalSeats(PLANNED_SEATS);
+        showtime.setAvailableSeats(PLANNED_SEATS);
+        showtime.setCreatedAt(now);
+        showtime.setUpdatedAt(now);
+        em.persist(showtime);
     }
-
-    private record NewShowtime(Long screen, Long movie, LocalDateTime start, LocalDateTime end) {}
-    public record Result(int createdScreens, int createdShowtimes) {}
 }

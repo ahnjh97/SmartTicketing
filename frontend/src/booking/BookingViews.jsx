@@ -9,6 +9,7 @@ import { availability, validParty } from './state.js';
 import { BookingButtons, DateCards, MovieCard, Pagination, QueryStatus, ShowtimeCard } from './BookingComponents.jsx';
 import BookingMap from './BookingMap.jsx';
 import TimeRangeMenu from './TimeRangeMenu.jsx';
+import HorizontalRail from '../components/HorizontalRail.jsx';
 
 function BookingDates({ booking }) {
  const { date, today, update, theaterMode } = booking;
@@ -16,7 +17,7 @@ function BookingDates({ booking }) {
 }
 
 function TheaterMovieRow({ movie, booking }) {
-    const { theaterId, date, now, params, update } = booking;
+    const { theaterId, date, now, params, update, selectedShow, valid, smartReady, enter } = booking;
     const shows = useCatalog('showtimes', { movieId: movie.movieId, theaterId, date });
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
     return <li className={styles.movieRow}>
@@ -27,14 +28,28 @@ function TheaterMovieRow({ movie, booking }) {
                 <small><InlineDetails items={[formatRating(movie.rating), movie.runningTime ? `${movie.runningTime}분` : '시간 미확인']} /></small>
             </div>
             <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
-            <div className={styles.rowShowtimes}>{items.map(show => {
+            <HorizontalRail label={`${movie.title} 상영 시간`} className={styles.rowShowtimes}>{items.map(show => {
                 const selected = params.get('showtime') === String(show.id);
-                return <div key={show.id} className={selected ? `${styles.slot} ${styles.slotSelected}` : styles.slot}>
-                    <ShowtimeCard show={show} selected={selected} label={availability(show, null)}
-                                  onClick={() => update({ movie: movie.movieId, showtime: show.id })} />
-                    {selected && <span className={ui.selectedBadge}>선택</span>}
+                if (!selected) return <div key={show.id} className={styles.slot}>
+                    <button className={ui.showtime} onClick={() => update({ movie: movie.movieId, showtime: show.id })}>
+                        <small>{show.screenName}</small>
+                        <strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong>
+                        <span>{show.availableSeats} / {show.totalSeats}석</span>
+                    </button>
                 </div>;
-            })}</div>
+
+                return <div key={show.id} className={`${styles.slot} ${styles.slotSelected}`}>
+                    <div className={`${ui.showtime} ${styles.slotCard}`} onClick={() => update({ movie: null, showtime: null })}>
+                        <small>{show.screenName}</small>
+                        <strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong>
+                        <div className={styles.slotActions} onClick={e => e.stopPropagation()}>
+                            <button className={styles.slotBtn} disabled={!valid || !selectedShow?.availableSeats} onClick={() => enter('THEATER_NORMAL')}>일반</button>
+                            <button className={`${styles.slotBtn} ${styles.slotBtnPrimary}`} disabled={!valid || !smartReady} onClick={() => enter('THEATER_SMART')}>스마트</button>
+                        </div>
+                    </div>
+                    <span className={ui.selectedBadge}>선택</span>
+                </div>;
+            })}</HorizontalRail>
         </div>
     </li>;
 }
@@ -56,7 +71,11 @@ export function BookingConfirmation({ booking }) {
         </section>);
 }
 export function TheaterBooking({ booking }) {
-    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences, selectedShow, valid, smartReady, enter } = booking;
+    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, list, theater, movies, selectedMovieExists, preferences, selectedShow } = booking;
+    const chart = useCatalog(theaterId ? 'main' : null, {});
+    const rank = new Map((chart.data?.nowShowing || []).map((m, index) => [m.id, index]));
+    const sortedMovies = [...(movies.data?.items || [])]
+        .sort((a, b) => (rank.get(a.movieId) ?? 999) - (rank.get(b.movieId) ?? 999));
     return (<>
             <div className={styles.theaterToolbar}>
                 <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
@@ -79,22 +98,21 @@ export function TheaterBooking({ booking }) {
                 <div className={styles.theaters}>{list.data?.items.map(t => <GlassButton key={t.id} aria-pressed={theaterId === String(t.id)} onClick={() => selectTheater(t.id)}><strong>{t.name}</strong><small>{t.address}</small></GlassButton>)}</div>
                 <Pagination data={list.data} page={page} onChange={value => update({ page: value })} />
             </>}
-            {theaterId && <>
-                <QueryStatus query={theater} />
-                {theater.data && <div className={styles.selectedTheater}><strong>{theater.data.name}</strong><span>{theater.data.address}</span><GlassButton onClick={() => update({ theater: null, movie: null, showtime: null })}>극장 변경</GlassButton></div>}
-                <BookingDates booking={booking} />
-                {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
-                <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>
-                <QueryStatus query={movies} empty={movies.data?.items.length === 0} />
-                {movieId && movies.data && !selectedMovieExists && <p role="alert">해당 날짜의 영화를 다시 선택해주세요.</p>}
-                <section aria-label="상영 회차"><ul className={styles.movieList}>{movies.data?.items.map(m => <TheaterMovieRow key={m.movieId} movie={m} booking={booking} />)}</ul></section>
-                {movies.data?.items.length > 0 && <section className={ui.panel + ' ' + styles.showPanel} aria-label="예매 진행">
-                    <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
-                    {selectedShow && !selectedShow.layoutComplete && <p>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
-                    <BookingButtons normal disabled={!valid} normalDisabled={!selectedShow?.availableSeats} smartDisabled={!smartReady} onEnter={enter} />
-                </section>}
+        {theaterId && <>
+            <QueryStatus query={theater} />
+            {theater.data && <div className={styles.selectedTheater}><strong>{theater.data.name}</strong><span>{theater.data.address}</span><GlassButton onClick={() => update({ theater: null, movie: null, showtime: null })}>극장 변경</GlassButton></div>}
+            <BookingDates booking={booking} />
+            {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
+            <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>
+            <QueryStatus query={movies} empty={movies.data?.items.length === 0} />
+            {movieId && movies.data && !selectedMovieExists && <p role="alert">해당 날짜의 영화를 다시 선택해주세요.</p>}
+            <ul className={styles.movieList}>{sortedMovies.map(m => <TheaterMovieRow key={m.movieId} movie={m} booking={booking} />)}</ul>
+            {movies.data?.items.length > 0 && <>
+                <p className={styles.note}>조회 시점의 좌석 정보이며 좌석 확보를 보장하지 않습니다. 인원은 다음 단계에서 선택합니다.</p>
+                {selectedShow && !selectedShow.layoutComplete && <p className={styles.note}>배치 미확인 회차는 자동 선점할 수 없습니다. 스마트예매에서 현재 상태와 대안을 확인할 수 있습니다.</p>}
             </>}
-        </>);
+        </>}
+    </>);
 }
 export function MovieBooking({ booking }) {
     const { date, now, rangeFuture, dateValid, from, until, party, rangeValid, update, shows, items, valid, enter } = booking;
