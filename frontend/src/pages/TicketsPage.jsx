@@ -98,8 +98,10 @@ export default function TicketsPage() {
                 if (stopped) return;
 
                 if (data.processing) {
-                    setVerificationPhase("processing");
-                    setVerificationSeconds(5);
+                    setVerificationPhase((current) => {
+                        if (current !== "processing") setVerificationSeconds(5);
+                        return "processing";
+                    });
                 } else if (data.used) {
                     setVerificationPhase("used");
                     setTickets((current) =>
