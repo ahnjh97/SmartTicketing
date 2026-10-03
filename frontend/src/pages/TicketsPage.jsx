@@ -1,4 +1,5 @@
 import InlineDetails from '../components/InlineDetails.jsx';
+import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
@@ -191,8 +192,13 @@ export default function TicketsPage() {
                                 <div className={styles.ticketCardRight}>
                                     <span className={styles.ticketStubLabel}>ADMIT ONE</span>
                                     <div className={styles.ticketQrPlaceholder}>
-                                        <span>QR</span>
-                                        <small>{selectedTicket.qrCode}</small>
+                                        <QRCodeSVG
+                                            value={`SMART-TICKET:${selectedTicket.qrCode || selectedTicket.ticketNumber}`}
+                                            size={168}
+                                            marginSize={2}
+                                            level="M"
+                                            title={`티켓 QR - ${selectedTicket.ticketNumber}`}
+                                        />
                                     </div>
                                     <div className={styles.ticketNumber}>
                                         <span>TICKET NO.</span>
