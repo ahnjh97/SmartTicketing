@@ -214,26 +214,25 @@ h2 {
 }
 
 .profile-social-provider {
-    width: 34px;
+    min-width: 34px;
     height: 34px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
     overflow: hidden;
 }
 
 .profile-social-provider.google {
-    background: #ffffff;
-    border: 1px solid #dddddd;
+    background: transparent;
 }
 
 .profile-social-provider.naver {
-    background: #03c75a;
-    color: #ffffff;
+    background: transparent;
 }
 
 .profile-social-provider.kakao {
+    width: 34px;
+    border-radius: 8px;
     background: #fee500;
     color: #222222;
 }
