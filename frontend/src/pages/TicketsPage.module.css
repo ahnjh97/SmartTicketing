@@ -80,6 +80,14 @@
 .ticketCard {
     position: relative;
     overflow: hidden;
+    -webkit-mask:
+        radial-gradient(circle 15px at 0 50%, transparent 14px, #000 15px),
+        radial-gradient(circle 15px at 100% 50%, transparent 14px, #000 15px);
+    -webkit-mask-composite: source-in;
+    mask:
+        radial-gradient(circle 15px at 0 50%, transparent 14px, #000 15px),
+        radial-gradient(circle 15px at 100% 50%, transparent 14px, #000 15px);
+    mask-composite: intersect;
     border: 1px solid #d9d9d9;
     border-radius: 6px;
     background: #fff;
@@ -97,7 +105,7 @@
     height: 28px;
     border: 0;
     border-radius: 50%;
-    background: rgb(0 0 0 / 55%);
+    background: transparent;
     transform: translateY(-50%);
 }
 .ticketCard::before { left: -15px; }
