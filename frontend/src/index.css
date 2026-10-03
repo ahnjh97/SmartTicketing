@@ -219,7 +219,7 @@ h2 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .profile-social-provider.google {
@@ -252,11 +252,13 @@ h2 {
 }
 
 .profile-social-provider .google-logo {
-    width: 79px;
+    width: auto;
+    height: 24px;
 }
 
 .profile-social-provider .naver-logo {
-    width: 82px;
+    width: auto;
+    height: 24px;
 }
 
 .profile-social-provider .kakao-logo {
