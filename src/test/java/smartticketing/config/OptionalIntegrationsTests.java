@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
 class OptionalIntegrationsTests {
     private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
             .withUserConfiguration(WebSecurity.class, SecurityConfig.class)
+            .withBean(smartticketing.auth.AdminAccess.class, () -> mock(smartticketing.auth.AdminAccess.class))
             .withBean(CustomOAuth2UserService.class, () -> mock(CustomOAuth2UserService.class))
             .withBean(OAuth2SuccessHandler.class, () -> mock(OAuth2SuccessHandler.class))
             .withBean(JwtDecoder.class, () -> mock(JwtDecoder.class));

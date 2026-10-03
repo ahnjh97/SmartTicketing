@@ -26,6 +26,7 @@ class BookingQuerySecurityTests {
     private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
             .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingCatalogController.class,
                     ShowtimeQueryController.class, TheaterController.class)
+            .withBean(smartticketing.auth.AdminAccess.class, () -> mock(smartticketing.auth.AdminAccess.class))
             .withBean(CustomOAuth2UserService.class, () -> mock(CustomOAuth2UserService.class))
             .withBean(OAuth2SuccessHandler.class, () -> mock(OAuth2SuccessHandler.class))
             .withBean(JwtDecoder.class, () -> mock(JwtDecoder.class))

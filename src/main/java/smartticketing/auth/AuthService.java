@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class AuthService {
 
+    private final AdminAccess adminAccess;
     private final UsersRepository users;
     private final UserSocialAccountRepository social;
     private final PasswordEncoder encoder;
@@ -30,8 +31,10 @@ public class AuthService {
             UsersRepository users,
             UserSocialAccountRepository social,
             PasswordEncoder encoder,
-            JwtService jwt
+            JwtService jwt,
+            AdminAccess adminAccess
     ) {
+        this.adminAccess = adminAccess;
         this.users = users;
         this.social = social;
         this.encoder = encoder;
@@ -50,7 +53,8 @@ public class AuthService {
                 user.getStatus(),
                 java.util.List.of(),
                 java.util.List.of(),
-                java.util.List.of()
+                java.util.List.of(),
+                false
         );
     }
 
@@ -91,6 +95,10 @@ public class AuthService {
                         )
                 );
 
+        if (adminAccess.isReserved(user.getLoginId())) {
+            throw new IllegalArgumentException("관리자 계정은 일반 비밀번호 재설정을 사용할 수 없습니다.");
+        }
+
         user.setPassword(
                 encoder.encode(newPassword)
         );
@@ -102,6 +110,9 @@ public class AuthService {
 
         String loginId = request.loginId().trim();
 
+        if (adminAccess.isReserved(loginId)) {
+            throw new IllegalArgumentException("사용할 수 없는 아이디입니다.");
+        }
         if (users.existsByLoginId(loginId)) {
             throw new IllegalArgumentException(
                     "이미 사용 중인 아이디입니다."
@@ -224,6 +235,9 @@ public class AuthService {
             );
         }
 
+        if (adminAccess.isReserved(loginId)) {
+            throw new IllegalArgumentException("사용할 수 없는 아이디입니다.");
+        }
         if (users.existsByLoginId(loginId)) {
             throw new IllegalArgumentException(
                     "이미 사용 중인 아이디입니다."

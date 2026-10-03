@@ -35,7 +35,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            ObjectProvider<ClientRegistrationRepository> registrations
+            ObjectProvider<ClientRegistrationRepository> registrations,
+            smartticketing.auth.AdminAccess adminAccess
     ) throws Exception {
 
         http
@@ -68,7 +69,6 @@ public class SecurityConfig {
                                 "/api/auth/social-signup",
                                 "/oauth2/**",
                                 "/login/**",
-                                "/api/admin/**",
                                 "/api/main",
                                 "/error"
                         ).permitAll()
@@ -77,6 +77,9 @@ public class SecurityConfig {
                                 HttpMethod.OPTIONS,
                                 "/**"
                         ).permitAll()
+
+                        .requestMatchers("/api/admin/**").access((authentication, context) ->
+                                new org.springframework.security.authorization.AuthorizationDecision(adminAccess.permits(authentication.get())))
 
                         .requestMatchers(HttpMethod.GET, "/api/theaters/nearby").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/movies", "/api/movies/{id}",

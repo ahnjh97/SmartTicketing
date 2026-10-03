@@ -1,4 +1,5 @@
 export const PAGE_PATHS = {
+    adminData: "/admin/data",
     home: "/",
     movies: "/movies",
     theaters: "/theaters",
@@ -16,6 +17,7 @@ export const PAGE_PATHS = {
 };
 
 const PROTECTED_PAGES = new Set([
+    "adminData",
     "bookingRestore",
     "tickets",
     "notifications",

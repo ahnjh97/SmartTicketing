@@ -17,6 +17,8 @@ import BookingRestorePage from './pages/BookingRestorePage.jsx';
 import TicketsPage from "./pages/TicketsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
+import AdminRouteGuard from "./components/AdminRouteGuard.jsx";
+import AdminDataPage from "./pages/AdminDataPage.jsx";
 
 export default function App() {
     return (
@@ -30,6 +32,7 @@ export default function App() {
                     <Route path={PAGE_PATHS.callback} element={<OAuthCallbackPage />} />
 
                     <Route element={<RouteGuard />}>
+                        <Route path={PAGE_PATHS.adminData} element={<AdminRouteGuard><AdminDataPage /></AdminRouteGuard>} />
                         <Route path={PAGE_PATHS.home} element={<HomePage />} />
                         <Route path={PAGE_PATHS.movies} element={<BookingPage key="movies" mode="movie" />} />
                         <Route path={PAGE_PATHS.theaters} element={<BookingPage key="theaters" mode="theater" />} />

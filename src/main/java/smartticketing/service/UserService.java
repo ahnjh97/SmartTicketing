@@ -13,6 +13,7 @@ import java.util.*;
 @Transactional
 public class UserService {
 
+    private final smartticketing.auth.AdminAccess adminAccess;
     private final UsersRepository users;
     private final UserSocialAccountRepository social;
     private final UserPreferredTheaterRepository preferredTheaters;
@@ -26,8 +27,10 @@ public class UserService {
             UserPreferredTheaterRepository t,
             UserPreferredSeatRepository ps,
             TheaterRepository tr,
-            UserNearbyTheaterRepository nt
+            UserNearbyTheaterRepository nt,
+            smartticketing.auth.AdminAccess adminAccess
     ) {
+        this.adminAccess = adminAccess;
         users = u;
         social = s;
         preferredTheaters = t;
@@ -204,6 +207,11 @@ public class UserService {
                 r.loginId() != null
                         && !r.loginId().isBlank()
         ) {
+
+            if (!r.loginId().equals(u.getLoginId())
+                    && (adminAccess.isReserved(r.loginId()) || adminAccess.isReserved(u.getLoginId()))) {
+                throw new IllegalArgumentException("관리자 아이디로 변경하거나 관리자 아이디를 변경할 수 없습니다.");
+            }
 
             if (u.getLoginId() == null) {
                 throw new IllegalStateException(
@@ -456,7 +464,8 @@ public class UserService {
                 u.getStatus(),
                 pts,
                 ps,
-                providers
+                providers,
+                adminAccess.isAdmin(u)
         );
     }
 

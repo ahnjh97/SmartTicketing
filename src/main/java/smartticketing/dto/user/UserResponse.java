@@ -18,7 +18,8 @@ public record UserResponse(
         UserStatus status,
         List<PreferredTheaterResponse> preferredTheaters,
         List<PreferredSeatResponse> preferredSeats,
-        List<SocialProvider> linkedProviders
+        List<SocialProvider> linkedProviders,
+        boolean admin
 ) {
 
     public record PreferredTheaterResponse(

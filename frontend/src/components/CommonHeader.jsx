@@ -2,7 +2,7 @@ import InlineDetails from './InlineDetails.jsx';
 import { useEffect, useRef, useState } from "react";
 import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
-import { Link, matchPath, NavLink, useLocation } from "react-router-dom";
+import { Link, matchPath, NavLink, useLocation, useNavigate } from "react-router-dom";
 import glass from "./GlassButton.module.css";
 import { notificationApi } from "../api/notifications.js";
 import { ticketApi } from "../api/tickets.js";
@@ -29,6 +29,7 @@ export default function CommonHeader({
     user, disabled, setupRequired, onLogout,
 }) {
     const { pathname } = useLocation();
+    const navigate = useNavigate();
     const headerRef = useRef(null);
     const innerRef = useRef(null);
     const brandRef = useRef(null);
@@ -215,6 +216,24 @@ export default function CommonHeader({
     function renderAccountItems() {
         return (
             <>
+                {user?.admin === true && (
+                <button
+                    type="button"
+                    className="common-header-icon-trigger"
+                    aria-label="데이터 관리"
+                    title="데이터 관리"
+                    disabled={disabled}
+                    onClick={() => { if (!disabled) { setOpenPanel(null); setOpenLocation(null); navigate(PAGE_PATHS.adminData); } }}
+                >
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l1.5 1.4a8 8 0 0 0 0 2.2L3 14.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2-2 .6A8 8 0 0 0 15 5l-.5-2Z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </span>
+                </button>
+                )}
+
                 <button
                     type="button"
                     className="common-header-icon-trigger"
@@ -226,8 +245,8 @@ export default function CommonHeader({
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none">
                             <path d="M4 7h16v10H4z" />
-                            <path d="M8 7v10" stroke-dasharray="1.5 2" />
-                            <path d="M16 7v10" stroke-dasharray="1.5 2" />
+                            <path d="M8 7v10" strokeDasharray="1.5 2" />
+                            <path d="M16 7v10" strokeDasharray="1.5 2" />
                         </svg>
                     </span>
                 </button>
