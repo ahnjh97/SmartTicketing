@@ -271,7 +271,7 @@ h2 {
     background: transparent !important;
     border: 0;
     box-shadow: none;
-    transform: translateY(2px);
+    transform: translateY(5px);
 }
 
 .profile-social-provider .naver-logo {
