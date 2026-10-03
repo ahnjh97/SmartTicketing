@@ -194,7 +194,7 @@ export default function TicketsPage() {
                                     <div className={styles.ticketQrPlaceholder}>
                                         <QRCodeSVG
                                             value={`SMART-TICKET:${selectedTicket.qrCode || selectedTicket.ticketNumber}`}
-                                            size={168}
+                                            size={220}
                                             marginSize={2}
                                             level="M"
                                             title={`티켓 QR - ${selectedTicket.ticketNumber}`}
