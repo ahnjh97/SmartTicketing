@@ -193,7 +193,7 @@ export default function TicketsPage() {
                                     <span className={styles.ticketStubLabel}>ADMIT ONE</span>
                                     <div className={styles.ticketQrPlaceholder}>
                                         <QRCodeSVG
-                                            value={`SMART-TICKET:${selectedTicket.qrCode || selectedTicket.ticketNumber}`}
+                                            value={`${window.location.origin}${import.meta.env.BASE_URL}ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
                                             size={220}
                                             marginSize={2}
                                             level="M"
