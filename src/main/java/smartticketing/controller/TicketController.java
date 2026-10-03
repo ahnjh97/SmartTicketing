@@ -27,6 +27,11 @@ public class TicketController {
         return ResponseEntity.ok(service.verifyAndUse(qrCode));
     }
 
+    @GetMapping("/verify/{qrCode}")
+    public ResponseEntity<TicketVerifyResponse> verifyStatus(@PathVariable String qrCode) {
+        return ResponseEntity.ok(service.verifyStatus(qrCode));
+    }
+
     @GetMapping
     public ResponseEntity<List<TicketResponse>> mine(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(service.mine(current.id(jwt)));
