@@ -13,6 +13,7 @@ export default function TicketsPage() {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [expandedTicketId, setExpandedTicketId] = useState(null);
 
     useEffect(() => {
         let mounted = true;
@@ -40,18 +41,57 @@ export default function TicketsPage() {
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
                     <div className={styles.tickets}>
-                        {tickets.map((ticket) => (
-                            <article key={ticket.ticketId} className={styles.ticket}>
-                                <h2>{ticket.movieTitle}</h2>
-                                <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
-                                <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
-                                <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
-                                <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
-                                <p>QR: {ticket.qrCode}</p>
-                                <p>상태: {ticket.status}</p>
-                                {ticket.groupId && <Link className={glass.button} to={`/booking/restore?group=${ticket.groupId}`}>예약 상세 및 전체 취소</Link>}
-                            </article>
-                        ))}
+                        {tickets.map((ticket) => {
+                            const expanded = expandedTicketId === ticket.ticketId;
+
+                            return (
+                                <article
+                                    key={ticket.ticketId}
+                                    className={`${styles.ticket}${expanded ? ` ${styles.expanded}` : ""}`}
+                                >
+                                    <button
+                                        type="button"
+                                        className={styles.ticketSummary}
+                                        aria-expanded={expanded}
+                                        onClick={() =>
+                                            setExpandedTicketId((current) =>
+                                                current === ticket.ticketId ? null : ticket.ticketId
+                                            )
+                                        }
+                                    >
+                                        <span className={styles.summaryMovie}>{ticket.movieTitle}</span>
+                                        <span className={styles.summaryTheater}>
+                                            <InlineDetails items={[ticket.theaterName]} />
+                                        </span>
+                                        <span className={styles.summaryTime}>
+                                            {formatDate(ticket.startTime)}
+                                        </span>
+                                        <span className={styles.expandIcon} aria-hidden="true">
+                                            {expanded ? "▲" : "▼"}
+                                        </span>
+                                    </button>
+
+                                    {expanded && (
+                                        <div className={styles.ticketDetails}>
+                                            <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
+                                            <p>{formatDate(ticket.startTime)} ~ {formatDate(ticket.endTime)}</p>
+                                            <p>좌석: {ticket.seats?.join(", ") || "-"}</p>
+                                            <p>티켓 번호: <strong>{ticket.ticketNumber}</strong></p>
+                                            <p>QR: {ticket.qrCode}</p>
+                                            <p>상태: {ticket.status}</p>
+                                            {ticket.groupId && (
+                                                <Link
+                                                    className={glass.button}
+                                                    to={`/booking/restore?group=${ticket.groupId}`}
+                                                >
+                                                    예약 상세 및 전체 취소
+                                                </Link>
+                                            )}
+                                        </div>
+                                    )}
+                                </article>
+                            );
+                        })}
                     </div>
                 )}
             </div>
