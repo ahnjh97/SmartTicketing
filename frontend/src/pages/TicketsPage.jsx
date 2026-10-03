@@ -61,6 +61,7 @@ export default function TicketsPage() {
     const [expandedTicketId, setExpandedTicketId] = useState(null);
     const [verificationPhase, setVerificationPhase] = useState("idle");
     const [verificationSeconds, setVerificationSeconds] = useState(3);
+    const [selectedDate, setSelectedDate] = useState("ALL");
 
     useEffect(() => {
         let mounted = true;
@@ -128,13 +129,13 @@ export default function TicketsPage() {
         <section className={styles.page}>
             <h1>내 티켓</h1>
             <div className={styles.panel}>
-                <h2>발급된 티켓</h2>
-                {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
+                <div className={styles.ticketFilterHeader}>\n                    <h2>발급된 티켓</h2>\n                    <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setExpandedTicketId(null); }} aria-label="티켓 날짜 필터">\n                        <option value="ALL">전체 날짜</option>\n                        {ticketDates.map((date) => <option key={date} value={date}>{new Date(date + "T00:00:00").toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</option>)}\n                    </select>\n                </div>
+                {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
                     <div className={styles.ticketGroups}>
                         {Object.entries(
-                            tickets.reduce((groups, ticket) => {
+                            filteredTickets.reduce((groups, ticket) => {
                                 const dateKey = ticket.startTime
                                     ? new Date(ticket.startTime).toLocaleDateString("ko-KR")
                                     : "날짜 미정";
