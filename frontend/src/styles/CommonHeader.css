@@ -284,6 +284,27 @@
     cursor: default;
 }
 
+.common-header-ticket-list-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid rgb(255 255 255 / 16%);
+    border-radius: 8px;
+    background: rgb(255 255 255 / 6%);
+    color: rgb(255 255 255 / 82%);
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.common-header-ticket-list-link:hover {
+    background: rgb(255 255 255 / 11%);
+    color: #fff;
+}
+
+
 .common-header-popover-body {
     max-height: min(60vh, 520px);
     overflow-y: auto;

@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/SmartTicketing/' : '/',
   plugins: [react()],
   envDir: fileURLToPath(new URL('..', import.meta.url)),
   envPrefix: 'VITE_',
@@ -16,4 +17,4 @@ export default defineConfig({
       '/login/oauth2': { target: 'http://localhost:8080', changeOrigin: true },
     },
   },
-})
+}))
