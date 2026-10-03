@@ -155,15 +155,6 @@ export default function TicketsPage() {
                         aria-label="티켓 상세"
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <button
-                            type="button"
-                            className={styles.ticketModalClose}
-                            aria-label="티켓 상세 닫기"
-                            onClick={() => setExpandedTicketId(null)}
-                        >
-                            ×
-                        </button>
-
                         <div className={styles.ticketCard}>
                             <div className={styles.ticketCardHeader}>
                                 <span className={styles.ticketLabel}>CINEMA PASS</span>
