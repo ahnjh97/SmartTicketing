@@ -94,7 +94,8 @@ export default function TicketsPage() {
                                         return (
                                             <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
                                                 <article
-                                                    className={`${styles.ticket}${expanded ? ` ${styles.expanded}` : ""}`}
+                                                    key={ticket.ticketId}
+                                                    className={styles.ticket}
                                                 >
                                                     <button
                                                         type="button"
@@ -113,7 +114,7 @@ export default function TicketsPage() {
                                                         <span className={styles.summaryTime}>
                                                             {formatDate(ticket.startTime)}
                                                         </span>
-                                                        <span className={`${styles.summaryStatus} ${styles[`status_${ticket.status?.toLowerCase()}`] || ""}`}>
+                                                        <span className={styles.summaryStatus}>
                                                             {formatTicketStatus(ticket.status)}
                                                         </span>
                                                         <span className={styles.expandIcon} aria-hidden="true">
@@ -121,13 +122,6 @@ export default function TicketsPage() {
                                                         </span>
                                                     </button>
                                                 </article>
-
-
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
                                 </div>
                             </section>
                         ))}
