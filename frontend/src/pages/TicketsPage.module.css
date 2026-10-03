@@ -57,27 +57,14 @@
 }
 .ticketModal {
     position: relative;
-    width: min(560px, 100%);
+    width: min(520px, 100%);
     max-height: min(720px, calc(100vh - 48px));
     overflow-y: auto;
-    box-sizing: border-box;
-    padding: 32px;
-    border: 1px solid var(--booking-border);
-    border-radius: var(--booking-radius-large);
-    background: var(--booking-surface);
-    box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
-}
-.ticketModal h2 {
-    margin: 0 40px 18px 0;
-    font-size: 26px;
-}
-.ticketModal p {
-    line-height: 1.7;
 }
 .ticketModalClose {
     position: absolute;
-    top: 14px;
-    right: 16px;
+    top: -14px;
+    right: -14px;
     width: 36px;
     height: 36px;
     border: 0;
@@ -282,6 +269,6 @@
         padding: 16px;
     }
     .ticketModal {
-        padding: 24px;
+        width: min(520px, 100%);
     }
 }
