@@ -9,6 +9,17 @@ function formatDate(value) {
     return value ? new Date(value).toLocaleString("ko-KR") : "-";
 }
 
+function formatDateOnly(value) {
+    return value
+        ? new Date(value).toLocaleDateString("ko-KR", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "long",
+        })
+        : "-";
+}
+
 export default function TicketsPage() {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -40,8 +51,23 @@ export default function TicketsPage() {
                 {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : tickets.length === 0 ? (
                     <p>발급된 티켓이 없습니다.</p>
                 ) : (
-                    <div className={styles.tickets}>
-                        {tickets.map((ticket) => {
+                    <div className={styles.ticketGroups}>
+                        {Object.entries(
+                            tickets.reduce((groups, ticket) => {
+                                const dateKey = ticket.startTime
+                                    ? new Date(ticket.startTime).toLocaleDateString("ko-KR")
+                                    : "날짜 미정";
+                                if (!groups[dateKey]) groups[dateKey] = [];
+                                groups[dateKey].push(ticket);
+                                return groups;
+                            }, {})
+                        ).map(([dateKey, dateTickets]) => (
+                            <section key={dateKey} className={styles.ticketGroup}>
+                                <h3 className={styles.dateHeading}>
+                                    {dateTickets[0]?.startTime ? formatDateOnly(dateTickets[0].startTime) : dateKey}
+                                </h3>
+                                <div className={styles.tickets}>
+                                    {dateTickets.map((ticket) => {
                             const expanded = expandedTicketId === ticket.ticketId;
 
                             return (
@@ -91,7 +117,10 @@ export default function TicketsPage() {
                                     )}
                                 </article>
                             );
-                        })}
+                                    })}
+                                </div>
+                            </section>
+                        ))}
                     </div>
                 )}
             </div>
