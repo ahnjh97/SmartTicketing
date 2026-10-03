@@ -62,6 +62,7 @@ export default function TicketsPage() {
     const [verificationPhase, setVerificationPhase] = useState("idle");
     const [verificationSeconds, setVerificationSeconds] = useState(3);
     const [selectedDate, setSelectedDate] = useState("ALL");
+    const [selectedDate, setSelectedDate] = useState("ALL");
 
     useEffect(() => {
         let mounted = true;
