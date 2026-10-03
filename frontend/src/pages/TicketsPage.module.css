@@ -57,12 +57,12 @@
 }
 .ticketModal {
     position: relative;
-    width: min(520px, 100%);
+    width: min(700px, 100%);
 }
 .ticketModalClose {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: -44px;
+    right: 0;
     width: 36px;
     height: 36px;
     border: 0;
@@ -80,18 +80,34 @@
 .ticketCard {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--booking-border);
-    border-radius: 18px;
+    border: 0;
+    border-radius: 20px;
     background: var(--booking-surface);
-    box-shadow: 0 20px 50px rgb(0 0 0 / 16%);
+    box-shadow: 0 24px 70px rgb(0 0 0 / 22%);
 }
+
+.ticketCard::before,
+.ticketCard::after {
+    content: "";
+    position: absolute;
+    top: 104px;
+    z-index: 3;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--booking-border);
+    border-radius: 50%;
+    background: rgb(0 0 0 / 45%);
+}
+
+.ticketCard::before { left: -12px; }
+.ticketCard::after { right: -12px; }
 
 .ticketCardHeader {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 18px 22px;
+    padding: 20px 26px;
     border-bottom: 1px solid var(--booking-border);
     background: var(--booking-soft);
 }
@@ -112,24 +128,32 @@
 
 .ticketCardContent {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    min-height: 330px;
+    grid-template-columns: minmax(0, 1fr) 230px;
+    min-height: 360px;
 }
 
 .ticketCardLeft {
     min-width: 0;
-    padding: 28px 26px;
+    padding: 34px 32px;
 }
 
 .ticketCardRight {
+    position: relative;
     display: flex;
     min-width: 0;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 18px;
-    padding: 28px 24px;
+    gap: 16px;
+    padding: 30px 24px;
     border-left: 1px dashed var(--booking-border);
+}
+
+.ticketStubLabel {
+    color: var(--booking-muted, inherit);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .2em;
 }
 
 .ticketCardMovie {
@@ -173,7 +197,7 @@
 
 .ticketQrPlaceholder {
     display: flex;
-    width: min(170px, 100%);
+    width: 168px;
     aspect-ratio: 1;
     align-items: center;
     justify-content: center;
@@ -220,6 +244,10 @@
     margin: 0 24px 24px;
 }
 
+.ticketNumber {
+    padding-top: 2px;
+}
+
 @media (max-width: 700px) {
     .ticketCardInfo {
         grid-template-columns: 1fr;
@@ -252,6 +280,19 @@
         padding: 16px;
     }
     .ticketModal {
-        width: min(520px, 100%);
+        width: min(100%, 520px);
+    }
+    .ticketCardContent {
+        grid-template-columns: minmax(0, 1fr) 150px;
+        min-height: 320px;
+    }
+    .ticketCardLeft {
+        padding: 26px 22px;
+    }
+    .ticketCardRight {
+        padding: 24px 14px;
+    }
+    .ticketQrPlaceholder {
+        width: 110px;
     }
 }
