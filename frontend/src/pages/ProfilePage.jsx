@@ -25,7 +25,7 @@ export default function ProfilePage() {
                 className: "social-logo social-wordmark naver-logo",
             },
             kakao: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/%EB%A1%9C%EA%B3%A0%20SVG/KAKAO.jpeg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Kakao_CI_yellow.svg",
                 alt: "Kakao",
                 className: "social-logo social-wordmark kakao-logo",
             },
