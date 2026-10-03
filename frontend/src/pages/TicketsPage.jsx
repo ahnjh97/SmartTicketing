@@ -189,8 +189,6 @@ export default function TicketsPage() {
                                     <small>{selectedTicket.qrCode}</small>
                                 </div>
                             </div>
-
-}
                         </div>
                     </section>
                 </div>
