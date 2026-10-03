@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_BASE_URL = "https://ahnjh97.github.io/SmartTicketing";
+const PUBLIC_TICKET_BASE_URL = "https://ahnj97.github.io/SmartTicketing";
 
 function formatDate(value) {
     return value
@@ -86,50 +86,12 @@ export default function TicketsPage() {
         }
 
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (!selected || selected.status !== "VALID") {
-            setVerificationPhase(selected?.status === "USED" ? "used" : "idle");
+        if (!selected) {
+            setVerificationPhase("idle");
             return;
         }
 
-        let stopped = false;
-        let timer;
-
-        const poll = async () => {
-            try {
-                const response = await fetch(
-                    `/api/tickets/verify/${encodeURIComponent(selected.qrCode || selected.ticketNumber)}`
-                );
-                const data = await response.json().catch(() => ({}));
-                if (stopped) return;
-
-                if (data.processing) {
-                    setVerificationPhase((current) => {
-                        if (current !== "processing") setVerificationSeconds(5);
-                        return "processing";
-                    });
-                } else if (data.used) {
-                    setVerificationPhase("used");
-                    setTickets((current) =>
-                        current.map((ticket) =>
-                            ticket.ticketId === selected.ticketId
-                                ? { ...ticket, status: "USED" }
-                                : ticket
-                        )
-                    );
-                    return;
-                }
-            } catch {
-                // QR 사용 확인은 다음 주기에 다시 시도한다.
-            }
-            timer = window.setTimeout(poll, 1000);
-        };
-
-        poll();
-
-        return () => {
-            stopped = true;
-            if (timer) window.clearTimeout(timer);
-        };
+        setVerificationPhase(selected.status === "USED" ? "used" : "idle");
     }, [expandedTicketId, tickets]);
 
     useEffect(() => {
@@ -141,6 +103,18 @@ export default function TicketsPage() {
 
         return () => window.clearInterval(timer);
     }, [verificationPhase]);
+
+    const handleVerifyDemo = () => {
+        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+        if (!selected || selected.status !== "VALID" || verificationPhase === "processing") return;
+
+        setVerificationSeconds(5);
+        setVerificationPhase("processing");
+
+        window.setTimeout(() => {
+            setVerificationPhase("used");
+        }, 5000);
+    };
 
     return (
         <section className={styles.page}>
@@ -171,10 +145,7 @@ export default function TicketsPage() {
 
                                         return (
                                             <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
-                                                <article
-                                                    key={ticket.ticketId}
-                                                    className={styles.ticket}
-                                                >
+                                                <article className={styles.ticket}>
                                                     <button
                                                         type="button"
                                                         className={styles.ticketSummary}
@@ -206,89 +177,102 @@ export default function TicketsPage() {
                     </div>
                 )}
             </div>
-        {expandedTicketId && (() => {
-            const selectedTicket = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-            if (!selectedTicket) return null;
+            {expandedTicketId && (() => {
+                const selectedTicket = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+                if (!selectedTicket) return null;
 
-            return (
-                <div
-                    className={styles.ticketModalBackdrop}
-                    role="presentation"
-                    onClick={() => setExpandedTicketId(null)}
-                >
-                    <section
-                        className={styles.ticketModal}
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="티켓 상세"
-                        onClick={(event) => event.stopPropagation()}
+                return (
+                    <div
+                        className={styles.ticketModalBackdrop}
+                        role="presentation"
+                        onClick={() => setExpandedTicketId(null)}
                     >
-                        <div className={styles.ticketCard}>
-                            <div className={styles.ticketCardHeader}>
-                                <span className={styles.ticketLabel}>CINEMA PASS</span>
-                                <span className={styles.ticketStatus}>
-                                    {verificationPhase === "used" ? "사용 처리됨" : formatTicketStatus(selectedTicket.status)}
-                                </span>
-                            </div>
-
-                            <div className={styles.ticketCardContent}>
-                                <div className={styles.ticketCardLeft}>
-                                    <div className={styles.ticketCardMovie}>
-                                        <span className={styles.ticketInfoLabel}>MOVIE</span>
-                                        <h2>{selectedTicket.movieTitle}</h2>
-                                    </div>
-
-                                    <div className={styles.ticketCardInfo}>
-                                        <div>
-                                            <span>THEATER</span>
-                                            <strong>
-                                                {selectedTicket.theaterName || "-"} , {selectedTicket.screenName || "-"}
-                                            </strong>
-                                        </div>
-                                        <div>
-                                            <span>SEAT</span>
-                                            <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
-                                        </div>
-                                        <div>
-                                            <span>TIME</span>
-                                            <strong>
-                                                {formatTime(selectedTicket.startTime)} ~ {formatTime(selectedTicket.endTime)}
-                                            </strong>
-                                        </div>
-                                    </div>
+                        <section
+                            className={styles.ticketModal}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label="티켓 상세"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className={styles.ticketCard}>
+                                <div className={styles.ticketCardHeader}>
+                                    <span className={styles.ticketLabel}>CINEMA PASS</span>
+                                    <span className={styles.ticketStatus}>
+                                        {verificationPhase === "used" ? "사용 처리됨" : formatTicketStatus(selectedTicket.status)}
+                                    </span>
                                 </div>
 
-                                <div className={styles.ticketCardRight}>
-                                    <span className={styles.ticketStubLabel}>ADMIT ONE</span>
-                                    <div className={styles.ticketQrPlaceholder}>
-                                        <QRCodeSVG
-                                            value={`${PUBLIC_TICKET_BASE_URL}/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
-                                            size={220}
-                                            marginSize={2}
-                                            level="M"
-                                            title={`티켓 QR - ${selectedTicket.ticketNumber}`}
-                                        />
-                                        {verificationPhase === "processing" && (
-                                            <div className={styles.qrProcessingOverlay}>
-                                                <strong>처리 중입니다...</strong>
-                                                <span>{verificationSeconds}초</span>
+                                <div className={styles.ticketCardContent}>
+                                    <div className={styles.ticketCardLeft}>
+                                        <div className={styles.ticketCardMovie}>
+                                            <span className={styles.ticketInfoLabel}>MOVIE</span>
+                                            <h2>{selectedTicket.movieTitle}</h2>
+                                        </div>
+
+                                        <div className={styles.ticketCardInfo}>
+                                            <div>
+                                                <span>THEATER</span>
+                                                <strong>
+                                                    {selectedTicket.theaterName || "-"} , {selectedTicket.screenName || "-"}
+                                                </strong>
                                             </div>
-                                        )}
+                                            <div>
+                                                <span>SEAT</span>
+                                                <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
+                                            </div>
+                                            <div>
+                                                <span>TIME</span>
+                                                <strong>
+                                                    {formatTime(selectedTicket.startTime)} ~ {formatTime(selectedTicket.endTime)}
+                                                </strong>
+                                            </div>
+                                        </div>
                                     </div>
-                                    {verificationPhase === "used" && (
-                                        <div className={styles.ticketUsedStamp}>USED</div>
-                                    )}
-                                    <div className={styles.ticketNumber}>
-                                        <span>TICKET NO.</span>
-                                        <strong>{selectedTicket.ticketNumber}</strong>
+
+                                    <div className={styles.ticketCardRight}>
+                                        <span className={styles.ticketStubLabel}>ADMIT ONE</span>
+                                        <div className={styles.ticketQrPlaceholder}>
+                                            <QRCodeSVG
+                                                value={`${PUBLIC_TICKET_BASE_URL}/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
+                                                size={220}
+                                                marginSize={2}
+                                                level="M"
+                                                title={`티켓 QR - ${selectedTicket.ticketNumber}`}
+                                            />
+                                            {verificationPhase === "processing" && (
+                                                <div className={styles.qrProcessingOverlay}>
+                                                    <strong>처리 중입니다...</strong>
+                                                    <span>{verificationSeconds}초</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {verificationPhase === "used" && (
+                                            <div className={styles.ticketUsedStamp}>USED</div>
+                                        )}
+
+                                        {selectedTicket.status === "VALID" && verificationPhase !== "used" && (
+                                            <button
+                                                type="button"
+                                                className={styles.verifyDemoButton}
+                                                onClick={handleVerifyDemo}
+                                                disabled={verificationPhase === "processing"}
+                                            >
+                                                {verificationPhase === "processing" ? "처리 중..." : "QR 사용 처리 테스트"}
+                                            </button>
+                                        )}
+
+                                        <div className={styles.ticketNumber}>
+                                            <span>TICKET NO.</span>
+                                            <strong>{selectedTicket.ticketNumber}</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
-                </div>
-            );
-        })()}
+                        </section>
+                    </div>
+                );
+            })()}
         </section>
     );
 }
