@@ -112,6 +112,13 @@ export default function TicketsPage() {
         setVerificationPhase("processing");
 
         window.setTimeout(() => {
+            setTickets((currentTickets) =>
+                currentTickets.map((ticket) =>
+                    ticket.ticketId === selected.ticketId
+                        ? { ...ticket, status: "USED" }
+                        : ticket
+                )
+            );
             setVerificationPhase("used");
         }, 3000);
     };
