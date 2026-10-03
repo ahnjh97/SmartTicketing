@@ -59,24 +59,6 @@
     position: relative;
     width: min(700px, 100%);
 }
-.ticketModalClose {
-    position: absolute;
-    top: -44px;
-    right: 0;
-    width: 36px;
-    height: 36px;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: inherit;
-    font-size: 28px;
-    line-height: 1;
-    cursor: pointer;
-}
-.ticketModalClose:hover {
-    background: rgb(0 0 0 / 7%);
-}
-
 .ticketCard {
     position: relative;
     overflow: hidden;
