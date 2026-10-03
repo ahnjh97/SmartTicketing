@@ -22,9 +22,7 @@ export default function ProfilePage() {
         }
         if (provider === "naver") {
             return (
-                <svg className="social-logo" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="currentColor" d="M4 4h5.08l5.92 8.03V4H20v16h-5.08L9 11.97V20H4V4Z" />
-                </svg>
+                <span className="naver-wordmark" aria-label="Naver">NAVER</span>
             );
         }
         return (
