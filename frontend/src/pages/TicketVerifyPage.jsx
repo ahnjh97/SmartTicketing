@@ -1,80 +1,111 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import "./TicketVerifyPage.css";
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 export default function TicketVerifyPage() {
     const { qrCode } = useParams();
-    const [message, setMessage] = useState("티켓을 확인하는 중입니다.");
-    const [error, setError] = useState(false);
+    const [phase, setPhase] = useState("loading");
+    const [ticket, setTicket] = useState(null);
+    const [message, setMessage] = useState("");
+    const [seconds, setSeconds] = useState(5);
 
     useEffect(() => {
-        if (!qrCode) {
-            setError(true);
-            setMessage("유효하지 않은 티켓입니다.");
-            return;
-        }
-
-        // 실제 USED 처리는 Spring API가 담당합니다.
-        // 배포 URL에서도 API 주소를 사용할 수 있도록 VITE_API_BASE_URL을 지원합니다.
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
         const controller = new AbortController();
 
-        fetch(`${apiBase}/api/tickets/verify/${encodeURIComponent(qrCode)}`, {
+        fetch(`${API_BASE_URL}/api/tickets/verify/${encodeURIComponent(qrCode || "")}`, {
             method: "POST",
-            credentials: "include",
             signal: controller.signal,
         })
             .then(async (response) => {
                 const data = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    throw new Error(data.message || "티켓을 사용할 수 없습니다.");
-                }
+                if (!response.ok) throw new Error(data.message || "티켓 확인에 실패했습니다.");
                 return data;
             })
-            .then(() => {
-                setMessage("사용 처리되었습니다.");
+            .then((data) => {
+                setTicket(data.ticket || null);
+                setMessage(data.message || "");
+                setPhase(data.used ? "processing" : "failed");
             })
-            .catch((e) => {
-                if (e.name === "AbortError") return;
-                setError(true);
-                setMessage(e.message || "티켓 확인에 실패했습니다.");
+            .catch((error) => {
+                if (error.name !== "AbortError") {
+                    setMessage(error.message || "티켓 확인에 실패했습니다.");
+                    setPhase("failed");
+                }
             });
 
         return () => controller.abort();
     }, [qrCode]);
 
     useEffect(() => {
-        if (error || message !== "사용 처리되었습니다.") return;
+        if (phase !== "processing") return;
+
+        const interval = window.setInterval(() => {
+            setSeconds((current) => {
+                if (current <= 1) {
+                    window.clearInterval(interval);
+                    setPhase("used");
+                    return 0;
+                }
+                return current - 1;
+            });
+        }, 1000);
+
+        return () => window.clearInterval(interval);
+    }, [phase]);
+
+    useEffect(() => {
+        if (phase !== "used") return;
 
         const timer = window.setTimeout(() => {
             window.close();
-            window.location.replace("about:blank");
-        }, 5000);
+            if (!window.closed) window.history.back();
+        }, 1200);
 
         return () => window.clearTimeout(timer);
-    }, [error, message]);
+    }, [phase]);
 
     return (
-        <main style={{
-            minHeight: "100vh",
-            display: "grid",
-            placeItems: "center",
-            padding: "24px",
-            boxSizing: "border-box",
-            background: "#f5f5f5",
-        }}>
-            <section style={{
-                width: "min(420px, 100%)",
-                padding: "36px 28px",
-                borderRadius: "16px",
-                background: "#fff",
-                boxShadow: "0 10px 30px rgba(0,0,0,.08)",
-                textAlign: "center",
-            }}>
-                <h1>{error ? "티켓 확인 실패" : "티켓 확인"}</h1>
-                <p>{message}</p>
-                {!error && message === "사용 처리되었습니다." && (
-                    <p>5초 후 페이지가 종료됩니다.</p>
+        <main className="ticket-verify-page">
+            <section className="verify-ticket">
+                <header className="verify-header">
+                    <span>CINEMA PASS</span>
+                    <strong>{phase === "used" ? "USED" : "TICKET VERIFY"}</strong>
+                </header>
+
+                <div className="verify-content">
+                    <div>
+                        <span className="verify-label">MOVIE</span>
+                        <h1>{ticket?.movieTitle || "티켓 확인"}</h1>
+                        <div className="verify-info">
+                            <p><span>THEATER</span>{ticket?.theaterName || "-"}</p>
+                            <p><span>SEAT</span>{ticket?.seats?.join(", ") || "-"}</p>
+                            <p><span>TICKET NO.</span>{ticket?.ticketNumber || "-"}</p>
+                        </div>
+                    </div>
+
+                    <div className="verify-qr-area">
+                        <div className="verify-qr-placeholder">QR</div>
+                    </div>
+                </div>
+
+                {phase === "loading" && <div className="verify-overlay"><strong>티켓 확인 중입니다.</strong></div>}
+
+                {phase === "processing" && (
+                    <div className="verify-overlay processing">
+                        <div className="processing-spinner" />
+                        <strong>처리 중입니다.</strong>
+                        <span>{seconds}초 후 사용 완료</span>
+                    </div>
                 )}
+
+                {phase === "used" && (
+                    <div className="used-stamp">USED</div>
+                )}
+
+                {phase === "used" && <p className="verify-message">사용 처리되었습니다.</p>}
+                {phase === "failed" && <p className="verify-error">{message}</p>}
             </section>
         </main>
     );
