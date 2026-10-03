@@ -166,7 +166,7 @@ export default function TicketsPage() {
 
                         <div className={styles.ticketCard}>
                             <div className={styles.ticketCardHeader}>
-                                <span className={styles.ticketLabel}>MOVIE TICKET</span>
+                                <span className={styles.ticketLabel}>CINEMA PASS</span>
                                 <span className={styles.ticketStatus}>{formatTicketStatus(selectedTicket.status)}</span>
                             </div>
 
@@ -198,6 +198,7 @@ export default function TicketsPage() {
                                 </div>
 
                                 <div className={styles.ticketCardRight}>
+                                    <span className={styles.ticketStubLabel}>ADMIT ONE</span>
                                     <div className={styles.ticketQrPlaceholder}>
                                         <span>QR</span>
                                         <small>{selectedTicket.qrCode}</small>
