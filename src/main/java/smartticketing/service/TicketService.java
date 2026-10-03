@@ -65,6 +65,19 @@ public class TicketService {
         return to(saved);
     }
 
+    public TicketVerifyResponse useNow(String qrCode) {
+        if (qrCode == null || qrCode.isBlank()) return new TicketVerifyResponse(false, false, "유효하지 않은 티켓입니다.", null);
+        Ticket ticket = tickets.findByQrCode(qrCode).orElseGet(() -> tickets.findByTicketNumber(qrCode).orElse(null));
+        if (ticket == null) return new TicketVerifyResponse(false, false, "유효하지 않은 티켓입니다.", null);
+        if (ticket.getStatus() == TicketStatus.USED) return new TicketVerifyResponse(false, false, "이미 사용된 티켓입니다.", to(ticket));
+        if (ticket.getStatus() == TicketStatus.CANCELLED) return new TicketVerifyResponse(false, false, "취소된 티켓입니다.", to(ticket));
+        int updated = tickets.markUsedIfValid(ticket.getQrCode(), TicketStatus.VALID, TicketStatus.USED, LocalDateTime.now());
+        if (updated == 0) return new TicketVerifyResponse(false, false, "티켓 사용 처리에 실패했습니다.", to(ticket));
+        ticket.setStatus(TicketStatus.USED);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return new TicketVerifyResponse(true, false, "사용 처리되었습니다.", to(ticket));
+    }
+
     public TicketVerifyResponse verifyAndUse(String qrCode) {
         if (qrCode == null || qrCode.isBlank()) {
             return new TicketVerifyResponse(false, false, "유효하지 않은 티켓입니다.", null);
