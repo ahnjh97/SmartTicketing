@@ -1,8 +1,6 @@
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
-import { Link } from 'react-router-dom';
-import glass from '../components/GlassButton.module.css';
 import styles from './TicketsPage.module.css';
 
 function formatDate(value) {
@@ -192,14 +190,7 @@ export default function TicketsPage() {
                                 </div>
                             </div>
 
-                            {selectedTicket.groupId && (
-                                <Link
-                                    className={glass.button}
-                                    to={`/booking/restore?group=${selectedTicket.groupId}`}
-                                >
-                                    예약 상세 및 전체 취소
-                                </Link>
-                            )}
+}
                         </div>
                     </section>
                 </div>
