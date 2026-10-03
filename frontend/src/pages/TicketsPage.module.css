@@ -57,7 +57,7 @@
 }
 .ticketModal {
     position: relative;
-    width: min(700px, 100%);
+    width: min(820px, 100%);
 }
 .ticketCard {
     position: relative;
@@ -133,7 +133,7 @@
 
 .ticketCardContent {
     display: grid;
-    grid-template-columns: minmax(0, .9fr) minmax(300px, 1.35fr);
+    grid-template-columns: minmax(0, .8fr) minmax(420px, 1.5fr);
     min-height: 360px;
 }
 
@@ -204,7 +204,7 @@
 
 .ticketQrPlaceholder {
     display: flex;
-    width: 168px;
+    width: 220px;
     aspect-ratio: 1;
     align-items: center;
     justify-content: center;
@@ -218,8 +218,8 @@
 
 .ticketQrPlaceholder svg {
     display: block;
-    width: 168px;
-    height: 168px;
+    width: 220px;
+    height: 220px;
 }
 
 .ticketNumber {
@@ -275,10 +275,10 @@
         padding: 16px;
     }
     .ticketModal {
-        width: min(100%, 520px);
+        width: min(100%, 700px);
     }
     .ticketCardContent {
-        grid-template-columns: minmax(0, .9fr) minmax(210px, 1.35fr);
+        grid-template-columns: minmax(0, .8fr) minmax(260px, 1.5fr);
         min-height: 320px;
     }
     .ticketCardLeft {
@@ -288,12 +288,12 @@
         padding: 24px 14px;
     }
     .ticketQrPlaceholder {
-        width: 130px;
+        width: 170px;
     }
 
     .ticketQrPlaceholder svg {
-        width: 130px;
-        height: 130px;
+        width: 170px;
+        height: 170px;
     }
 }
 
