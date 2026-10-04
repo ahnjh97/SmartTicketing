@@ -8,3 +8,6 @@
 !src/**
 !deploy/
 !deploy/backend-entrypoint.sh
+!build/
+!build/deploy/
+!build/deploy/app.jar

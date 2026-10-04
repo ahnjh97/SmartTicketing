@@ -4,6 +4,7 @@ import ui from './BookingComponents.module.css';
 import { useEffect, useRef, useState } from 'react';
 import { theaterApi } from '../api/theaters.js';
 import useAuth from '../hooks/useAuth.js';
+import { getKakaoMapKey } from '../config/runtime.js';
 
 // Reuse the SDK key/script identity and authenticated nearby API of ResidencePreference.
 export default function BookingMap({ theaters, onSelect }) {
@@ -23,7 +24,7 @@ export default function BookingMap({ theaters, onSelect }) {
             if (active) { setCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude }); setMessage('현재 위치를 표시했습니다. 지도에서 극장 핀을 선택해주세요.'); }
         }, () => { if (active) setMessage('위치 정보를 사용할 수 없습니다. 지도를 움직여 극장 핀을 선택해주세요.'); }, { timeout: 10000 });
         if (!navigator.geolocation) queueMicrotask(() => { if (active) setMessage('위치 기능을 지원하지 않습니다. 지도에서 극장 핀을 선택해주세요.'); });
-        const key = import.meta.env.VITE_KAKAO_MAP_JS_KEY;
+        const key = getKakaoMapKey();
         let script;
         const fail = () => { if (active) setMessage('지도를 불러올 수 없습니다. 모달을 닫고 브랜드 탭에서 지점을 선택해주세요.'); };
         const load = () => window.kakao?.maps ? window.kakao.maps.load(() => {

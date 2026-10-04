@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { theaterApi, userApi } from "../api";
+import { getKakaoMapKey } from "../config/runtime.js";
 import "./ResidencePreference.css";
 
 const ROWS =
@@ -367,8 +368,7 @@ export default function ResidencePreference({
         }
 
         const key =
-            import.meta.env
-                .VITE_KAKAO_MAP_JS_KEY;
+            getKakaoMapKey();
 
         if (!key) {
             Promise.resolve().then(

@@ -32,6 +32,7 @@ jobs:
         run: |
           bash -n deploy/deploy.sh
           sh -n deploy/backend-entrypoint.sh
+          sh -n frontend/docker/40-runtime-config.sh
           python3 -m unittest discover -s deploy -p 'test_*.py'
 
   backend:
@@ -64,6 +65,22 @@ jobs:
           java-version: 21
           cache: gradle
       - run: bash gradlew test bootJar --no-daemon
+      - name: Package tested backend JAR
+        run: |
+          set -euo pipefail
+          mapfile -t jars < <(find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -type f)
+          test "${#jars[@]}" -eq 1
+          mkdir -p build/deploy
+          cp "${jars[0]}" build/deploy/app.jar
+          cd build/deploy
+          sha256sum app.jar > app.jar.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: build/deploy/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -75,20 +92,56 @@ jobs:
     needs: [frontend, backend]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      BACKEND_IMAGE: smartticketing-backend:${{ github.sha }}
+      FRONTEND_IMAGE: smartticketing-frontend:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: build/deploy
       - name: Build backend production image
-        run: docker build -t smartticketing-backend:ci .
+        run: |
+          (cd build/deploy && sha256sum --check app.jar.sha256)
+          docker build --target prebuilt -t "$BACKEND_IMAGE" .
       - name: Build frontend production image
         run: >-
-          docker build -t smartticketing-frontend:ci
-          --build-arg VITE_KAKAO_MAP_JS_KEY=ci-build-placeholder
+          docker build -t "$FRONTEND_IMAGE"
+          --build-arg VITE_KAKAO_MAP_JS_KEY=
           --build-arg VITE_API_BASE_URL=
           --build-arg VITE_BASE_PATH=/ frontend
       - name: Validate container entrypoints
         run: |
-          docker run --rm --entrypoint sh smartticketing-backend:ci -n /app/backend-entrypoint.sh
-          docker run --rm smartticketing-frontend:ci nginx -t
+          expected=$(cut -d ' ' -f 1 build/deploy/app.jar.sha256)
+          actual=$(docker run --rm --entrypoint sha256sum "$BACKEND_IMAGE" /app/app.jar | cut -d ' ' -f 1)
+          test "$actual" = "$expected"
+          docker run --rm --entrypoint sh "$BACKEND_IMAGE" -n /app/backend-entrypoint.sh
+          docker run --rm -e VITE_KAKAO_MAP_JS_KEY=ciRuntimeKey "$FRONTEND_IMAGE" nginx -t
+      - name: Verify frontend runtime configuration over HTTP
+        run: |
+          set -euo pipefail
+          docker run -d --name frontend-check -p 127.0.0.1:8088:80 \
+            -e VITE_KAKAO_MAP_JS_KEY=ciRuntimeKey "$FRONTEND_IMAGE"
+          trap 'docker logs frontend-check; docker rm -f frontend-check' EXIT
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8088/ -o /tmp/frontend-index.html
+          grep -q '/runtime-config.js' /tmp/frontend-index.html
+          curl --fail http://127.0.0.1:8088/runtime-config.js | grep -q '"kakaoMapJsKey":"ciRuntimeKey"'
+      - name: Export verified images
+        run: |
+          set -euo pipefail
+          mkdir -p build/images
+          docker image inspect --format '{{.Id}}' "$BACKEND_IMAGE" > build/images/backend.image-id
+          docker image inspect --format '{{.Id}}' "$FRONTEND_IMAGE" > build/images/frontend.image-id
+          docker save "$BACKEND_IMAGE" "$FRONTEND_IMAGE" | gzip -1 > build/images/images.tar.gz
+          (cd build/images && sha256sum images.tar.gz > images.tar.gz.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-images-${{ github.sha }}
+          path: build/images/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
 
   deploy:
     needs: [frontend, backend, containers]
@@ -100,17 +153,30 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-images-${{ github.sha }}
+          path: build/images
       - name: Deploy tested commit to EC2
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
           AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
           DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           : "${AWS_HOST:?Set AWS_HOST}"
           : "${AWS_USERNAME:?Set AWS_USERNAME}"
           : "${AWS_SSH_KEY:?Set AWS_SSH_KEY}"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_ID" =~ ^[0-9]+-[0-9]+$ ]]
+          (cd build/images && sha256sum --check images.tar.gz.sha256)
+          IMAGES_SHA256=$(sha256sum build/images/images.tar.gz | cut -d ' ' -f 1)
+          BACKEND_ID=$(cat build/images/backend.image-id)
+          FRONTEND_ID=$(cat build/images/frontend.image-id)
+          [[ "$BACKEND_ID" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$FRONTEND_ID" =~ ^sha256:[0-9a-f]{64}$ ]]
           install -m 700 -d ~/.ssh
           trap 'rm -f ~/.ssh/smartticketing-key.pem' EXIT
           printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/smartticketing-key.pem
@@ -132,10 +198,14 @@ jobs:
             exit 1
           fi
           echo 'SSH host key received. Connecting to EC2...'
-          ssh -4 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=30 \
-            -o ConnectionAttempts=3 \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
-            -i ~/.ssh/smartticketing-key.pem "$AWS_USERNAME@$AWS_HOST" \
-            "bash -s -- '$DEPLOY_SHA'" < deploy/deploy.sh
+          ssh_options=(-4 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=30
+            -o ConnectionAttempts=3 -o ServerAliveInterval=30 -o ServerAliveCountMax=6
+            -i ~/.ssh/smartticketing-key.pem)
+          echo 'Uploading the verified backend and frontend images...'
+          ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
+            "umask 077; mkdir -p ~/.smartticketing-artifacts && cat > ~/.smartticketing-artifacts/$DEPLOY_ID.tar.gz" \
+            < build/images/images.tar.gz
+          ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
+            "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_ID' '$FRONTEND_ID'" < deploy/deploy.sh
       - name: Verify public HTTPS and JSON APIs
         run: python3 deploy/smoke-test.py https://smartticketing.duckdns.org

@@ -34,9 +34,11 @@ services:
       - smartticketing
 
   backend:
+    image: ${BACKEND_IMAGE:-smartticketing-backend:local}
     build:
       context: .
       dockerfile: Dockerfile
+      target: ${BACKEND_BUILD_TARGET:-source}
     container_name: smartticketing-backend
     restart: unless-stopped
     depends_on:
@@ -78,6 +80,7 @@ services:
       - smartticketing
 
   frontend:
+    image: ${FRONTEND_IMAGE:-smartticketing-frontend:local}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -86,6 +89,8 @@ services:
         VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
         VITE_BASE_PATH: /
     container_name: smartticketing-frontend
+    environment:
+      VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
     restart: unless-stopped
     depends_on:
       backend:
