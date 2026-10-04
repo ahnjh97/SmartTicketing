@@ -237,6 +237,24 @@ test('theater entry restores IDs and row panel without collecting party', async 
     expect(screen.getByTestId('url').textContent).toContain('entry=THEATER_NORMAL');
     expect(await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/)).toBeTruthy();
 });
+test('a showtime opens booking choices and closing restores the showtime card', async () => {
+    mount(`/theaters?theater=71&date=${seoulDate()}`);
+    const card = await screen.findByRole('button', { name: /20 \/ 108석/ });
+    card.focus();
+    fireEvent.click(card);
+    const dialog = await screen.findByRole('dialog', { name: '예매 방식 선택' });
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(screen.queryByText('선택')).toBe(null);
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.click(screen.getByRole('button', { name: '예매 방식 선택 닫기' }));
+    expect(screen.queryByRole('dialog', { name: '예매 방식 선택' })).toBe(null);
+    expect(document.activeElement).toBe(card);
+    expect(document.body.style.overflow).not.toBe('hidden');
+    fireEvent.click(card);
+    fireEvent(await screen.findByRole('dialog', { name: '예매 방식 선택' }), new Event('cancel', { bubbles: true, cancelable: true }));
+    expect(screen.queryByRole('dialog', { name: '예매 방식 선택' })).toBe(null);
+});
+
 test('sold out and unknown layouts have distinct button behavior', async () => {
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, layoutComplete: false }, { ...show, id: 92, availableSeats: 0 }] })) : baseFetch(url));
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);

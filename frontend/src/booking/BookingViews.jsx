@@ -7,6 +7,7 @@ import { formatRating } from './format.js';
 import { Link } from 'react-router-dom';
 import { DateCards, MovieCard, Pagination, QueryStatus } from './BookingComponents.jsx';
 import BookingMapDialog from './BookingMapDialog.jsx';
+import BookingMethodDialog from './BookingMethodDialog.jsx';
 import TimeRangeMenu from './TimeRangeMenu.jsx';
 import HorizontalRail from '../components/HorizontalRail.jsx';
 
@@ -16,7 +17,7 @@ function BookingDates({ booking }) {
 }
 
 function TheaterMovieRow({ movie, booking }) {
-    const { theaterId, date, now, params, update, selectedShow, valid, smartReady, enter } = booking;
+    const { theaterId, date, now, params, update } = booking;
     const shows = useCatalog('showtimes', { movieId: movie.movieId, theaterId, date });
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
     return <li className={styles.movieRow}>
@@ -28,26 +29,17 @@ function TheaterMovieRow({ movie, booking }) {
             </div>
             <QueryStatus query={shows} empty={Boolean(shows.data && !items.length)} />
             <HorizontalRail label={`${movie.title} 상영 시간`} className={styles.rowShowtimes}>{items.map(show => {
-                const selected = params.get('showtime') === String(show.id);
-                if (!selected) return <div key={show.id} className={styles.slot}>
-                    <button aria-pressed={false} className={ui.showtime} onClick={() => update({ movie: movie.movieId, showtime: show.id })}>
+                return <div key={show.id} className={styles.slot}>
+                    <button className={ui.showtime} aria-haspopup="dialog" onClick={() => update({ movie: movie.movieId, showtime: show.id })}>
                         <small>{show.screenName}</small>
                         <strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong>
                         <span>{show.availableSeats} / {show.totalSeats}석 {!show.availableSeats ? '매진' : !show.layoutComplete ? '배치 미확인' : ''}</span>
                     </button>
                 </div>;
-
-                return <div key={show.id} className={`${styles.slot} ${styles.slotSelected}`}>
-                    <div className={`${ui.showtime} ${styles.slotCard}`}>
-                        <button className={styles.slotSelection} aria-pressed={true} aria-label={`${show.screenName} ${show.startTime.slice(11, 16)} → ${show.endTime.slice(11, 16)} ${show.availableSeats} / ${show.totalSeats}석 ${!show.availableSeats ? '매진' : !show.layoutComplete ? '배치 미확인' : ''} 선택 해제`} onClick={() => update({ movie: null, showtime: null })}><small>{show.screenName}</small><strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong></button>
-                        <div className={styles.slotActions} onClick={e => e.stopPropagation()}>
-                            <button aria-label="일반예매" className={styles.slotBtn} disabled={!valid || !selectedShow?.availableSeats} onClick={() => enter('THEATER_NORMAL')}>일반</button>
-                            <button aria-label="스마트예매" className={`${styles.slotBtn} ${styles.slotBtnPrimary}`} disabled={!valid || !smartReady} onClick={() => enter('THEATER_SMART')}>스마트</button>
-                        </div>
-                    </div>
-                    <span className={ui.selectedBadge}>선택</span>
-                </div>;
             })}</HorizontalRail>
+            {params.get('movie') === String(movie.movieId) && items.some(show => String(show.id) === params.get('showtime')) &&
+                <BookingMethodDialog booking={booking} movie={movie} show={items.find(show => String(show.id) === params.get('showtime'))} />}
+
         </div>
     </li>;
 }
