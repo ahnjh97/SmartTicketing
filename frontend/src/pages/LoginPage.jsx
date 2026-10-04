@@ -29,7 +29,7 @@ export default function LoginPage() {
             });
 
             navigate(
-                bookingReturn() || PAGE_PATHS.profile,
+                bookingReturn() || PAGE_PATHS.home,
                 { replace: true }
             );
         });

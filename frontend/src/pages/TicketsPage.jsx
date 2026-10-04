@@ -60,7 +60,7 @@ export default function TicketsPage() {
     const [error, setError] = useState("");
     const [expandedTicketId, setExpandedTicketId] = useState(null);
     const [verificationPhase, setVerificationPhase] = useState("idle");
-    const [verificationSeconds, setVerificationSeconds] = useState(3);
+    const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
 
     useEffect(() => {
@@ -105,25 +105,47 @@ export default function TicketsPage() {
         return () => window.clearInterval(timer);
     }, [verificationPhase]);
 
-    const handleVerifyDemo = () => {
+
+    useEffect(() => {
+        if (!expandedTicketId) return;
+
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (!selected || selected.status !== "VALID" || verificationPhase === "processing") return;
+        if (!selected || selected.status !== "VALID") return;
 
-        setVerificationSeconds(3);
-        setVerificationPhase("processing");
+        let stopped = false;
+        let timer;
 
-        window.setTimeout(async () => {
+        const refresh = async () => {
             try {
-                const result = await ticketApi.completeVerify(selected.qrCode || selected.ticketNumber);
-                if (!result?.used) throw new Error(result?.message || "티켓 사용 처리에 실패했습니다.");
-                setTickets((currentTickets) => currentTickets.map((ticket) => ticket.ticketId === selected.ticketId ? { ...ticket, status: "USED" } : ticket));
-                setVerificationPhase("used");
-            } catch (e) {
-                setVerificationPhase("idle");
-                setError(e?.message ?? "티켓 사용 처리에 실패했습니다.");
+                const result = await ticketApi.verifyStatus(selected.qrCode || selected.ticketNumber);
+                if (stopped) return;
+
+                if (result?.used || result?.ticket?.status === "USED") {
+                    setTickets((currentTickets) =>
+                        currentTickets.map((ticket) =>
+                            ticket.ticketId === selected.ticketId
+                                ? { ...ticket, status: "USED" }
+                                : ticket
+                        )
+                    );
+                    setVerificationPhase("used");
+                    return;
+                }
+
+                setVerificationPhase(result?.processing ? "processing" : "idle");
+                timer = window.setTimeout(refresh, 1000);
+            } catch {
+                if (!stopped) timer = window.setTimeout(refresh, 2000);
             }
-        }, 3000);
-    };
+        };
+
+        refresh();
+
+        return () => {
+            stopped = true;
+            if (timer) window.clearTimeout(timer);
+        };
+    }, [expandedTicketId, tickets]);
 
     const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? new Date(ticket.startTime).toLocaleDateString("sv-SE") : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
     const filteredTickets = selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && new Date(ticket.startTime).toLocaleDateString("sv-SE") === selectedDate);
@@ -267,17 +289,6 @@ export default function TicketsPage() {
 
                                         {verificationPhase === "used" && (
                                             <div className={styles.ticketUsedStamp}>USED</div>
-                                        )}
-
-                                        {selectedTicket.status === "VALID" && verificationPhase !== "used" && (
-                                            <button
-                                                type="button"
-                                                className={styles.verifyDemoButton}
-                                                onClick={handleVerifyDemo}
-                                                disabled={verificationPhase === "processing"}
-                                            >
-                                                {verificationPhase === "processing" ? "처리 중..." : "QR 사용 처리 테스트"}
-                                            </button>
                                         )}
 
                                         <div className={styles.ticketNumber}>

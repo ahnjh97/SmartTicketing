@@ -23,7 +23,7 @@ export default function OAuthCallbackPage() {
 
     return (
         <Navigate
-            to={target === 'profile' ? bookingReturn() || PAGE_PATHS.profile : PAGE_PATHS[target]}
+            to={target === 'profile' ? bookingReturn() || PAGE_PATHS.home : PAGE_PATHS[target]}
             replace
         />
     );
