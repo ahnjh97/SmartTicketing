@@ -13,6 +13,91 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class AdminDataTests {
+    private void runResetSql(TemporaryMysqlDatabase database) throws Exception {
+        runResetSql(database, "reset-theaters.sql");
+    }
+
+    private void runResetSql(TemporaryMysqlDatabase database, String file) throws Exception {
+        String script = java.nio.file.Files.readString(java.nio.file.Path.of("deploy", file));
+        try (var connection = java.sql.DriverManager.getConnection(database.jdbcUrl(),
+                System.getenv("BOOKING_TEST_MYSQL_USER"), System.getenv("BOOKING_TEST_MYSQL_PASSWORD"));
+             var statement = connection.createStatement()) {
+            try {
+                for (String sql : script.split(";")) if (!sql.isBlank()) statement.execute(sql);
+            } catch (Exception failure) {
+                statement.execute("ROLLBACK");
+                throw failure;
+            }
+        }
+    }
+
+    @Test void deploymentResetWithUsersDeletesAdminSocialAndPreferencesButKeepsMovies() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.update("update users set login_id='admin',password='old-password-hash' where id=1");
+            f.sql.update("insert into users(id,name,nickname,status) values(2,'member','member','ACTIVE')");
+            f.sql.update("insert into user_social_accounts(user_id,provider,provider_user_id) values(2,'GOOGLE','social-id')");
+            f.sql.update("insert into user_preferred_seats(user_id,seat_position,priority) values(2,'MIDDLE_MIDDLE',0)");
+            f.sql.update("insert into notifications(user_id,type,message,is_read,created_at) values(2,'RESERVATION_COMPLETED','unlinked notice',false,now())");
+            var movies = f.sql.queryForList("select * from movies order by id");
+            runResetSql(database, "reset-theaters-and-users.sql");
+            for (String table : List.of("users", "user_social_accounts", "user_preferred_seats", "notifications",
+                    "theaters", "screens", "seats", "showtimes", "showtime_seats", "reservations", "payments",
+                    "tickets", "waiting_queues", "booking_request_groups", "user_preferred_theaters"))
+                assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isZero();
+            assertThat(f.sql.queryForList("select * from movies order by id")).isEqualTo(movies);
+            runResetSql(database, "reset-theaters-and-users.sql");
+        }
+    }
+
+    @Test void deploymentResetWithUsersRollsBackAllDataOnUnknownUserReference() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.execute("create table reset_legacy_user_guard (user_id bigint primary key, foreign key (user_id) references users(id)) engine=InnoDB");
+            f.sql.update("insert into reset_legacy_user_guard values(1)");
+            assertThatThrownBy(() -> runResetSql(database, "reset-theaters-and-users.sql")).isInstanceOf(java.sql.SQLException.class);
+            for (String table : List.of("theaters", "reservations", "payments", "notifications"))
+                assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isEqualTo(2);
+            assertThat(f.sql.queryForObject("select count(*) from users", Long.class)).isEqualTo(1);
+        }
+    }
+
+    @Test void deploymentResetPreservesAccountsSocialIdentitiesMoviesAndSeatPreferences() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.update("update users set login_id='admin',password='preserve-password-hash' where id=1");
+            f.sql.update("insert into user_social_accounts(user_id,provider,provider_user_id,email) values(1,'GOOGLE','social-id','test@example.com')");
+            f.sql.update("insert into user_preferred_seats(user_id,seat_position,priority) values(1,'MIDDLE_MIDDLE',0)");
+            f.sql.update("insert into notifications(user_id,type,message,is_read,created_at) values(1,'RESERVATION_COMPLETED','unlinked notice',false,now())");
+            var preserved = new java.util.LinkedHashMap<String, Object>();
+            for (String table : List.of("users", "user_social_accounts", "movies", "user_preferred_seats"))
+                preserved.put(table, f.sql.queryForList("select * from " + table + " order by id"));
+            runResetSql(database);
+            for (var entry : preserved.entrySet())
+                assertThat(f.sql.queryForList("select * from " + entry.getKey() + " order by id")).isEqualTo(entry.getValue());
+            for (String table : List.of("theaters", "screens", "seats", "showtimes", "showtime_seats",
+                    "reservations", "reservation_seats", "payments", "tickets", "waiting_queues",
+                    "queue_counters", "booking_request_groups", "booking_group_seat_preferences",
+                    "booking_group_theater_preferences", "user_preferred_theaters", "user_nearby_theaters"))
+                assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isZero();
+            assertThat(f.sql.queryForObject("select message from notifications", String.class)).isEqualTo("unlinked notice");
+            runResetSql(database); // Empty data can be reset again without affecting accounts.
+        }
+    }
+
+    @Test void deploymentResetRollsBackWhenUnexpectedForeignKeyBlocksDeletion() throws Exception {
+        try (var database = new TemporaryMysqlDatabase()) {
+            var f = fixture(database);
+            f.sql.execute("create table reset_legacy_guard (theater_id bigint primary key, foreign key (theater_id) references theaters(id)) engine=InnoDB");
+            f.sql.update("insert into reset_legacy_guard values(1)");
+            assertThatThrownBy(() -> runResetSql(database)).isInstanceOf(java.sql.SQLException.class);
+            assertThat(f.sql.queryForObject("select count(*) from theaters", Long.class)).isEqualTo(2);
+            assertThat(f.sql.queryForObject("select count(*) from reservations", Long.class)).isEqualTo(2);
+            assertThat(f.sql.queryForObject("select count(*) from payments", Long.class)).isEqualTo(2);
+            assertThat(f.sql.queryForObject("select count(*) from users", Long.class)).isEqualTo(1);
+        }
+    }
+
     private record Fixture(AdminDataService service, JdbcTemplate sql, TransactionTemplate tx) {
         Preview delete(Scope scope, Preview preview, boolean bookings) {
             return tx.execute(status -> service.delete(new DeleteRequest(scope, preview.fingerprint(), "삭제", bookings)));
