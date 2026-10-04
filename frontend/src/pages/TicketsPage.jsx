@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_BASE_URL = "https://smartticketing.duckdns.org";
+const PUBLIC_TICKET_BASE_URL = "https://ahnj97.github.io/SmartTicketing";
 
 function formatDate(value) {
     return value
