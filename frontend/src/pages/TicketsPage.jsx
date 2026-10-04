@@ -60,7 +60,7 @@ export default function TicketsPage() {
     const [error, setError] = useState("");
     const [expandedTicketId, setExpandedTicketId] = useState(null);
     const [verificationPhase, setVerificationPhase] = useState("idle");
-    const [verificationSeconds, setVerificationSeconds] = useState(3);
+    const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
 
     useEffect(() => {
@@ -133,7 +133,6 @@ export default function TicketsPage() {
                 }
 
                 setVerificationPhase(result?.processing ? "processing" : "idle");
-                setVerificationSeconds(5);
                 timer = window.setTimeout(refresh, 1000);
             } catch {
                 if (!stopped) timer = window.setTimeout(refresh, 2000);
