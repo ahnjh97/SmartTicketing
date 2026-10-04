@@ -25,6 +25,28 @@ public class ShowtimeQueryService {
         this.em = em; this.catalog = catalog; this.clock = clock.withZone(SEOUL);
     }
 
+    public ScheduleAvailability availability(Long movieId, LocalDate date, List<Long> theaterIds) {
+        BookingCatalogService.positiveId(movieId);
+        validateDate(date);
+        if (theaterIds != null && (theaterIds.isEmpty() || theaterIds.size() > 10
+                || theaterIds.stream().anyMatch(id -> id == null || id <= 0)))
+            throw new IllegalArgumentException("극장은 1~10개의 유효한 ID로 입력해주세요.");
+        var now = LocalDateTime.now(clock);
+        // Only one timestamp is needed. Do not materialize showtimes or load seat inventory.
+        var request = em.createQuery("""
+                select s.startTime from Showtime s join s.movie m join s.screen c join c.theater t
+                where m.id=:movie and m.active=true and c.active=true and t.active=true
+                and s.status=:status and s.startTime>=:from and s.startTime<:until and s.startTime>:now
+                """ + (theaterIds == null ? "" : " and t.id in :theaters")
+                + " order by s.startTime desc", LocalDateTime.class)
+                .setParameter("movie", movieId).setParameter("status", ShowtimeStatus.SCHEDULED)
+                .setParameter("from", CinemaDay.start(date)).setParameter("until", CinemaDay.start(date.plusDays(1)))
+                .setParameter("now", now).setMaxResults(1);
+        if (theaterIds != null) request.setParameter("theaters", theaterIds);
+        var times = request.getResultList();
+        return new ScheduleAvailability(!times.isEmpty(), times.isEmpty() ? null : offset(times.getFirst()), offset(now));
+    }
+
     public Items<MovieItem> theaterMovies(Long theaterId, LocalDate date) {
         catalog.requireTheater(theaterId);
         validateDate(date);

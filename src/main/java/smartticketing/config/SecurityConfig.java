@@ -85,7 +85,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/theaters/nearby").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/movies", "/api/movies/{id}",
                                 "/api/theaters", "/api/theaters/{id}", "/api/theaters/{id}/movies",
-                                "/api/showtimes", "/api/showtimes/{id}/seats").permitAll()
+                                "/api/showtimes", "/api/showtimes/availability", "/api/showtimes/{id}/seats").permitAll()
 
                         .anyRequest()
                         .authenticated()

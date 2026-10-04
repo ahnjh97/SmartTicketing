@@ -183,3 +183,8 @@ section.showPanel { max-width: 900px; margin-top: 16px; border-top: 2px solid va
 .movieSubmit { flex: 0 0 auto; height: 54px; padding-inline: 22px; white-space: nowrap; font-weight: 700; border-radius: 12px; }
 
 @media (max-width: 999px) { .movieFields { gap: 18px; padding: 16px; } }
+
+.availabilityNotice { max-width: 830px; min-height: 48px; margin: 4px auto 0; color: var(--booking-muted); font-size: 13px; line-height: 1.6; }
+.availabilityNotice p { margin: 4px 0; }
+.availabilityNotice strong { color: var(--booking-ink); font-weight: 600; }
+.availabilityNotice a { color: var(--booking-accent); }

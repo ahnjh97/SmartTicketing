@@ -20,6 +20,7 @@ async function api(url,options={}) {
     if(url.startsWith('/api/theaters?')) return response({items:[]});
     if(url==='/api/theaters/71') return response({id:71,name:'서울 극장'});
     if(url.startsWith('/api/theaters/71/movies')) return response({items:[movie]});
+    if(url.startsWith('/api/showtimes/availability?')) return response({available:true,latestStartTime:show.startTime});
     if(url.startsWith('/api/showtimes?')) return response({items:[show]});
     if(url==='/api/booking-groups') { if(pending) return pending; group={id:401,...JSON.parse(options.body),seatPreferences:['MIDDLE_MIDDLE']}; return response(group,201); }
     if(url==='/api/booking-groups/401') return response({...group,activeReservationId:saved?.id});

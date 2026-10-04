@@ -120,6 +120,8 @@ export function MovieBooking({ booking }) {
     const { date, now, rangeFuture, dateValid, from, until, adultCount, youthCount, audienceValid, update, shows, valid, enter } = booking;
     const total = adultCount + youthCount;
     const changeCount = (field, value) => update({ adult: adultCount, youth: youthCount, [field]: value, party: total + value - (field === 'adult' ? adultCount : youthCount) });
+    const releaseDate = booking.selectedMovie?.releaseDate;
+    const beforeRelease = releaseDate && date < releaseDate;
     return <>
         <BookingDates booking={booking} />
         <div className={styles.bookingRail}>
@@ -142,6 +144,15 @@ export function MovieBooking({ booking }) {
                 <button className={ui.primary + ' ' + styles.movieSubmit} disabled={!valid} onClick={() => enter('MOVIE_SMART')}>스마트예매</button>
             </div>
         </div>
+        {dateValid && <div className={styles.availabilityNotice}>
+            {booking.authLoading || booking.dayShows.loading ? <p role="status">상영회차를 확인하고 있습니다. 인원과 시간은 먼저 선택할 수 있습니다.</p>
+                : booking.needsPreferences ? <p role="status">스마트예매에 사용할 <Link to="/preferences">선호극장을 설정해주세요.</Link></p>
+                : booking.dayShows.error ? <QueryStatus query={booking.dayShows} />
+                : booking.dayShows.data && !booking.hasDayShows ? <div role="status">
+                    <strong>{booking.user ? '선택한 날짜에 선호극장의 상영회차가 없습니다.' : '선택한 날짜에 예매 가능한 상영회차가 없습니다.'}</strong>
+                    <p>{beforeRelease ? `${releaseDate.replaceAll('-', '.')} 개봉 예정입니다. ` : ''}다른 날짜를 선택하거나 추후 상영시간표를 확인해주세요.</p>
+                </div> : null}
+        </div>}
         {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 선택해주세요.</p>}
         {from && until && !rangeFuture && <p role="alert">현재 시각 이후의 시간 범위를 선택해주세요.</p>}
         {!audienceValid && <p role="alert">관람 인원은 총 1~6명으로 선택해주세요.</p>}
