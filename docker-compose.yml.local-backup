@@ -32,7 +32,6 @@ services:
       - mysql
       - redis
     environment:
-      OAUTH2_REDIRECT_BASE_URL: ${OAUTH2_REDIRECT_BASE_URL:-http://localhost:8080}
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-smart_ticketing}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&createDatabaseIfNotExist=true
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -48,8 +47,6 @@ services:
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      SERVER_FORWARD_HEADERS_STRATEGY: framework
-      SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
       SPRING_DATA_REDIS_HOST: redis
       REDIS_PORT: 6379
     expose:
@@ -63,7 +60,6 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-        VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
         VITE_BASE_PATH: /
     container_name: smartticketing-frontend
     restart: unless-stopped
@@ -83,21 +79,11 @@ services:
       - backend
     ports:
       - "80:80"
-      - "443:443"
     volumes:
-      - ./certbot/www:/var/www/certbot:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - smartticketing
-  certbot:
-    image: certbot/certbot:latest
-    container_name: smartticketing-certbot
-    volumes:
-      - ./certbot/www:/var/www/certbot
-      - ./certbot/conf:/etc/letsencrypt
-    networks:
-      - smartticketing
+
 volumes:
   mysql_data:
   redis_data:
