@@ -117,9 +117,23 @@ jobs:
           chmod 600 ~/.ssh/smartticketing-key.pem
           # Discover the server key on the runner; only the existing three secrets are needed.
           # This trusts the key returned by the network rather than an independently pinned key.
-          ssh-keyscan -T 10 -H "$AWS_HOST" > ~/.ssh/known_hosts
-          test -s ~/.ssh/known_hosts
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+          echo 'Fetching the EC2 SSH host key on port 22...'
+          host_key_ready=false
+          for attempt in 1 2 3; do
+            echo "SSH host key attempt $attempt/3"
+            if ssh-keyscan -4 -T 30 -t ed25519,rsa -H "$AWS_HOST" > ~/.ssh/known_hosts && test -s ~/.ssh/known_hosts; then
+              host_key_ready=true
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          if [ "$host_key_ready" != true ]; then
+            echo '::error::No SSH host key received after three attempts. Verify AWS_HOST matches the current EC2 public address and that port 22 allows this GitHub runner. SSH authentication and deployment have not started.'
+            exit 1
+          fi
+          echo 'SSH host key received. Connecting to EC2...'
+          ssh -4 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=30 \
+            -o ConnectionAttempts=3 \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -i ~/.ssh/smartticketing-key.pem "$AWS_USERNAME@$AWS_HOST" \
             "bash -s -- '$DEPLOY_SHA'" < deploy/deploy.sh
