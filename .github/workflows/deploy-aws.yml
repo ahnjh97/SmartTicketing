@@ -33,6 +33,7 @@ jobs:
           bash -n deploy/deploy.sh
           bash -n deploy/image-fingerprint.sh
           bash -n deploy/check-image-portability.sh
+          bash -n deploy/check-frontend-container.sh
           sh -n deploy/backend-entrypoint.sh
           sh -n frontend/docker/40-runtime-config.sh
           python3 -m unittest discover -s deploy -p 'test_*.py'
@@ -121,14 +122,7 @@ jobs:
           docker run --rm --entrypoint sh "$BACKEND_IMAGE" -n /app/backend-entrypoint.sh
           docker run --rm -e VITE_KAKAO_MAP_JS_KEY=ciRuntimeKey "$FRONTEND_IMAGE" nginx -t
       - name: Verify frontend runtime configuration over HTTP
-        run: |
-          set -euo pipefail
-          docker run -d --name frontend-check -p 127.0.0.1:8088:80 \
-            -e VITE_KAKAO_MAP_JS_KEY=ciRuntimeKey "$FRONTEND_IMAGE"
-          trap 'docker logs frontend-check; docker rm -f frontend-check' EXIT
-          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8088/ -o /tmp/frontend-index.html
-          grep -q '/runtime-config.js' /tmp/frontend-index.html
-          curl --fail http://127.0.0.1:8088/runtime-config.js | grep -q '"kakaoMapJsKey":"ciRuntimeKey"'
+        run: bash deploy/check-frontend-container.sh
       - name: Export verified images
         run: |
           set -euo pipefail
