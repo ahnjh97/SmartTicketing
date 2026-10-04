@@ -5,11 +5,12 @@ revision=${1:?Pass the tested commit SHA}
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
 artifact_id=${2:?Pass the workflow run ID and attempt}
 images_sha256=${3:?Pass the verified image archive SHA256}
-backend_id=${4:?Pass the verified backend image ID}
-frontend_id=${5:?Pass the verified frontend image ID}
+backend_fingerprint=${4:?Pass the verified backend fingerprint}
+frontend_fingerprint=${5:?Pass the verified frontend fingerprint}
 [[ "$artifact_id" =~ ^[0-9]+-[0-9]+$ ]] || { echo 'Invalid artifact ID' >&2; exit 1; }
 [[ "$images_sha256" =~ ^[0-9a-f]{64}$ ]] || { echo 'Invalid archive SHA256' >&2; exit 1; }
-[[ "$backend_id" =~ ^sha256:[0-9a-f]{64}$ && "$frontend_id" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Invalid image ID' >&2; exit 1; }
+[[ "$backend_fingerprint" =~ ^[0-9a-f]{64}$ && "$frontend_fingerprint" =~ ^[0-9a-f]{64}$ ]] || { echo 'Invalid image fingerprint' >&2; exit 1; }
+declare -F image_fingerprint >/dev/null || { echo 'Load image-fingerprint.sh before deploy.sh' >&2; exit 1; }
 artifact="$HOME/.smartticketing-artifacts/$artifact_id.tar.gz"
 cd "$HOME/SmartTicketing"
 
@@ -43,8 +44,10 @@ echo 'Loading the images validated by CI...'
 docker load --input "$artifact" < /dev/null
 export BACKEND_IMAGE="smartticketing-backend:$revision"
 export FRONTEND_IMAGE="smartticketing-frontend:$revision"
-[[ "$(docker image inspect --format '{{.Id}}' "$BACKEND_IMAGE")" == "$backend_id" ]] || { echo 'Backend image ID mismatch' >&2; exit 1; }
-[[ "$(docker image inspect --format '{{.Id}}' "$FRONTEND_IMAGE")" == "$frontend_id" ]] || { echo 'Frontend image ID mismatch' >&2; exit 1; }
+actual_backend=$(image_fingerprint "$BACKEND_IMAGE")
+actual_frontend=$(image_fingerprint "$FRONTEND_IMAGE")
+[[ "$actual_backend" == "$backend_fingerprint" ]] || { echo "Backend content/config mismatch: expected=$backend_fingerprint actual=$actual_backend" >&2; exit 1; }
+[[ "$actual_frontend" == "$frontend_fingerprint" ]] || { echo "Frontend content/config mismatch: expected=$frontend_fingerprint actual=$actual_frontend" >&2; exit 1; }
 
 git checkout main
 git reset --hard "$revision"

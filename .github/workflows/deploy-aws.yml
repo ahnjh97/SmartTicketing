@@ -31,6 +31,8 @@ jobs:
         working-directory: .
         run: |
           bash -n deploy/deploy.sh
+          bash -n deploy/image-fingerprint.sh
+          bash -n deploy/check-image-portability.sh
           sh -n deploy/backend-entrypoint.sh
           sh -n frontend/docker/40-runtime-config.sh
           python3 -m unittest discover -s deploy -p 'test_*.py'
@@ -131,10 +133,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/images
-          docker image inspect --format '{{.Id}}' "$BACKEND_IMAGE" > build/images/backend.image-id
-          docker image inspect --format '{{.Id}}' "$FRONTEND_IMAGE" > build/images/frontend.image-id
+          bash deploy/image-fingerprint.sh "$BACKEND_IMAGE" > build/images/backend.fingerprint
+          bash deploy/image-fingerprint.sh "$FRONTEND_IMAGE" > build/images/frontend.fingerprint
           docker save "$BACKEND_IMAGE" "$FRONTEND_IMAGE" | gzip -1 > build/images/images.tar.gz
           (cd build/images && sha256sum images.tar.gz > images.tar.gz.sha256)
+      - name: Verify images across Docker image stores
+        timeout-minutes: 5
+        run: bash deploy/check-image-portability.sh
       - uses: actions/upload-artifact@v4
         with:
           name: production-images-${{ github.sha }}
@@ -173,10 +178,10 @@ jobs:
           [[ "$DEPLOY_ID" =~ ^[0-9]+-[0-9]+$ ]]
           (cd build/images && sha256sum --check images.tar.gz.sha256)
           IMAGES_SHA256=$(sha256sum build/images/images.tar.gz | cut -d ' ' -f 1)
-          BACKEND_ID=$(cat build/images/backend.image-id)
-          FRONTEND_ID=$(cat build/images/frontend.image-id)
-          [[ "$BACKEND_ID" =~ ^sha256:[0-9a-f]{64}$ ]]
-          [[ "$FRONTEND_ID" =~ ^sha256:[0-9a-f]{64}$ ]]
+          BACKEND_FINGERPRINT=$(cat build/images/backend.fingerprint)
+          FRONTEND_FINGERPRINT=$(cat build/images/frontend.fingerprint)
+          [[ "$BACKEND_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$FRONTEND_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]
           install -m 700 -d ~/.ssh
           trap 'rm -f ~/.ssh/smartticketing-key.pem' EXIT
           printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/smartticketing-key.pem
@@ -205,7 +210,8 @@ jobs:
           ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
             "umask 077; mkdir -p ~/.smartticketing-artifacts && cat > ~/.smartticketing-artifacts/$DEPLOY_ID.tar.gz" \
             < build/images/images.tar.gz
-          ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
-            "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_ID' '$FRONTEND_ID'" < deploy/deploy.sh
+          cat deploy/image-fingerprint.sh deploy/deploy.sh | \
+            ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
+            "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_FINGERPRINT' '$FRONTEND_FINGERPRINT'"
       - name: Verify public HTTPS and JSON APIs
         run: python3 deploy/smoke-test.py https://smartticketing.duckdns.org
