@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_BASE_URL = "https://ahnj97.github.io/SmartTicketing";
+const PUBLIC_TICKET_BASE_URL = new URL(import.meta.env.BASE_URL || '/', window.location.origin).href.replace(/\/$/, '');
 
 function formatDate(value) {
     return value

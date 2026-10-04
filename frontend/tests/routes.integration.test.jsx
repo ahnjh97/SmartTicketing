@@ -45,6 +45,7 @@ beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn(async (url) => {
+        if (url === "/api/main") return new Response(JSON.stringify({ nowShowing: [], comingSoon: [] }));
         if (url.startsWith("/api/movies?") || url.startsWith("/api/theaters?")) return new Response(JSON.stringify({ items: [], page: 0, size: 20, totalElements: 0 }));
         if (url === "/api/auth/login") return new Response(JSON.stringify({ accessToken: "login-token" }));
         if (url.startsWith("/api/auth/check-login-id?")) return new Response(JSON.stringify({ available: true }));
@@ -78,8 +79,8 @@ test("header navigation changes paths and browser history with public booking pa
     fireEvent.click(screen.getByRole("button", { name: "테스트 뒤로가기" }));
     await at("/login");
     fireEvent.click(movies);
-    await at("/login");
-    expect(movies.getAttribute("aria-disabled")).toBe("true");
+    await at("/");
+    expect(movies.getAttribute("aria-current")).toBe("page");
     fireEvent.click(screen.getByRole("link", { name: "극장" }));
     await at("/theaters");
     expect(movies.getAttribute("aria-current")).toBe(null);
@@ -124,13 +125,13 @@ test('all public pages reuse the home header without route-specific appearance',
         const header = screen.getByRole('banner');
         expect(screen.getAllByRole('banner')).toHaveLength(1);
         expect(header.className).toBe('common-header');
-        expect(within(header).getAllByRole('link').map(link => link.textContent)).toEqual(['SmartTicketing', '극장', '로그인', '회원가입']);
-        expect(within(header).getByText('영화').getAttribute('aria-disabled')).toBe('true');
+        expect(within(header).getAllByRole('link').map(link => link.textContent)).toEqual(['SmartTicketing', '영화', '극장', '로그인', '회원가입']);
+        expect(within(header).getByRole('link', { name: '영화' }).getAttribute('href')).toBe('/');
         cleanup();
     }
 });
 
-test('member header keeps tickets immediately before logout on home and booking pages', async () => {
+test('member header exposes ticket, notification, logout and profile controls', async () => {
     localStorage.setItem('accessToken', 'header-test-token');
     for (const path of ['/', '/movies', '/theaters', '/profile', '/tickets']) {
         mount(path);
@@ -138,7 +139,8 @@ test('member header keeps tickets immediately before logout on home and booking 
         const header = screen.getByRole('banner');
         expect(header.className).toBe('common-header');
         const account = within(header).getByRole('navigation', { name: '회원 메뉴' });
-        expect([...account.children].map(item => item.textContent)).toEqual(['내 티켓', '로그아웃', '마이페이지']);
+        expect(within(account).getAllByRole('button').map(item => item.getAttribute('aria-label'))).toEqual(['내 티켓 열기', '알림 열기', '로그아웃']);
+        expect(within(account).getByRole('link', { name: '마이페이지' }).getAttribute('href')).toBe('/profile');
         cleanup();
     }
 });
@@ -162,13 +164,13 @@ test("tickets load the existing API for members and redirect guests to login", a
     mount("/tickets");
     await screen.findByLabelText("아이디");
     await at("/login");
-    expect(screen.queryByRole("link", { name: "내 티켓" })).toBe(null);
+    expect(screen.queryByRole("button", { name: "내 티켓 열기" })).toBe(null);
     cleanup();
     localStorage.setItem("accessToken", "saved-token");
     mount("/tickets");
-    await screen.findByRole("link", { name: "내 티켓" });
+    await screen.findByRole("button", { name: "내 티켓 열기" });
     await at("/tickets");
-    expect(await screen.findByText('발급된 티켓이 없습니다.')).toBeTruthy();
+    expect(await within(screen.getByRole('main')).findByText('발급된 티켓이 없습니다.')).toBeTruthy();
 });
 
 test("signup accepts a non-email login ID and opens preference setup with its issued token", async () => {
@@ -252,14 +254,14 @@ test("a late availability response cannot approve an edited login ID", async () 
     expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(false);
 });
 
-test("normal login retrieves the member and opens the existing profile", async () => {
+test("normal login retrieves the member and opens home", async () => {
     mount("/login");
     fireEvent.change(await screen.findByLabelText("아이디"), { target: { value: "tester" } });
     fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "로그인", exact: true }));
-    await at("/profile");
-    await screen.findByRole("heading", { name: "회원정보", exact: true });
-    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/auth/login", "/api/users/me"]);
+    await at("/");
+    await screen.findByRole("heading", { name: "상영작", exact: true });
+    expect(fetch.mock.calls.map(([url]) => url).filter(url => url === '/api/auth/login' || url === '/api/users/me')).toEqual(["/api/auth/login", "/api/users/me"]);
     expect(localStorage.getItem("accessToken")).toBe("login-token");
 });
 
@@ -268,22 +270,27 @@ test("refresh restores a preferences deep link once even under StrictMode", asyn
     mount("/preferences");
     await screen.findByRole("heading", { name: "회원정보 수정" });
     await at("/preferences");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer saved-token");
+    const memberRequests = fetch.mock.calls.filter(([url]) => url === '/api/users/me');
+    expect(memberRequests).toHaveLength(1);
+    expect(memberRequests[0][1].headers.Authorization).toBe("Bearer saved-token");
 });
 
-test("OAuth removes URL credentials and goes directly to preferences, then profile", async () => {
+test("OAuth removes URL credentials and goes directly to preferences, then home", async () => {
     const kakaoUser = { id: 2, nickname: "카카오", linkedProviders: ["KAKAO"], email: null };
-    fetch.mockResolvedValue(new Response(JSON.stringify(kakaoUser)));
+    const originalFetch = fetch.getMockImplementation();
+    fetch.mockImplementation((url, options) => url === '/api/users/me'
+        ? Promise.resolve(new Response(JSON.stringify(kakaoUser)))
+        : originalFetch(url, options));
     mount("/oauth2/callback#token=oauth-token");
     await screen.findByRole("heading", { name: "선호 정보 설정" });
     await at("/setup/preferences");
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer oauth-token");
+    const memberRequests = fetch.mock.calls.filter(([url]) => url === '/api/users/me');
+    expect(memberRequests).toHaveLength(1);
+    expect(memberRequests[0][1].headers.Authorization).toBe("Bearer oauth-token");
     fireEvent.click(screen.getByRole("button", { name: "선호정보 저장 테스트" }));
-    await screen.findByRole("heading", { name: "회원정보", exact: true });
-    await at("/profile");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await screen.findByRole("heading", { name: "상영작", exact: true });
+    await at("/");
+    expect(fetch.mock.calls.filter(([url]) => url === '/api/users/me')).toHaveLength(1);
 });
 
 test("401 during a member API call clears authentication and redirects the mounted page", async () => {
@@ -306,5 +313,7 @@ test("logout clears the session and leaves member routes", async () => {
     fireEvent.click(screen.getAllByRole("button", { name: "로그아웃" })[0]);
     await at("/login");
     expect(localStorage.getItem("accessToken")).toBe(null);
-    expect(fetch.mock.calls[1][0]).toBe("/api/auth/logout");
+    const logoutRequests = fetch.mock.calls.filter(([url]) => url === '/api/auth/logout');
+    expect(logoutRequests).toHaveLength(1);
+    expect(logoutRequests[0][1].method).toBe('POST');
 });

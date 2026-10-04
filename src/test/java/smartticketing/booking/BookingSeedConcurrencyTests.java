@@ -39,10 +39,11 @@ class BookingSeedConcurrencyTests {
                 };
                 var first = executor.submit(task); var second = executor.submit(task); start.countDown();
                 assertThat(List.of(first.get(60, TimeUnit.SECONDS), second.get(60, TimeUnit.SECONDS)))
-                        .containsExactlyInAnyOrder(21, 0);
+                        .containsExactlyInAnyOrder(9, 0);
                 try (var em = database.open()) {
-                    assertThat(em.createQuery("select count(s) from Showtime s", Long.class).getSingleResult()).isEqualTo(21);
-                    assertThat(em.createQuery("select count(s) from ShowtimeSeat s", Long.class).getSingleResult()).isEqualTo(2520);
+                    // One movie × three days × three scenario screens; concurrent calls must not duplicate it.
+                    assertThat(em.createQuery("select count(s) from Showtime s", Long.class).getSingleResult()).isEqualTo(9);
+                    assertThat(em.createQuery("select count(s) from ShowtimeSeat s", Long.class).getSingleResult()).isEqualTo(1080);
                 }
             } finally {
                 executor.shutdownNow();

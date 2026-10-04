@@ -83,7 +83,7 @@ public class SecurityConfig {
                                 new org.springframework.security.authorization.AuthorizationDecision(adminAccess.permits(authentication.get())))
 
                         .requestMatchers(HttpMethod.GET, "/api/theaters/nearby").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/movies", "/api/movies/{id}",
+                        .requestMatchers(HttpMethod.GET, "/api/health/readiness", "/api/movies", "/api/movies/{id}",
                                 "/api/theaters", "/api/theaters/{id}", "/api/theaters/{id}/movies",
                                 "/api/showtimes", "/api/showtimes/availability", "/api/showtimes/{id}/seats").permitAll()
 
@@ -127,7 +127,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(
                 List.of(
                         "http://localhost:5173",
-                        "https://ahnjh97.github.io"
+                        "https://ahnjh97.github.io",
+                        "https://smartticketing.duckdns.org"
                 )
         );
 

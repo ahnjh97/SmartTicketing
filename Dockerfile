@@ -12,6 +12,9 @@ RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/build/libs/*.jar app.jar
+COPY deploy/backend-entrypoint.sh /app/backend-entrypoint.sh
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "/app/backend-entrypoint.sh"]

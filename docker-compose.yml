@@ -3,6 +3,12 @@ services:
     image: mysql:8.4
     container_name: smartticketing-mysql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_ticketing}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -17,6 +23,11 @@ services:
     container_name: smartticketing-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     volumes:
       - redis_data:/data
     networks:
@@ -29,10 +40,19 @@ services:
     container_name: smartticketing-backend
     restart: unless-stopped
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 5 http://localhost:8080/api/health/readiness >/dev/null && curl --fail --silent --max-time 5 'http://localhost:8080/api/movies?page=0&size=1' >/dev/null"]
+      interval: 10s
+      timeout: 12s
+      retries: 48
+      start_period: 120s
     environment:
-      OAUTH2_REDIRECT_BASE_URL: ${OAUTH2_REDIRECT_BASE_URL:-http://localhost:8080}
+      OAUTH2_REDIRECT_BASE_URL: https://smartticketing.duckdns.org
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-smart_ticketing}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&createDatabaseIfNotExist=true
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -47,7 +67,7 @@ services:
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      FRONTEND_URL: https://smartticketing.duckdns.org
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
       SPRING_DATA_REDIS_HOST: redis
@@ -62,13 +82,19 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_API_BASE_URL: ""
         VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
         VITE_BASE_PATH: /
     container_name: smartticketing-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     expose:
       - "80"
     networks:
@@ -79,8 +105,10 @@ services:
     container_name: smartticketing-nginx
     restart: unless-stopped
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -91,6 +119,7 @@ services:
     networks:
       - smartticketing
   certbot:
+    profiles: ["maintenance"]
     image: certbot/certbot:latest
     container_name: smartticketing-certbot
     volumes:

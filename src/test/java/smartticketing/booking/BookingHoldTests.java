@@ -296,7 +296,7 @@ class BookingHoldTests {
         assertThat(tx(em -> service(em, CLOCK).hold(f.user, group, key(), BookingHoldService.Source.WAITING, candidate)).status()).isEqualTo(201);
         assertThat(tx(em -> service(em, CLOCK).hold(f.user, group, key(), BookingHoldService.Source.SMART, candidate)).status()).isEqualTo(409);
         assertInventory(f, 1, 1, 0);
-        tx(em -> { em.find(Showtime.class, f.show).setStartTime(NOW.toLocalDate().plusDays(1).atTime(2, 0)); return null; });
+        tx(em -> { em.find(Showtime.class, f.show).setStartTime(NOW.toLocalDate().plusDays(1).atTime(2, 1)); return null; });
         long otherGroup = id(create(f.otherUser, key(), request));
         assertThat(tx(em -> service(em, CLOCK).hold(f.otherUser, otherGroup, key(), BookingHoldService.Source.SMART, candidate)).status()).isEqualTo(400);
     }

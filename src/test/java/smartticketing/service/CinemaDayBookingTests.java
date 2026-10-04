@@ -22,6 +22,8 @@ class CinemaDayBookingTests {
         group.setStartTimeFrom(LocalTime.MIDNIGHT);
         assertThatCode(() -> BookingHoldService.validateGroupShow(group, show)).doesNotThrowAnyException();
         show.setStartTime(date.plusDays(1).atTime(2, 0));
+        assertThatCode(() -> BookingHoldService.validateGroupShow(group, show)).doesNotThrowAnyException();
+        show.setStartTime(date.plusDays(1).atTime(2, 1));
         assertThatThrownBy(() -> BookingHoldService.validateGroupShow(group, show)).isInstanceOf(BookingRejection.class);
     }
 }
