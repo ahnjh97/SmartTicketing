@@ -17,6 +17,6 @@ export default function RouteGuard() {
         if (target === 'preferenceSetup' || target === 'login') rememberBooking(location.pathname + location.search);
     }, [target, location.pathname, location.search]);
     if (loading) return <LoadingPage />;
-    if (target) return <Navigate to={target === 'profile' ? bookingReturn() || PAGE_PATHS.profile : PAGE_PATHS[target]} replace />;
+    if (target) return <Navigate to={target === 'profile' ? bookingReturn() || PAGE_PATHS.home : PAGE_PATHS[target]} replace />;
     return <Outlet />;
 }
