@@ -60,7 +60,7 @@ export default function SmartBooking({ booking }) {
             <GlassButton disabled={flow.busy} onClick={back}>선택 수정</GlassButton></header>
         <ol className={styles.steps} aria-label="스마트예매 진행 단계">{['조건 확인', '자동 선점 후 결제', '나의 티켓'].map((label,index) =>
             <li key={label} aria-current={index === step ? 'step' : undefined}><span>{index < step ? '✓' : `0${index+1}`}</span>{label}</li>)}</ol>
-        {!flow.user ? <section className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><p>선택한 영화와 조건은 그대로 돌아옵니다.</p><Link to="/login">로그인하고 이 선택으로 돌아오기 →</Link></section>
+        {!flow.user ? <section className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><p>선택한 영화와 조건은 그대로 돌아옵니다.</p><Link to="/login">로그인하고 이 선택으로 돌아오기</Link></section>
             : flow.loading ? <div className={styles.skeleton} role="status">서버에서 예매 상태를 복원하고 있습니다…</div>
             : flow.reservation ? <ReservationPanel flow={flow} onRestart={back}/>
             : flow.reservationId || flow.groupId && !flow.group ? null
@@ -84,7 +84,7 @@ export default function SmartBooking({ booking }) {
                     {preferredSeats.length > 0 && <div className={styles.preferences} aria-label="선호좌석 순위">{preferredSeats.map((seat,index) => <span key={`${seat}-${index}`}>{index+1}. {getSeatLabel(seat)}</span>)}</div>}
                     <p className={styles.hint}>{flow.group ? '이 요청은 생성 당시 선호순위를 유지합니다.' : '요청 생성 시 저장된 선호순위를 사용합니다.'} 선호좌석 배정을 보장하지 않습니다.</p>
                     <button className={`${ui.primary} ${styles.submit}`} disabled={flow.busy || !valid || !audience.companionsEligible}
-                        onClick={hold}>{flow.busy ? '가능한 자리를 찾고 있습니다…' : '자동으로 찾아 5분 선점 →'}</button>
+                        onClick={hold}>{flow.busy ? '가능한 자리를 찾고 있습니다…' : '자동으로 찾아 5분 선점'}</button>
                     <p className={styles.hint} role={flow.busy ? 'status' : undefined}>{flow.busy ? '좌석을 확인 중입니다. 아직 확보가 확정되지 않았습니다.' : '실제 결제와 자동 대기 등록은 진행되지 않습니다'}</p>
                 </aside>
             </div>}
@@ -92,8 +92,8 @@ export default function SmartBooking({ booking }) {
             <h3 ref={failureHeading} tabIndex={-1}>{choices ? '이번에는 자리를 확보하지 못했어요' : '요청을 완료하지 못했습니다'}</h3><p>{flow.error.message}</p>
             <div className={styles.actions}><GlassButton disabled={flow.busy} onClick={flow.refresh}>현재 예약 확인</GlassButton>
                 <GlassButton disabled={flow.busy} onClick={back}>조건 변경</GlassButton>
-                <Link to={`/theaters?date=${booking.date}`} onClick={flow.resetIntent}>극장과 회차 직접 선택 →</Link>
-                {flow.error.code === 'NO_THEATER_SCOPE' && <Link to="/preferences" onClick={flow.resetIntent}>선호극장 설정 →</Link>}
+                <Link to={`/theaters?date=${booking.date}`} onClick={flow.resetIntent}>극장과 회차 직접 선택</Link>
+                {flow.error.code === 'NO_THEATER_SCOPE' && <Link to="/preferences" onClick={flow.resetIntent}>선호극장 설정</Link>}
                 {choices && <GlassButton aria-expanded={waiting} onClick={() => setWaiting(value => !value)}>예비번호와 대기 안내</GlassButton>}</div>
             {waiting && <div className={styles.waiting}><strong>아래에서 대기할 회차를 직접 선택하세요</strong><p>신청 전에는 대기 등록이나 예비번호 발급이 이루어지지 않습니다.</p></div>}
         </section>}

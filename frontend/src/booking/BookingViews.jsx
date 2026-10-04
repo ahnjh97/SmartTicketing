@@ -162,7 +162,7 @@ export function MovieBooking({ booking }) {
 export function MovieCatalog({ booking }) {
     const { page, update, list } = booking;
     return (<>
-            <div className={styles.sectionHeading}><h2>영화 목록</h2><Link to="/theaters">극장별 예매 →</Link></div>
+            <div className={styles.sectionHeading}><h2>영화 목록</h2><Link to="/theaters">극장별 예매</Link></div>
             <QueryStatus query={list} empty={list.data?.items.length === 0} />
             <div className={styles.movies}>{list.data?.items.map(m => <MovieCard key={m.id} movie={m} onClick={() => update({ movie: m.id, showtime: null })} />)}</div>
             <Pagination data={list.data} page={page} onChange={value => update({ page: value })} />

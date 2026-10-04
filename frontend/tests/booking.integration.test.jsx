@@ -109,7 +109,7 @@ test('home uses title artwork while booking always uses a text title', async () 
     fireEvent.click(screen.getByRole('link', { name: '서울의 밤', exact: true }));
     expect((await screen.findByRole('heading', { name: '서울의 밤' })).textContent).toBe('서울의 밤');
     expect(screen.queryByAltText('서울의 밤')).toBe(null);
-    expect(screen.queryByRole('link', { name: '← 홈으로' })).toBe(null);
+    expect(screen.queryByRole('link', { name: '홈으로' })).toBe(null);
     fireEvent.click(screen.getByRole('link', { name: 'SmartTicketing' }));
     fireEvent.error(await screen.findByAltText('서울의 밤'));
     expect(screen.getByRole('heading', { name: '서울의 밤' }).textContent).toBe('서울의 밤');
