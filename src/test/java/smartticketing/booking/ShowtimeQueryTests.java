@@ -51,6 +51,43 @@ class ShowtimeQueryTests {
                 .setParameter("key", "booking-v1-" + scenario).getResultList().getFirst();
     }
 
+    @Test void scheduleAvailabilityUsesOneScalarQueryWithoutLoadingInventory() {
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true); statistics.clear();
+        var date = LocalDate.of(2026, 10, 1);
+        var result = query.availability(movieId, date, null);
+        assertThat(result.available()).isTrue();
+        assertThat(result.latestStartTime()).isAfter(result.serverTime());
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
+        assertThat(statistics.getEntityLoadCount()).isZero();
+        assertThat(query.availability(movieId, date, List.of(theaterId))).isEqualTo(result);
+        assertThat(query.availability(movieId, date, List.of(Long.MAX_VALUE)).available()).isFalse();
+        assertThat(query.availability(Long.MAX_VALUE, date, null).available()).isFalse();
+        assertThatThrownBy(() -> query.availability(movieId, date, List.of())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> query.availability(movieId, date, List.of(-1L))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void scheduleAvailabilityExcludesStartedCancelledAndInactiveShows() {
+        showtime("normal").setStatus(ShowtimeStatus.CANCELLED);
+        showtime("sold-out").setStartTime(LocalDateTime.of(2026, 10, 1, 9, 0));
+        showtime("fragmented").getScreen().setActive(false);
+        em.flush(); em.clear();
+        var result = query.availability(movieId, LocalDate.of(2026, 10, 1), null);
+        assertThat(result.available()).isFalse();
+        assertThat(result.latestStartTime()).isNull();
+    }
+
+    @Test void scheduleAvailabilityIncludesDawnInPreviousCinemaDay() {
+        em.createQuery("update Showtime s set s.status=:status").setParameter("status", ShowtimeStatus.CANCELLED).executeUpdate();
+        em.clear();
+        var show = showtime("normal");
+        show.setStatus(ShowtimeStatus.SCHEDULED);
+        show.setStartTime(LocalDateTime.of(2026, 10, 4, 1, 0));
+        em.flush(); em.clear();
+        assertThat(query.availability(movieId, LocalDate.of(2026, 10, 3), null).available()).isTrue();
+        assertThat(query.availability(movieId, LocalDate.of(2026, 10, 4), null).available()).isFalse();
+    }
+
     @Test void dawnShowBelongsToPreviousBookingDayAndKeepsActualTimestamp() {
         var show = showtime("normal");
         show.setStartTime(LocalDateTime.of(2026, 10, 4, 1, 0));
@@ -67,7 +104,7 @@ class ShowtimeQueryTests {
         assertThat(query.theaterMovies(theaterId, date).items()).extracting(item -> item.movieId()).contains(movieId);
     }
 
-    @Test void overnightRangeIncludesLowerAndExcludesUpperWithSeoulDates() {
+    @Test void overnightRangeIncludesBothStartTimeBoundsWithSeoulDates() {
         var first = showtime("normal"); var second = showtime("sold-out"); var excluded = showtime("fragmented");
         first.setStartTime(LocalDateTime.of(2026, 10, 1, 22, 0));
         first.setEndTime(LocalDateTime.of(2026, 10, 2, 0, 20));
@@ -77,7 +114,9 @@ class ShowtimeQueryTests {
         excluded.setEndTime(LocalDateTime.of(2026, 10, 2, 4, 0));
         em.flush(); em.clear();
         var result = query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), LocalTime.of(22, 0), LocalTime.of(2, 0));
-        assertThat(result.items()).extracting(i -> i.id()).containsExactly(first.getId(), second.getId());
+        assertThat(result.items()).extracting(i -> i.id()).containsExactly(first.getId(), second.getId(), excluded.getId());
+        assertThat(query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), LocalTime.of(22, 0), LocalTime.of(1, 59)).items())
+                .extracting(i -> i.id()).containsExactly(first.getId(), second.getId());
         assertThat(result.items().getFirst().endsNextDay()).isTrue();
         assertThat(result.items().getFirst().startTime().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
         assertThat(result.items().getFirst().pricePerPerson()).isEqualTo(10000);

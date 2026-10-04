@@ -43,7 +43,7 @@ export default function ReservationPanel({ flow, onRestart }) {
             <button className={`${ui.primary} ${styles.pay}`} disabled={busy || remaining === 0} onClick={() => pay(false)}>{busy ? '서버에서 처리 중…' : failed ? '모의결제 다시 시도' : `${r.totalAmount.toLocaleString('ko-KR')}원 모의결제`}</button>
             {import.meta.env.DEV && import.meta.env.VITE_BOOKING_MOCK_FAILURE === 'true' && <GlassButton disabled={busy || remaining === 0} onClick={() => pay(true)}>개발용 결제 실패 확인</GlassButton>}
         </>}
-        {confirmed && <Link className={styles.ticketLink} to="/tickets">내 티켓에서 확인 →</Link>}
+        {confirmed && <Link className={styles.ticketLink} to="/tickets">내 티켓에서 확인</Link>}
         {r.status === 'CANCELLED' && <p>예약 전체가 취소되었습니다. 결제 완료 건은 수수료 없이 모의 전액 환불됩니다.</p>}
         {r.status === 'EXPIRED' && <p>좌석을 다시 선택해주세요. 이전 선점은 연장되지 않습니다.</p>}
         <div className={styles.resultActions}><GlassButton disabled={busy} onClick={refresh}>최신 상태 확인</GlassButton>

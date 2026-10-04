@@ -1,7 +1,10 @@
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import ResidencePreference from "../src/components/ResidencePreference.jsx";
+import { theaterApi } from "../src/api";
+
+vi.mock("../src/api", () => ({ theaterApi: { nearby: vi.fn() }, userApi: {} }));
 
 const user = {
     id: 1, nickname: "테스터", birthDate: "2000-01-01", address: "서울",
@@ -34,6 +37,68 @@ afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+});
+
+test.each([true, false])("map confirmation keeps a fixed pin only after successful lookup: %s", async succeeds => {
+    const maps = window.kakao.maps;
+    maps.LatLng = class {
+        constructor(lat, lng) { this.lat = lat; this.lng = lng; }
+        getLat() { return this.lat; }
+        getLng() { return this.lng; }
+    };
+    let map;
+    maps.Map = class {
+        constructor(_, options) { this.center = options.center; map = this; }
+        addControl() {}
+        setCenter(center) { this.center = center; }
+        getCenter() { return this.center; }
+        setLevel() {}
+    };
+    maps.MarkerImage = class {};
+    maps.Size = class {};
+    maps.Point = class {};
+    maps.Marker = vi.fn(class { setMap() {} });
+    maps.services = {
+        Status: { OK: 'OK' },
+        Geocoder: class { coord2Address(_, __, callback) { callback([{ address: { address_name: '선택한 주소' } }], 'OK'); } },
+    };
+    theaterApi.nearby.mockReset();
+    if (succeeds) theaterApi.nearby.mockResolvedValue([1, 2, 3].map(id => ({ theaterId: id, name: `극장${id}`, distance: 100 })));
+    else theaterApi.nearby.mockRejectedValue(new Error('조회 실패'));
+    const { container } = render(<ResidencePreference user={user} onSaved={vi.fn()} />);
+    expect(screen.queryByText(/다른 위치를 찾으려면/)).toBe(null);
+    expect(screen.getByRole('button', { name: '선호 정보 저장' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '다른 위치 선택하기' }));
+    map.setCenter(new maps.LatLng(37.5, 127.1));
+    expect(container.querySelector('.map-center-pin')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '이 위치로 조회' }));
+    await waitFor(() => expect(theaterApi.nearby).toHaveBeenCalledWith(expect.objectContaining({ latitude: 37.5, longitude: 127.1 })));
+    if (succeeds) {
+        const status = await screen.findByText('위치가 확정됐어요. 아래에서 영화관을 선택해주세요.');
+        expect(status.closest('section').querySelector('.kakao-map')).toBeTruthy();
+        expect(container.querySelector('.map-center-pin')).toBe(null);
+        expect(maps.Marker).toHaveBeenCalledWith(expect.objectContaining({ title: '조회 기준 위치', position: expect.objectContaining({ lat: 37.5, lng: 127.1 }) }));
+        expect(screen.getByText('선택한 주소')).toBeTruthy();
+        expect(screen.queryByText('확정된 위치')).toBe(null);
+        const save = screen.getByRole('button', { name: '선호 정보 저장' });
+        fireEvent.click(screen.getByRole('button', { name: '극장1' }));
+        fireEvent.click(screen.getByRole('button', { name: '극장2' }));
+        expect(save.disabled).toBe(true);
+        fireEvent.click(screen.getByRole('button', { name: '극장3' }));
+        expect(save.disabled).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: '중앙 5번' }));
+        fireEvent.click(screen.getAllByRole('button', { name: '양옆 1번' })[0]);
+        expect(save.disabled).toBe(true);
+        fireEvent.click(screen.getByRole('button', { name: '중앙 5번' }));
+        expect(save.disabled).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: '다른 위치 선택하기' }));
+        expect(save.disabled).toBe(true);
+    } else {
+        await screen.findByText('조회 실패');
+        expect(screen.queryByText('위치가 확정됐어요. 아래에서 영화관을 선택해주세요.')).toBe(null);
+        expect(container.querySelector('.map-center-pin')).toBeTruthy();
+        expect(maps.Marker).not.toHaveBeenCalled();
+    }
 });
 
 test("saved seat priorities restore immediately and remain editable", () => {

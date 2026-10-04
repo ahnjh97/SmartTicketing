@@ -6,7 +6,7 @@ import { dates, positive, rememberBooking, seoulDate, validRange, validParty, fu
 
 export default function useBookingPage(mode) {
     const theaterMode = mode === 'theater';
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [params, setParams] = useSearchParams();
     const [expanded, setExpanded] = useState(false);
     const [columns, setColumns] = useState(() => window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
@@ -35,7 +35,7 @@ export default function useBookingPage(mode) {
             if (value === null || value === '') next.delete(key); else next.set(key, String(value));
         }
         return next;
-    }), [setParams]);
+    }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams]);
     const selectTheater = useCallback(id => update({ theater: id, brand: null, q: null, page: 0, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
@@ -58,15 +58,19 @@ export default function useBookingPage(mode) {
     const movies = useCatalog(theaterMode && theaterId && dateValid ? `theaters/${theaterId}/movies` : null, { date });
     const detail = useCatalog(!theaterMode && movieId ? `movies/${movieId}` : null);
     const selectedMovieExists = theaterMode ? movies.data?.items.some(m => String(m.movieId) === movieId) : Boolean(detail.data);
-    const shows = useCatalog(movieId && dateValid && selectedMovieExists && (theaterMode ? theater.data : rangeFuture && audienceValid) ? 'showtimes' : null,
-        { movieId, ...(theaterMode ? { theaterId } : from && until ? { startFrom: from, startUntil: until } : {}), date }, entry || '');
+    const preferences = [...(user?.preferredTheaters || [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+    const needsPreferences = Boolean(user && !preferences.length);
+    const dayShows = useCatalog(!theaterMode && movieId && dateValid && !authLoading && !needsPreferences ? 'showtimes/availability' : null,
+        { movieId, date, ...(user ? { theaterIds: preferences.map(theater => theater.theaterId).join(',') } : {}) }, `${user?.id || 'guest'}:${entry || ''}`);
+    const hasDayShows = Boolean(dayShows.data?.available && Date.parse(dayShows.data.latestStartTime) > now);
+    const shows = useCatalog(theaterMode && movieId && dateValid && selectedMovieExists && theater.data ? 'showtimes' : null,
+        { movieId, theaterId, date }, entry || '');
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
     const selectedShow = items.find(s => String(s.id) === params.get('showtime'));
     const selectedMovie = theaterMode ? movies.data?.items.find(m => String(m.movieId) === movieId) : detail.data;
-    const preferences = [...(user?.preferredTheaters || [])].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     const valid = Boolean(dateValid && selectedMovieExists && !shows.loading && !shows.error && (theaterMode
         ? selectedShow
-        : audienceValid && rangeFuture));
+        : !authLoading && !needsPreferences && hasDayShows && !dayShows.loading && !dayShows.error && audienceValid && rangeFuture));
     const smartReady = theaterMode ? Boolean(selectedShow) : true;
     const enter = kind => {
         if (!valid || (kind === 'THEATER_SMART' && !smartReady)) return;
@@ -82,5 +86,5 @@ export default function useBookingPage(mode) {
             return next;
         });
     };
-    return { theaterMode, user, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, adultCount, youthCount, audienceValid, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
+    return { theaterMode, user, authLoading, needsPreferences, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, adultCount, youthCount, audienceValid, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, dayShows, hasDayShows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
 }

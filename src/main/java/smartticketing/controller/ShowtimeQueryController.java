@@ -6,12 +6,20 @@ import smartticketing.dto.booking.ShowtimeResponse.*;
 import smartticketing.service.ShowtimeQueryService;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api")
 public class ShowtimeQueryController {
     private final ShowtimeQueryService query;
     public ShowtimeQueryController(ShowtimeQueryService query) { this.query = query; }
+
+    @GetMapping("/showtimes/availability")
+    public ScheduleAvailability availability(@RequestParam Long movieId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) List<Long> theaterIds) {
+        return query.availability(movieId, date, theaterIds);
+    }
 
     @GetMapping("/showtimes")
     public Items<ShowtimeItem> showtimes(@RequestParam(required = false) Long movieId,

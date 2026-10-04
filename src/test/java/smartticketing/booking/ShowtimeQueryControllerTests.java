@@ -30,6 +30,20 @@ class ShowtimeQueryControllerTests {
         verifyNoInteractions(query);
     }
 
+    @Test void availabilityBindsOptionalTheaterScopeAndRequiresMovieAndDate() throws Exception {
+        var date = LocalDate.of(2026, 10, 1);
+        var start = OffsetDateTime.parse("2026-10-01T22:00:00+09:00");
+        when(query.availability(1L, date, List.of(2L, 3L)))
+                .thenReturn(new ScheduleAvailability(true, start, start.minusHours(3)));
+        mvc.perform(get("/api/showtimes/availability").param("movieId", "1").param("date", date.toString()).param("theaterIds", "2,3"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(true))
+                .andExpect(jsonPath("$.latestStartTime").value("2026-10-01T22:00:00+09:00"));
+        verify(query).availability(1L, date, List.of(2L, 3L));
+        mvc.perform(get("/api/showtimes/availability").param("movieId", "1")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/showtimes/availability").param("date", date.toString())).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/showtimes/availability").param("movieId", "1").param("date", "2026-02-30")).andExpect(status().isBadRequest());
+    }
+
     @Test void timeFiltersBindWithoutLosingNextDayDisplayInformation() throws Exception {
         var start = OffsetDateTime.parse("2026-10-01T22:00:00+09:00");
         var item = new ShowtimeItem(9L, 1L, 2L, 3L, "1관", start, start.plusHours(3), true,

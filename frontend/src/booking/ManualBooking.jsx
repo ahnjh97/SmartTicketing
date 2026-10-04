@@ -43,7 +43,7 @@ export default function ManualBooking({ booking }) {
             const step = flow.reservation?.status === 'CONFIRMED' ? 2 : flow.reservation ? 1 : 0;
             return <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}><span>{index < step ? '✓' : `0${index+1}`}</span>{label}</li>;
         })}</ol>
-        {!flow.user ? <section className={styles.empty}><h3>로그인 후 좌석을 선택할 수 있습니다</h3><p>선택한 회차를 저장해두었습니다.</p><Link to="/login">로그인하고 계속하기 →</Link></section>
+        {!flow.user ? <section className={styles.empty}><h3>로그인 후 좌석을 선택할 수 있습니다</h3><p>선택한 회차를 저장해두었습니다.</p><Link to="/login">로그인하고 계속하기</Link></section>
             : flow.loading ? <div className={styles.skeleton} role="status">서버에서 예약을 복원하고 있습니다…</div>
             : flow.reservation ? <ReservationPanel flow={flow} onRestart={reset} />
             : flow.reservationId || flow.groupId && !flow.group ? null
@@ -66,7 +66,7 @@ export default function ManualBooking({ booking }) {
                     {show.pricePerPerson !== 10000 && <p className={styles.error}>회차 가격을 확인할 수 없어 예매할 수 없습니다.</p>}
                     <button className={`${ui.primary} ${styles.pay}`} disabled={flow.busy || !validSeats || !audience.companionsEligible || party < 1 || party > 6 || show.pricePerPerson !== 10000}
                         onClick={() => flow.hold({ entryPoint: 'THEATER_NORMAL', movieId: Number(booking.movieId), viewingDate: booking.date,
-                            partySize: party, selectedShowtimeId: show.id, audience }, selected)}>{flow.busy ? '좌석을 확인하고 있습니다…' : '선택한 좌석 5분 선점 →'}</button>
+                            partySize: party, selectedShowtimeId: show.id, audience }, selected)}>{flow.busy ? '좌석을 확인하고 있습니다…' : '선택한 좌석 5분 선점'}</button>
                     <p className={styles.hint}>다음 단계에서 모의결제를 진행합니다.</p>
                     <GlassButton disabled={flow.busy} onClick={seats.retry}>좌석 현황 새로고침</GlassButton>
                 </aside>
