@@ -7,7 +7,7 @@
 .card[data-holding="true"] { background: radial-gradient(ellipse at top right, var(--booking-smart-glow), transparent 75%), var(--booking-soft); border-color: var(--booking-accent); }
 .card h3 { font-size: 21px; margin: 20px 0 12px; overflow-wrap: anywhere; }
 .badge { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 20px; background: var(--booking-muted-surface); display: inline-block; }
-.action { color: var(--booking-ink); display: inline-flex; gap: 20px; justify-content: space-between; align-items: center; min-height: 44px; font-weight: 750; text-underline-offset: 5px; }
+.action { color: var(--booking-ink); display: inline-flex; gap: 20px; justify-content: space-between; align-items: center; min-height: 44px; font-weight: 750; text-decoration: none; }
 .action:focus-visible { outline: 3px solid var(--booking-accent); outline-offset: 5px; border-radius: 3px; }
 .action:hover { color: var(--booking-accent); }
 .paging { display: flex; gap: 10px; margin-top: 20px; }

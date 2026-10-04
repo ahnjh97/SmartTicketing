@@ -17,6 +17,7 @@
 .logo { display: block; width: min(100%, 400px); height: 180px; object-fit: contain; object-position: left center; }
 .copy h1 { font-size: clamp(36px, 4.6vw, 64px); line-height: 1.08; letter-spacing: -.035em; color: white; margin: 0 0 24px; overflow-wrap: anywhere; }
 .meta { font-size: 14px; font-weight: 600; color: #e0e0e2; }
+.genres { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .synopsis { white-space: pre-line; font-size: 14px; line-height: 1.8; color: #ddd; margin-top: 24px; }
 .notice { color: #b0b2b8; font-size: 12px; line-height: 1.6; }
 .hero .primary { display: inline-flex; align-items: center; gap: 40px; margin-top: 24px; padding: 16px 24px; border-radius: 6px; color: var(--booking-on-accent); background: var(--booking-accent); text-decoration: none; font-weight: 700; }
@@ -45,3 +46,25 @@
 .credits { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 20px; font-size: 14px; line-height: 1.4; }
 .credits dt { font-weight: 700; }
 .credits dd { margin: 0; opacity: 0.85; }
+/* Keep the booking controls anchored across short and long movie descriptions. */
+.detail .inner { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); padding-bottom: 8px; }
+.detail .copy { display: grid; grid-template-rows: auto auto auto auto auto; align-content: start; gap: 16px; height: 540px; min-width: 0; box-sizing: border-box; padding-top: 30px; }
+.detail .copy h1 { font-size: 42px; line-height: 1.2; margin: 0 0 6px; overflow: visible; word-break: keep-all; overflow-wrap: anywhere; }
+.detail .meta { display: flex; align-items: baseline; gap: 12px; margin: 0; min-width: 0; white-space: nowrap; }
+.detail .meta > span:not(.genres) { flex-shrink: 0; }
+/* Six lines also fit when a title wraps on mobile, without moving the booking controls. */
+.detail .synopsis { margin: 0; min-height: 0; align-self: start; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; max-height: 10.8em; overflow: hidden; overflow-wrap: anywhere; word-break: normal; }
+.detail .credits { margin: 0; align-content: start; overflow: auto; overflow-wrap: anywhere; min-height: 0; scrollbar-width: thin; }
+.detailActions { min-width: 0; overflow: auto; }
+.detailActions .notice { margin: 4px 0; }
+.hero .copy .play { width: fit-content; height: 40px; min-height: 40px; gap: 8px; padding: 0 16px; border-radius: 999px; margin-top: 4px; background: rgb(255 255 255 / 8%); border: 1px solid rgb(255 255 255 / 24%); }
+.hero .copy .play span { font-size: 13px; font-weight: 600; letter-spacing: -.02em; }
+.hero .copy .play svg { width: 16px; height: 16px; flex-shrink: 0; }
+.hero .copy .play:hover { background: rgb(255 255 255 / 16%); border-color: rgb(255 255 255 / 45%); }
+@media (min-width: 600px) and (max-width: 999px) { .detail .inner { grid-template-columns: minmax(0, 560px) minmax(0, 1fr); } }
+@media (max-width: 599px) {
+ .detail .inner { grid-template-columns: minmax(0, 1fr); padding-bottom: 8px; }
+ .detail .copy { height: 490px; }
+ .detail .copy h1 { font-size: 32px; }
+}
+@media (max-width: 359px) { .detail .copy { height: 540px; } }

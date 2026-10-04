@@ -132,7 +132,9 @@ public class BookingWaitingService {
                 from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom()); until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
                 if (!until.isAfter(from)) until = until.plusDays(1);
             }
-            var candidates = em.createQuery("select s from Showtime s where s.movie.id=:m and s.startTime>=:from and s.startTime<:until and s.startTime>:now order by s.startTime,s.id", Showtime.class)
+            var candidates = em.createQuery("select s from Showtime s where s.movie.id=:m and s.startTime>=:from and s.startTime>:now"
+                    + (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART ? " and s.startTime<=:until" : " and s.startTime<:until")
+                    + " order by s.startTime,s.id", Showtime.class)
                     .setParameter("m", group.getMovie().getId()).setParameter("from", from).setParameter("until", until).setParameter("now", now).getResultList();
             for (var show : candidates) {
                 if (rows.stream().anyMatch(q -> q.getShowtime().getId().equals(show.getId()))) continue;

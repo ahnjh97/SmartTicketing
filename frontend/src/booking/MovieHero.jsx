@@ -1,4 +1,3 @@
-import InlineDetails from '../components/InlineDetails.jsx';
 import GlassButton from '../components/GlassButton.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -51,27 +50,27 @@ export default function MovieHero({ movie, home = false }) {
                     ? <Link className={styles.titleLink} to={href}>{title}</Link>
                     : title}</h1>
                 {!home && <p className={styles.meta}>
-                    <InlineDetails items={[
-                        formatRating(movie.rating),
-                        movie.runningTime ? `${movie.runningTime}분` : '상영시간 미확인',
-                        movie.releaseDate && `${movie.releaseDate.replaceAll('-', '.')} 개봉`,
-                    ].filter(Boolean)} />
-                    {movie.genres && <><br />{movie.genres}</>}
+                    <span>{formatRating(movie.rating)}</span>
+                    <span>{movie.runningTime ? `${movie.runningTime}분` : '상영시간 미확인'}</span>
+                    {movie.genres && <span className={styles.genres} title={movie.genres}>{movie.genres.split(/[,/]/).map(genre => genre.trim()).filter(Boolean).join(' / ')}</span>}
                 </p>}
-                {!home && <p className={styles.synopsis}>{movie.description || '등록된 줄거리가 없습니다.'}</p>}
-                {!home && (movie.director || movie.castNames) && <dl className={styles.credits}>
+                {!home && <p className={styles.synopsis} aria-label="영화 줄거리">{movie.description || '등록된 줄거리가 없습니다.'}</p>}
+                {!home && <dl className={styles.credits}>
+                    {movie.releaseDate && <><dt>개봉일</dt><dd><time dateTime={movie.releaseDate}>{movie.releaseDate.replaceAll('-', '.')}</time></dd></>}
                     {movie.director && <><dt>감독</dt><dd>{movie.director}</dd></>}
                     {movie.castNames && <><dt>출연</dt><dd>{movie.castNames}</dd></>}
                 </dl>}
-                {!home && video && <GlassButton className={styles.play} onClick={() => setPlaying(true)} aria-label={`${movie.title} 예고편 재생`} title="예고편 보기">
+                {!home && <div className={styles.detailActions}>{video && <GlassButton className={styles.play} onClick={() => setPlaying(true)} aria-label={`${movie.title} 예고편 재생`} title="예고편">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7Z" /></svg>
+                    <span>예고편</span>
                 </GlassButton>}
+                    {!image && <p className={styles.notice}>등록된 이미지가 없습니다.</p>}
+                    {!video && <p className={styles.notice}>{image ? '예고편 대신 영화 이미지로 안내합니다.' : '등록된 예고편이 없습니다.'}</p>}
+                </div>}
                 {home && <Link className={styles.primary} to={href}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true" focusable="false">
                         <g transform="rotate(-35 12 12)"><path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4Z" /><path d="M15 6v3m0 2v2m0 2v3" /></g>
                     </svg>예매하기</Link>}
-                {!home && !image && <p className={styles.notice}>등록된 이미지가 없습니다.</p>}
-                {!home && !video && <p className={styles.notice}>{image ? '예고편 대신 영화 이미지로 안내합니다.' : '등록된 예고편이 없습니다.'}</p>}
             </div>
         </div>
         {playing && <Trailer title={movie.title} src={video} onClose={() => setPlaying(false)} />}

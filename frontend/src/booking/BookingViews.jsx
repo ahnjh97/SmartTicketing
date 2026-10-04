@@ -60,7 +60,7 @@ export function BookingConfirmation({ booking }) {
             {valid && (entry !== 'THEATER_SMART' || smartReady) ? <>
                 <p><InlineDetails items={[selectedMovie?.title, date]} /></p>
                 {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
-                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만</>, `총 ${party}명`]} /></p>}
+                    : <p><InlineDetails items={[<>시작시간 {from} ~ {until} (양 끝 포함)</>, `총 ${party}명`]} /></p>}
                 <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점, 결제, 대기 신청은 실행되지 않았습니다.</p>
                 {!user && <Link to="/login">로그인하고 이 선택으로 돌아오기</Link>}
             </> : (shows.loading || detail.loading || theater.loading || movies.loading) ? null
@@ -120,6 +120,8 @@ export function MovieBooking({ booking }) {
     const { date, now, rangeFuture, dateValid, from, until, adultCount, youthCount, audienceValid, update, shows, valid, enter } = booking;
     const total = adultCount + youthCount;
     const changeCount = (field, value) => update({ adult: adultCount, youth: youthCount, [field]: value, party: total + value - (field === 'adult' ? adultCount : youthCount) });
+    const releaseDate = booking.selectedMovie?.releaseDate;
+    const beforeRelease = releaseDate && date < releaseDate;
     return <>
         <BookingDates booking={booking} />
         <div className={styles.bookingRail}>
@@ -137,11 +139,20 @@ export function MovieBooking({ booking }) {
                         </div>)}<div className={styles.partyTotal}><span>총인원</span><output aria-label="총인원" aria-live="polite"><strong>{total}</strong>명</output></div></div>
                 </fieldset>
                 <div className={styles.timePicker}><span className={styles.fieldLabel}>상영 시작 시간</span>
-                    <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} update={update} />
+                    <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} runningTime={booking.selectedMovie?.runningTime} update={update} />
                 </div>
                 <button className={ui.primary + ' ' + styles.movieSubmit} disabled={!valid} onClick={() => enter('MOVIE_SMART')}>스마트예매</button>
             </div>
         </div>
+        {dateValid && <div className={styles.availabilityNotice}>
+            {booking.authLoading || booking.dayShows.loading ? <p role="status">상영회차를 확인하고 있습니다. 인원과 시간은 먼저 선택할 수 있습니다.</p>
+                : booking.needsPreferences ? <p role="status">스마트예매에 사용할 <Link to="/preferences">선호극장을 설정해주세요.</Link></p>
+                : booking.dayShows.error ? <QueryStatus query={booking.dayShows} />
+                : booking.dayShows.data && !booking.hasDayShows ? <div role="status">
+                    <strong>{booking.user ? '선택한 날짜에 선호극장의 상영회차가 없습니다.' : '선택한 날짜에 예매 가능한 상영회차가 없습니다.'}</strong>
+                    <p>{beforeRelease ? `${releaseDate.replaceAll('-', '.')} 개봉 예정입니다. ` : ''}다른 날짜를 선택하거나 추후 상영시간표를 확인해주세요.</p>
+                </div> : null}
+        </div>}
         {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 선택해주세요.</p>}
         {from && until && !rangeFuture && <p role="alert">현재 시각 이후의 시간 범위를 선택해주세요.</p>}
         {!audienceValid && <p role="alert">관람 인원은 총 1~6명으로 선택해주세요.</p>}
@@ -151,7 +162,7 @@ export function MovieBooking({ booking }) {
 export function MovieCatalog({ booking }) {
     const { page, update, list } = booking;
     return (<>
-            <div className={styles.sectionHeading}><h2>영화 목록</h2><Link to="/theaters">극장별 예매 →</Link></div>
+            <div className={styles.sectionHeading}><h2>영화 목록</h2><Link to="/theaters">극장별 예매</Link></div>
             <QueryStatus query={list} empty={list.data?.items.length === 0} />
             <div className={styles.movies}>{list.data?.items.map(m => <MovieCard key={m.id} movie={m} onClick={() => update({ movie: m.id, showtime: null })} />)}</div>
             <Pagination data={list.data} page={page} onChange={value => update({ page: value })} />

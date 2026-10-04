@@ -20,6 +20,7 @@ async function api(url,options={}) {
     if(url.startsWith('/api/theaters?')) return response({items:[]});
     if(url==='/api/theaters/71') return response({id:71,name:'서울 극장'});
     if(url.startsWith('/api/theaters/71/movies')) return response({items:[movie]});
+    if(url.startsWith('/api/showtimes/availability?')) return response({available:true,latestStartTime:show.startTime});
     if(url.startsWith('/api/showtimes?')) return response({items:[show]});
     if(url==='/api/booking-groups') { if(pending) return pending; group={id:401,...JSON.parse(options.body),seatPreferences:['MIDDLE_MIDDLE']}; return response(group,201); }
     if(url==='/api/booking-groups/401') return response({...group,activeReservationId:saved?.id});
@@ -39,8 +40,8 @@ function mount(path=moviePath) { return render(<MemoryRouter initialEntries={[pa
 beforeEach(()=>{ localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test'); group=null;saved=null;failure=null;lost=false;attempts=0;paid=false;pending=null;vi.stubGlobal('fetch',vi.fn(api)); });
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 async function confirm() { fireEvent.click(await screen.findByLabelText(/동반 관객 모두/));
-    await waitFor(()=>expect(screen.getByRole('button',{name:'자동으로 찾아 5분 선점 →'}).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button',{name:'자동으로 찾아 5분 선점 →'})); }
+    await waitFor(()=>expect(screen.getByRole('button',{name:'자동으로 찾아 5분 선점'}).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button',{name:'자동으로 찾아 5분 선점'})); }
 
 test('movie smart sends range and audience without seat IDs, restores and uses shared mock payment',async()=>{
     mount(); await confirm(); await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
@@ -69,8 +70,8 @@ test.each(['SOLD_OUT','NO_CONTIGUOUS_SEATS','LAYOUT_UNVERIFIED'])('%s offers exp
 test('network retry preserves smart request key and never optimistically confirms seats',async()=>{
     lost=true;mount();await confirm();await screen.findByText('네트워크 연결 끊김');
     expect(screen.queryByRole('heading',{name:'좌석을 선점했습니다'})).toBeNull();
-    await waitFor(()=>expect(screen.getByRole('button',{name:'자동으로 찾아 5분 선점 →'}).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button',{name:'자동으로 찾아 5분 선점 →'}));await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
+    await waitFor(()=>expect(screen.getByRole('button',{name:'자동으로 찾아 5분 선점'}).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button',{name:'자동으로 찾아 5분 선점'}));await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
     const holds=fetch.mock.calls.filter(([url])=>url.endsWith('/smart-hold'));expect(holds).toHaveLength(2);
     expect(holds[0][1].headers['Idempotency-Key']).toBe(holds[1][1].headers['Idempotency-Key']);
 });

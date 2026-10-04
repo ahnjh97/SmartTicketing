@@ -13,11 +13,11 @@ export default function PreferenceSetupPage() {
     }
     return (
         <div className="page">
-            <div className="card profile-card">
+            <div className="card profile-card preference-card">
                 <div className="profile-header">
                     <div>
                         <h1>선호 정보 설정</h1>
-                        <p className="subtitle">{user.nickname}님, 예매에 사용할 선호 정보를 설정해주세요.</p>
+                        <p className="subtitle">{user.nickname}님, 스마트 예매에 사용할 선호 정보를 설정해주세요.</p>
                     </div>
                 </div>
                 <ResidencePreference key={user.id} user={user} onSaved={handleSaved} />

@@ -89,7 +89,7 @@ test("header navigation changes paths and browser history with public booking pa
     await at("/");
     expect(movies.getAttribute("aria-current")).toBe("page");
     expect(theaters.getAttribute("aria-current")).toBe(null);
-    expect(screen.queryByRole("link", { name: "영화 목록에서 예매 시작하기 →" })).toBe(null);
+    expect(screen.queryByRole("link", { name: "영화 목록에서 예매 시작하기" })).toBe(null);
 });
 
 test("guest direct access to a member page reaches login", async () => {

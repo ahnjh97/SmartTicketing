@@ -92,6 +92,25 @@ class BookingSmartTests {
             assertThat(em.createQuery("select count(w) from WaitingQueue w where w.requestGroup.id=:g",Long.class).setParameter("g",f.group).getSingleResult()).isZero(); return null; });
     }
 
+    @Test void movieRangeIncludesMaximumStartEvenWhenMovieEndsLater() {
+        var f = fixture(true, 2, 4);
+        tx(em -> {
+            var group = em.find(BookingRequestGroup.class, f.group);
+            group.setStartTimeFrom(LocalTime.of(11, 30));
+            group.setStartTimeTo(LocalTime.of(12, 0));
+            var query = new ShowtimeQueryService(em, new BookingCatalogService(em), CLOCK);
+            var shows = query.showtimes(f.movie, null, NOW.toLocalDate(), LocalTime.of(11, 30), LocalTime.of(12, 0));
+            assertThat(shows.items()).extracting(ShowtimeResponse.ShowtimeItem::id).containsExactly(f.shows.getLast());
+            assertThat(shows.items().getFirst().endTime().toLocalTime()).isEqualTo(LocalTime.of(14, 0));
+            var outside = query.showtimes(f.movie, null, NOW.toLocalDate(), LocalTime.of(11, 0), LocalTime.of(11, 30));
+            assertThat(outside.items()).isEmpty();
+            return null;
+        });
+        var result = hold(f);
+        assertThat(result.status()).isEqualTo(201);
+        assertThat(value(result, "showtimeId")).isEqualTo(f.shows.getLast());
+    }
+
     @Test void seatPriorityPrecedesTheaterAndUsesSnapshot() {
         var f=fixture(true,2,4);
         tx(em -> { var live = new UserPreferredSeat(); live.setUser(em.find(Users.class,f.user)); live.setPriority(1); live.setSeatPosition(SeatPosition.SIDE_REAR); em.persist(live); return null; });
@@ -192,18 +211,19 @@ class BookingSmartTests {
             code(hold(f),"LAYOUT_UNVERIFIED"); noBooking(f);
         }
     }
-    @Test void midnightIncludesLowerBoundAndExcludesUpperBound() {
+    @Test void midnightIncludesBothStartTimeBounds() {
         var f=fixture(true,2,4); tx(em -> {
             em.createNativeQuery("update booking_request_groups set start_time_from='22:00', start_time_to='02:00' where id=:id",Object.class).setParameter("id",f.group).executeUpdate();
             em.find(Showtime.class,f.shows.getFirst()).setStartTime(NOW.toLocalDate().atTime(22,0));
             em.find(Showtime.class,f.shows.getLast()).setStartTime(NOW.toLocalDate().plusDays(1).atTime(2,0)); return null;
         });
-        assertThat(value(hold(f),"showtimeId")).isEqualTo(f.shows.getFirst());
+        assertThat(value(hold(f),"showtimeId")).isEqualTo(f.shows.getLast());
         var g=fixture(true,2,4); tx(em -> {
             em.createNativeQuery("update booking_request_groups set start_time_from='22:00', start_time_to='02:00' where id=:id",Object.class).setParameter("id",g.group).executeUpdate();
-            em.find(Showtime.class,g.shows.getLast()).setStartTime(NOW.toLocalDate().plusDays(1).atTime(1,0)); return null;
+            em.find(Showtime.class,g.shows.getFirst()).setStartTime(NOW.toLocalDate().atTime(22,0));
+            em.find(Showtime.class,g.shows.getLast()).setStartTime(NOW.toLocalDate().plusDays(1).atTime(2,1)); return null;
         });
-        assertThat(value(hold(g),"showtimeId")).isEqualTo(g.shows.getLast());
+        assertThat(value(hold(g),"showtimeId")).isEqualTo(g.shows.getFirst());
     }
     static List<BookingResult> race(Callable<BookingResult> a, Callable<BookingResult> b) throws Exception {
         var pool=Executors.newFixedThreadPool(2);

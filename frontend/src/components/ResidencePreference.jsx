@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { theaterApi, userApi } from "../api";
+import "./ResidencePreference.css";
 
 const ROWS =
     "ABCDEFGHIJ".split("");
@@ -168,9 +169,7 @@ export default function ResidencePreference({
 
     const [location, setLocation] =
         useState(null);
-
-    const [locationSource, setLocationSource] =
-        useState(null);
+    const [locationConfirmed, setLocationConfirmed] = useState(false);
 
     const [isMapSelectionMode, setIsMapSelectionMode] =
         useState(false);
@@ -275,7 +274,7 @@ export default function ResidencePreference({
                 latitude,
                 longitude,
             });
-            setLocationSource("MAP");
+
 
             try {
                 const kakao = window.kakao;
@@ -707,6 +706,7 @@ export default function ResidencePreference({
     }
 
     function clearMapSearchVisuals() {
+        setLocationConfirmed(false);
         theaterMarkersRef.current.forEach((marker) =>
             marker.setMap(null)
         );
@@ -767,7 +767,7 @@ export default function ResidencePreference({
             latitude: center.getLat(),
             longitude: center.getLng(),
         });
-        setLocationSource("MAP");
+
     }
 
     function searchPlaces() {
@@ -855,7 +855,7 @@ export default function ResidencePreference({
             latitude,
             longitude,
         });
-        setLocationSource("MAP");
+
 
         const resolvedAddress =
             place.road_address_name ||
@@ -867,17 +867,16 @@ export default function ResidencePreference({
         setError("");
         setMessage("");
         setIsMapSelectionMode(false);
+        isMapSelectionModeRef.current = false;
         showSelectionPin(false);
 
-        await loadNearbyTheaters(
+        const loaded = await loadNearbyTheaters(
             latitude,
             longitude,
             resolvedAddress
         );
 
-        setMessage(
-            "검색한 위치 기준으로 주변 영화관을 조회했습니다."
-        );
+        if (loaded) setMessage("위치를 확정하고 주변 영화관을 조회했습니다.");
     }
 
     function finishMapSelection() {
@@ -898,7 +897,7 @@ export default function ResidencePreference({
             };
 
             setLocation(selectedLocation);
-            setLocationSource("MAP");
+
         }
 
         if (!selectedLocation) {
@@ -972,18 +971,20 @@ export default function ResidencePreference({
                 map.setLevel(6);
             }
 
-            await loadNearbyTheaters(
+            const loaded = await loadNearbyTheaters(
                 selectedLocation.latitude,
                 selectedLocation.longitude,
                 resolvedAddress
             );
+
+            if (!loaded) return;
 
             setIsMapSelectionMode(false);
             isMapSelectionModeRef.current = false;
             showSelectionPin(false);
 
             setMessage(
-                "선택한 위치 기준으로 주변 영화관을 조회했습니다."
+                "위치를 확정하고 주변 영화관을 조회했습니다."
             );
         } catch (e) {
             setError(
@@ -1001,7 +1002,7 @@ export default function ResidencePreference({
         latitude,
         longitude,
         resolvedAddress,
-        showCurrentLocationMarker = false
+        showCurrentLocationMarker = true
     ) {
         setSelectedTheaters([]);
         setTheaterLoading(true);
@@ -1046,15 +1047,19 @@ export default function ResidencePreference({
                         new window.kakao.maps.LatLng(
                             latitude,
                             longitude
-                        )
+                        ),
+                        "조회 기준 위치"
                     );
             }
+            setLocationConfirmed(true);
+            return true;
         } catch (e) {
             setError(
                 e.message ??
                 "주변 영화관 조회에 실패했습니다."
             );
             setTheaters([]);
+            return false;
         } finally {
             setTheaterLoading(false);
         }
@@ -1875,7 +1880,18 @@ export default function ResidencePreference({
         setBirthDay(event.target.value.replace(/\D/g, "").slice(0, 2));
     }
 
+    const parsedBirthDate = new Date(`${birthDate}T00:00:00Z`);
+    const birthDateValid = Boolean(birthDate && Number.isFinite(parsedBirthDate.getTime())
+        && parsedBirthDate.toISOString().slice(0, 10) === birthDate);
+    const canSave = birthDateValid && locationConfirmed && Boolean(location && address.trim())
+        && selectedTheaters.length >= 3 && selectedTheaters.length <= 5
+        && selectedTheaters.every(id => Number.isInteger(Number(id)) && Number(id) > 0)
+        && selectedSeats.length >= 1 && selectedSeats.length <= 6
+        && !isMapSelectionMode && !currentLocationLoading && !mapSearchLoading
+        && !theaterLoading && !placeSearchLoading && !saving;
+
     async function save() {
+        if (!canSave) return;
         setError("");
         setMessage("");
 
@@ -2010,6 +2026,7 @@ export default function ResidencePreference({
 
             <section>
 
+                <div className="location-toolbar">
                 <div className="location-action-buttons">
                     <button
                         type="button"
@@ -2017,9 +2034,13 @@ export default function ResidencePreference({
                         onClick={getCurrentLocation}
                         disabled={currentLocationLoading}
                     >
+                        <svg className="location-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.5" />
+                            <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                        </svg>
                         {currentLocationLoading
                             ? "현재 위치 확인 중..."
-                            : "⌖ 현재 사용자 위치에서 조회"}
+                            : "현재 위치에서 선택"}
                     </button>
 
                     <button
@@ -2032,13 +2053,18 @@ export default function ResidencePreference({
                         onClick={startMapSelection}
                         disabled={currentLocationLoading}
                     >
-                        🗺️ {isMapSelectionMode
+                        <svg className="location-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2.5" />
+                        </svg>
+                        {isMapSelectionMode
                             ? "위치 선택 중"
                             : "다른 위치 선택하기"}
                     </button>
                 </div>
 
-                <div className="map-place-search">
+                <div className="map-place-search" onKeyDown={(event) => {
+                    if (event.key === "Escape") setPlaceSearchResults([]);
+                }}>
                     <div className="map-place-search-row">
                         <input
                             type="text"
@@ -2079,6 +2105,7 @@ export default function ResidencePreference({
                                     type="button"
                                     key={place.id}
                                     className="map-place-search-result"
+                                    title={`${place.place_name} · ${place.road_address_name || place.address_name || ""}`}
                                     onClick={() =>
                                         selectPlaceSearchResult(place)
                                     }
@@ -2090,15 +2117,12 @@ export default function ResidencePreference({
                                         {place.road_address_name ||
                                             place.address_name}
                                     </span>
-                                    {place.category_name && (
-                                        <small>
-                                            {place.category_name}
-                                        </small>
-                                    )}
                                 </button>
                             ))}
                         </div>
                     )}
+                </div>
+
                 </div>
 
                 <div className="map-selection-wrapper">
@@ -2116,15 +2140,12 @@ export default function ResidencePreference({
                     )}
                 </div>
 
-                <p className="help map-selection-help">
-                    {isMapSelectionMode
-                        ? "지도를 드래그하면 중앙 핀 위치가 이동합니다. 원하는 위치에 맞춘 뒤 아래 버튼을 눌러 영화관을 조회하세요."
-                        : "다른 위치를 찾으려면 '다른 위치 선택하기'를 누른 뒤 지도를 드래그하세요."}
-                </p>
-
+                <div className="location-summary">
+                <div className="location-confirm-row">
+                    <p className={`selected-address${address ? "" : " is-empty"}`}>{address || "지도에서 위치를 선택해주세요"}</p>
                 <button
                     type="button"
-                    className="primary-button map-search-button"
+                    className="preference-action-button map-search-button"
                     onClick={finishMapSelection}
                     disabled={
                         !isMapSelectionMode ||
@@ -2134,47 +2155,36 @@ export default function ResidencePreference({
                 >
                     {mapSearchLoading
                         ? "위치 확인 중..."
-                        : "이 위치에서 영화관 조회"}
+                        : "이 위치로 조회"}
                 </button>
 
-                {address && (
-                    <div className="selected-address">
-                        <span>
-                            {locationSource === "MAP"
-                                ? "선택한 위치"
-                                : "현재 사용자 위치"}
-                        </span>
-
-                        <strong>
-                            {address}
-                        </strong>
-                    </div>
-                )}
+                </div>
+                <div className="location-feedback-space">
+                    {(currentLocationLoading || mapSearchLoading || theaterLoading || isMapSelectionMode || message) &&
+                        <p className="location-feedback" role="status">
+                            {currentLocationLoading ? "현재 위치를 확인하고 있어요."
+                                : mapSearchLoading || theaterLoading ? "주변 영화관을 찾고 있어요."
+                                : isMapSelectionMode ? "핀 위치를 맞춘 뒤 조회하면 이 위치로 확정됩니다."
+                                : "위치가 확정됐어요. 아래에서 영화관을 선택해주세요."}
+                        </p>}
+                </div>
+                </div>
             </section>
 
             <section>
                 <div className="section-title">
                     <h2>
-                        주변 영화관
+                        선호 영화관
                     </h2>
 
                     <span>
-                        {
-                            selectedTheaters.length
-                        }
-                        /5
+                        {selectedTheaters.length} / 5
                     </span>
                 </div>
 
                 <p className="help">
-                    선택한 위치를 기준으로 가까운 영화관 12개를 표시합니다.
+                    가까운 영화관 12곳 중 선호하는 3~5곳을 우선순위대로 선택해주세요.
                 </p>
-
-                {theaterLoading && (
-                    <p className="help">
-                        영화관을 조회하는 중...
-                    </p>
-                )}
 
                 {!theaterLoading &&
                     theaters.length === 0 &&
@@ -2246,13 +2256,10 @@ export default function ResidencePreference({
                                             </strong>
                                         </div>
 
-                                        <small>
-                                            {
-                                                theater.address
-                                            }
-                                        </small>
                                     </div>
 
+                                    </button>
+                                    <div className="theater-card-footer">
                                     <div className="theater-time">
                                         {theaterSort === "DISTANCE" && (
                                             <div>
@@ -2263,7 +2270,6 @@ export default function ResidencePreference({
                                                             : `${theater.distance}m`
                                                         : "-"}
                                                 </strong>
-                                                <small>직선거리</small>
                                             </div>
                                         )}
 
@@ -2299,25 +2305,10 @@ export default function ResidencePreference({
                                             </div>
                                         )}
                                     </div>
-                                    </button>
-                                    {selected ? (
-                                        <div className="theater-selected-footer">
-                                            <div className="theater-selected-rank">
-                                                {(selectedTheaters.indexOf(
-                                                    Number(theater.theaterId)
-                                                ) + 1) + "순위"}
-                                            </div>
-                                                                                <a
-                                                                                    className="theater-route-button"
-                                                                                    href={kakaoDirectionsUrl}
-                                                                                    target="_blank"
-                                                                                    rel="noreferrer"
-                                                                                    onClick={(event) => event.stopPropagation()}
-                                                                                >
-                                        길찾기
-                                    </a>
-                                        </div>
-                                    ) : (
+                                    {selected && <span className="theater-selected-rank">
+                                        <span className="theater-priority-number">{selectedTheaters.indexOf(Number(theater.theaterId)) + 1}</span>
+                                        <span className="theater-priority-label">순위</span>
+                                    </span>}
                                     <a
                                         className="theater-route-button"
                                         href={kakaoDirectionsUrl}
@@ -2327,7 +2318,7 @@ export default function ResidencePreference({
                                     >
                                         길찾기
                                     </a>
-                                    )}
+                                    </div>
                                 </div>
                             );
                         }
@@ -2342,16 +2333,12 @@ export default function ResidencePreference({
                     </h2>
 
                     <span>
-                        {selectedSeats.length}/6
+                        {selectedSeats.length} / 6
                     </span>
                 </div>
 
                 <p className="help">
-                    실제 영화관 좌석 배치처럼 표시됩니다.
-                    좌측/우측의 같은 번호 사이드는 하나의 영역으로 취급합니다.
-                    예를 들어 1번에 마우스를 올리면 좌측 1번과 우측 1번이 함께 반응하고,
-                    중앙 4, 5, 6번은 각각 독립적으로 반응합니다.
-                    선호 위치는 1~6개까지 선택하고 선택한 순서가 우선순위가 됩니다.
+                    선호하는 좌석 위치를 우선순위대로 선택해주세요.
                 </p>
 
                 <div className="screen preference-screen">
@@ -2475,8 +2462,9 @@ export default function ResidencePreference({
                                     aria-label={getSeatLabel(zone.position)}
                                 >
                                     {priority && (
-                                        <strong>
-                                            {priority}순위
+                                        <strong className="seat-zone-priority">
+                                            <span className="seat-zone-priority-number">{priority}</span>
+                                            <span className="seat-zone-priority-label">순위</span>
                                         </strong>
                                     )}
                                 </button>
@@ -2515,20 +2503,14 @@ export default function ResidencePreference({
                 </p>
             )}
 
-            {message && (
-                <p className="success-message">
-                    {message}
-                </p>
-            )}
-
             <button
                 type="button"
-                className="primary-button save-preference-button"
+                className="preference-action-button save-preference-button"
                 onClick={
                     save
                 }
                 disabled={
-                    saving
+                    !canSave
                 }
             >
                 {

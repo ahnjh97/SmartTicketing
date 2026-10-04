@@ -75,7 +75,7 @@ async function selectAndHold() {
     fireEvent.click(screen.getByLabelText(/동반 관객 모두/));
     fireEvent.click(await screen.findByRole('button',{ name: 'A1 좌석' }));
     fireEvent.click(screen.getByRole('button',{ name: 'A2 좌석' }));
-    fireEvent.click(screen.getByRole('button',{ name: '선택한 좌석 5분 선점 →' }));
+    fireEvent.click(screen.getByRole('button',{ name: '선택한 좌석 5분 선점' }));
     await screen.findByRole('heading',{ name: '좌석을 선점했습니다' });
 }
 test('real route connects audience, seats, hold, reload, payment failure/retry and whole cancellation', async () => {
@@ -104,10 +104,10 @@ test('network failure retries the same hold identity without showing premature s
     mount();
     fireEvent.change(await screen.findByLabelText('성인 인원'),{target:{value:'1'}});
     fireEvent.click(screen.getByLabelText(/동반 관객 모두/)); fireEvent.click(await screen.findByRole('button',{name:'A1 좌석'}));
-    fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점 →'}));
+    fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}));
     await screen.findByText('연결 끊김'); expect(screen.queryByText('좌석을 선점했습니다')).toBeNull();
     expect(screen.getByTestId('path').textContent).toContain('group=401');
-    fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점 →'}));
+    fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}));
     await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
     const callsToHold=fetch.mock.calls.filter(([url])=>url.endsWith('/manual-hold'));
     expect(callsToHold[0][1].headers['Idempotency-Key']).toBe(callsToHold[1][1].headers['Idempotency-Key']);
@@ -126,5 +126,5 @@ test('foreign reservation restoration shows the server ownership error without d
 test('unknown prices disable hold rather than inventing an amount', async () => {
     vi.stubGlobal('fetch',vi.fn((url,options)=>url.startsWith('/api/showtimes?')? Promise.resolve(response({items:[{...show,pricePerPerson:null}]})) : api(url,options)));
     mount(); await screen.findByText('회차 가격을 확인할 수 없어 예매할 수 없습니다.');
-    expect(screen.getByRole('button',{name:'선택한 좌석 5분 선점 →'}).disabled).toBe(true);
+    expect(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}).disabled).toBe(true);
 });

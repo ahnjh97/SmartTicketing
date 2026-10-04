@@ -54,6 +54,24 @@ button {
     cursor: pointer;
 }
 
+/* Links use color and focus outlines instead of underlined text. */
+a:any-link {
+    text-decoration: none;
+}
+
+:where(a:any-link) {
+    color: var(--color-accent);
+}
+
+:where(a:any-link:hover) {
+    color: var(--color-accent-hover);
+}
+
+a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 4px;
+}
+
 .page {
     min-height: 100vh;
 
@@ -468,8 +486,8 @@ input:focus {
 
 .text-button:hover {
     color: white;
-
-    text-decoration: underline;
+    background: #ffffff12;
+    border-radius: 6px;
 }
 
 .logout-button {
@@ -2083,14 +2101,23 @@ input:focus {
 }
 
 .profile-action-area {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
     margin-top: 24px;
     padding-top: 20px;
     border-top: 1px solid #303030;
 }
 
-.profile-action-area .primary-button,
-.profile-action-area .withdraw-button {
-    flex: 1;
+.profile-card .profile-action-area > button {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 12px 24px;
 }
 
 @media (max-width: 700px) {

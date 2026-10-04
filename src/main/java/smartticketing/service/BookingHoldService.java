@@ -239,7 +239,7 @@ public class BookingHoldService {
             var from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom());
             var until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
             if (!until.isAfter(from)) until = until.plusDays(1);
-            if (show.getStartTime().isBefore(from) || !show.getStartTime().isBefore(until))
+            if (show.getStartTime().isBefore(from) || show.getStartTime().isAfter(until))
                 reject(400, "요청 시간 범위 밖의 회차입니다.");
         }
     }

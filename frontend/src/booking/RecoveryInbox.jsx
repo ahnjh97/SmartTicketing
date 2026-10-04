@@ -23,7 +23,7 @@ export default function RecoveryInbox() {
         {groups?.status === 'fulfilled' && <>
             <div className={styles.grid}>{items.map(group => <article className={styles.card} key={group.id} data-holding={group.status === 'HOLDING'}>
                 <span className={styles.badge}>{labels[group.status] || group.status}</span><h3>{group.movieTitle}</h3>
-                <p><InlineDetails items={[group.viewingDate, `${group.partySize}명`]} /></p><Link className={styles.action} to={`/booking/restore?group=${group.id}`}>예약 및 대기 확인 <span aria-hidden="true">↗</span></Link>
+                <p><InlineDetails items={[group.viewingDate, `${group.partySize}명`]} /></p><Link className={styles.action} to={`/booking/restore?group=${group.id}`}>예약 및 대기 확인</Link>
             </article>)}</div>
             {!items.length && <p className={styles.empty}>저장된 예매 요청이 없습니다. 영화와 회차를 선택해 시작해보세요.</p>}
             <nav className={styles.paging} aria-label="예매 목록 페이지"><GlassButton disabled={!pages.length} onClick={() => setPages(p => p.slice(0, -1))}>이전</GlassButton>
@@ -37,7 +37,7 @@ export default function RecoveryInbox() {
                 {n.groupId && <Link className={styles.action} to={`/booking/restore?group=${n.groupId}`} onClick={() => {
                     // Read acknowledgement must never prevent recovery navigation.
                     notificationApi.read(n.id).catch(() => {});
-                }}>예약 및 대기로 이동 ↗</Link>}
+                }}>예약 및 대기로 이동</Link>}
             </li>)}</ul>)}
         </details>
     </section>;
