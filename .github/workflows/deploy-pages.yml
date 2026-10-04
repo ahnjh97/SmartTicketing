@@ -3,6 +3,7 @@ name: Deploy React to GitHub Pages
 on:
   push:
     branches:
+      - main
       - feature/jusang
   workflow_dispatch:
 
