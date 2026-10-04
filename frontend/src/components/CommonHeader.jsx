@@ -25,8 +25,13 @@ function formatDate(value) {
     return value ? new Date(value).toLocaleString("ko-KR") : "-";
 }
 
-export default function CommonHeader({
-    user, disabled, setupRequired, onLogout,
+export default function CommonHeader(props) {
+    // Account data and popovers belong to one signed-in session.
+    return <HeaderContent key={`${props.user?.id ?? 'guest'}:${Boolean(props.disabled)}`} {...props} />;
+}
+
+function HeaderContent({
+    user, disabled, setupRequired,
 }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
@@ -73,13 +78,7 @@ export default function CommonHeader({
     }
 
     useEffect(() => {
-        if (!user || disabled) {
-            setUnreadCount(0);
-            setNotifications([]);
-            setTickets([]);
-            setOpenPanel(null);
-            return;
-        }
+        if (!user || disabled) return;
 
         let mounted = true;
         const loadUnread = () => notificationApi.list(true)
@@ -228,12 +227,6 @@ export default function CommonHeader({
         setOpenPanel(null);
     }
 
-    function handleLogout() {
-        setOpenLocation(null);
-        setOpenPanel(null);
-        onLogout();
-    }
-
     function renderAccountItems() {
         return (
             <>
@@ -292,21 +285,24 @@ export default function CommonHeader({
                     )}
                 </button>
 
-                <button
-                    type="button"
+                <NavLink
+                    to={PAGE_PATHS.activeBookings}
                     className="common-header-icon-trigger"
-                    aria-label="로그아웃"
-                    disabled={disabled}
-                    onClick={handleLogout}
+                    aria-label="내 대기 및 선점"
+                    title="내 대기 및 선점"
+                    aria-disabled={navigationDisabled || undefined}
+                    tabIndex={navigationDisabled ? -1 : undefined}
+                    onClick={handleNavigation}
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M10 17l5-5-5-5" />
-                            <path d="M15 12H3" />
-                            <path d="M13 5V3h7v18h-7v-2" />
+                            <path d="M5 11V6a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v5h1" />
+                            <path d="M5 11H4a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h7M5 11v3h6M5 18v3" />
+                            <circle cx="17.5" cy="17.5" r="4.5" />
+                            <path d="M17.5 15v2.5l1.5 1" />
                         </svg>
                     </span>
-                </button>
+                </NavLink>
 
                 <NavLink
                     to={PAGE_PATHS.profile}
@@ -401,7 +397,7 @@ export default function CommonHeader({
                         </div>
                         <div className="common-header-popover-body">
                             {notificationLoading ? (
-                                <p className="common-header-popover-empty">알림을 불러오는 중입니다.</p>
+                                null
                             ) : notifications.length === 0 ? (
                                 <p className="common-header-popover-empty">새로운 알림이 없습니다.</p>
                             ) : (
@@ -438,7 +434,7 @@ export default function CommonHeader({
                         </div>
                         <div className="common-header-popover-body">
                             {ticketLoading ? (
-                                <p className="common-header-popover-empty">티켓을 불러오는 중입니다.</p>
+                                null
                             ) : tickets.length === 0 ? (
                                 <p className="common-header-popover-empty">발급된 티켓이 없습니다.</p>
                             ) : (

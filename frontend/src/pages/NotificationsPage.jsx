@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { notificationApi } from "../api/notifications.js";
 import "./NotificationsPage.css";
 
@@ -19,21 +19,14 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const load = useCallback(async () => {
-        try {
-            setError("");
-            const data = await notificationApi.list(false);
-            setNotifications(Array.isArray(data) ? data : []);
-        } catch (e) {
-            setError(e?.message ?? "알림을 불러오지 못했습니다.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
     useEffect(() => {
-        load();
-    }, [load]);
+        let active = true;
+        notificationApi.list(false)
+            .then(data => { if (active) setNotifications(Array.isArray(data) ? data : []); })
+            .catch(e => { if (active) setError(e?.message ?? "알림을 불러오지 못했습니다."); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, []);
 
     async function markRead(id) {
         try {
@@ -85,7 +78,7 @@ export default function NotificationsPage() {
                 {error && <p className="error-message">{error}</p>}
 
                 {loading ? (
-                    <p>알림을 불러오는 중입니다.</p>
+                    null
                 ) : notifications.length === 0 ? (
                     <div className="notification-empty">새로운 알림이 없습니다.</div>
                 ) : (

@@ -4,6 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import App from '../src/App.jsx';
 import { dates, seoulDate } from '../src/booking/state.js';
+vi.mock('../src/maps/theaterMarkerImages.js', () => ({
+    getTheaterBrand: theater => theater.brand,
+    getTheaterMarkerImage: async brand => ({ brand }),
+}));
 vi.mock('../src/components/ResidencePreference.jsx', () => ({
     default: ({ user, onSaved }) => <button onClick={() => onSaved({ ...user, birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3].map(theaterId => ({ theaterId })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] })}>선호 설정 완료</button>,
 }));
@@ -15,6 +19,7 @@ const json = data => new Response(JSON.stringify(data));
 async function baseFetch(url) {
     if (url === '/api/main') return json({ nowShowing: [movie, { ...movie, id: 42, title: '두 번째 영화' }], comingSoon: [] });
     if (url === '/api/users/me') return json(member);
+    if (url === '/api/booking-groups') return new Response(JSON.stringify({message:'테스트 선점 실패',code:'SOLD_OUT'}), {status:409});
     if (url === '/api/auth/login') return json({ accessToken: 'test-token' });
     if (url.startsWith('/api/movies?')) return json({ items: [movie, { ...movie, id: 42, title: '두 번째 영화' }], page: 0, size: 20, totalElements: 2 });
     if (url === '/api/movies/41') return json(movie);
@@ -152,8 +157,9 @@ test('movie restores audience and midnight bounds without showing inventory note
     expect(screen.getByAltText('서울의 밤 배경')).toBeTruthy();
     expect(screen.queryByText('23:00 → 01:00')).toBe(null);
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes?'))).toBe(false);
+    
     fireEvent.click(screen.getByRole('button', { name: '스마트예매' }));
-    await screen.findByRole('heading', { name: '좋은 자리는, 알아서.' });
+    await screen.findByRole('heading', { name: '스마트예매' });
     expect(await screen.findByText(/로그인하고 스마트예매를 시작하세요/)).toBeTruthy();
     expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
@@ -173,10 +179,10 @@ test('lightweight availability is independent of audience and time selections', 
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom='))).toBe(false);
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '영화 최소 시작시간 선택' }));
-    fireEvent.click(screen.getByRole('button', { name: '10:00', exact: true }));
+    fireEvent.change(screen.getByRole('combobox', { name: '최소 시작시간 시' }), { target: { value: '10' } });
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom='))).toBe(false);
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '12:00', exact: true }));
+    fireEvent.change(screen.getByRole('combobox', { name: '최대 시작시간 시' }), { target: { value: '12' } });
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom='))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: '이 시간으로 적용' }));
     await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false));
@@ -227,13 +233,13 @@ test('a directly opened theater retains its brand without a duplicate theater su
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?') && url.includes('brand=MEGABOX'))).toBe(true));
 });
 
-test('theater entry restores IDs and row panel without collecting party', async () => {
+test('theater entry restores IDs and row panel with audience selection', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 01:00');
-    expect(screen.queryByLabelText('총인원')).toBe(null);
+    await screen.findByText((_, element) => element.tagName === 'STRONG' && element.textContent === '23:00 → 01:00');
+    expect(screen.getByLabelText('총인원').textContent).toBe('1명');
     expect(screen.getByRole('region', { name: '상영 회차' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
-    await screen.findByRole('heading', { name: '나의 자리를 선택하세요' });
+    await screen.findByRole('heading', { name: '일반 예매' });
     expect(screen.getByTestId('url').textContent).toContain('entry=THEATER_NORMAL');
     expect(await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/)).toBeTruthy();
 });
@@ -242,17 +248,17 @@ test('a showtime opens booking choices and closing restores the showtime card', 
     const card = await screen.findByRole('button', { name: /20 \/ 108석/ });
     card.focus();
     fireEvent.click(card);
-    const dialog = await screen.findByRole('dialog', { name: '예매 방식 선택' });
+    const dialog = await screen.findByRole('dialog', { name: '서울의 밤' });
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(screen.queryByText('선택')).toBe(null);
     expect(document.body.style.overflow).toBe('hidden');
     fireEvent.click(screen.getByRole('button', { name: '예매 방식 선택 닫기' }));
-    expect(screen.queryByRole('dialog', { name: '예매 방식 선택' })).toBe(null);
+    expect(screen.queryByRole('dialog', { name: '서울의 밤' })).toBe(null);
     expect(document.activeElement).toBe(card);
     expect(document.body.style.overflow).not.toBe('hidden');
     fireEvent.click(card);
-    fireEvent(await screen.findByRole('dialog', { name: '예매 방식 선택' }), new Event('cancel', { bubbles: true, cancelable: true }));
-    expect(screen.queryByRole('dialog', { name: '예매 방식 선택' })).toBe(null);
+    fireEvent(await screen.findByRole('dialog', { name: '서울의 밤' }), new Event('cancel', { bubbles: true, cancelable: true }));
+    expect(screen.queryByRole('dialog', { name: '서울의 밤' })).toBe(null);
 });
 
 test('sold out and unknown layouts have distinct button behavior', async () => {
@@ -268,7 +274,7 @@ test('sold out and unknown layouts have distinct button behavior', async () => {
 test('loading, error, retry and empty states stay distinct', async () => {
     let finish;
     fetch.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-    mount('/movies'); await screen.findByText('불러오는 중…');
+    mount('/movies'); expect(screen.queryByText('불러오는 중…')).toBeNull();
     await waitFor(() => expect(typeof finish).toBe('function'));
     await act(async () => finish(new Response(JSON.stringify({ message: '일시적 오류' }), { status: 503 })));
     await screen.findByRole('alert');
@@ -286,9 +292,9 @@ test('map opens in a dismissible dialog and guests can use brand tabs without se
     expect(screen.queryByLabelText('극장 이름 또는 주소 검색')).toBe(null);
     expect(locate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '지도에서 선택' }));
-    expect(await screen.findByRole('dialog', { name: '지도에서 극장 선택' })).toBeTruthy();
-    await screen.findByText(/주변 극장 검색은 로그인이 필요/);
-    expect(locate).toHaveBeenCalled();
+    expect(await screen.findByRole('dialog', { name: '극장 지도' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '현재 위치로 이동' })).toBeTruthy();
+    expect(locate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '지도 닫기' }));
     expect(screen.queryByRole('dialog')).toBe(null);
     expect(document.body.style.overflow).not.toBe('hidden');
@@ -299,29 +305,29 @@ test('map opens in a dismissible dialog and guests can use brand tabs without se
 
 test('all preferred theaters are visible in the default first tab', async () => {
     localStorage.setItem('accessToken', 'saved-token'); mount('/theaters');
-    await screen.findByRole('button', { name: '1순위 선호1' });
-    expect(screen.getByRole('button', { name: '4순위 선호4' })).toBeTruthy();
+    await screen.findByRole('button', { name: '선호1', exact: true });
+    expect(screen.getByRole('button', { name: '선호4', exact: true })).toBeTruthy();
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['선호극장', 'CGV', '롯데시네마', '메가박스']);
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?'))).toBe(false);
 });
 
-test('login and reload restore selection without booking mutation', async () => {
+test('login and reload resume the requested smart booking', async () => {
     const path = `/movies?movie=41&party=2&from=22:00&until=02:00&date=${seoulDate()}&entry=MOVIE_SMART`;
     mount(path);
     fireEvent.click(await screen.findByRole('link', { name: /로그인하고 이 선택으로 돌아오기/ }));
     fireEvent.change(await screen.findByLabelText('아이디'), { target: { value: 'test' } });
     fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('button', { name: '로그인', exact: true }));
-    await screen.findByRole('heading', { name: '좋은 자리는, 알아서.' });
+    await screen.findByRole('heading', { name: '스마트예매' });
     expect(decodeURIComponent(screen.getByTestId('url').textContent)).toBe(path);
     cleanup(); mount(path);
-    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
-    expect(fetch.mock.calls.some(([url]) => /booking-groups|hold|payment|waiting/.test(url))).toBe(false);
+    await screen.findByText(/테스트 선점 실패/);
+    expect(fetch.mock.calls.some(([url]) => url === '/api/booking-groups')).toBe(true);
 });
 test('expired date cannot enter the future flow', async () => {
     localStorage.setItem('accessToken', 'saved-token');
     mount('/movies?movie=41&party=2&date=2020-01-01&entry=MOVIE_SMART');
-    await screen.findByText(/영화, 날짜, 시간 또는 회차를 다시 선택해주세요/);
+    await screen.findByText(/인원 또는 상영 조건을 확인해주세요/);
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
 });
 
@@ -371,7 +377,7 @@ test('brand tabs fetch every catalog page without paging controls', async () => 
 
 test('date change clears movie and showtime, preserves the theater and seven dates', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 01:00');
+    await screen.findByText((_, element) => element.tagName === 'STRONG' && element.textContent === '23:00 → 01:00');
     const buttons = screen.getAllByRole('button').filter(b => /^\d{4}-\d{2}-\d{2}$/.test(b.getAttribute('aria-label') || ''));
     expect(buttons).toHaveLength(7);
     fireEvent.click(buttons[1]);
@@ -388,14 +394,14 @@ test('OAuth callback restores the same saved booking and strips token from addre
     const path = `/movies?movie=41&party=2&from=22%3A00&until=02%3A00&date=${seoulDate()}&entry=MOVIE_SMART`;
     sessionStorage.setItem('booking.return', path);
     mount('/oauth2/callback#token=oauth-test-token');
-    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
+    await screen.findByText(/테스트 선점 실패/);
     expect(screen.getByTestId('url').textContent).toBe(path);
     expect(fetch.mock.calls.find(([url]) => url === '/api/users/me')[1].headers.Authorization).toBe('Bearer oauth-test-token');
 });
 
 test('guest manual entry requires login and never promises newly sold-out inventory', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
-    await screen.findByText('23:00 → 01:00');
+    await screen.findByText((_, element) => element.tagName === 'STRONG' && element.textContent === '23:00 → 01:00');
     fetch.mockImplementation(url => url.startsWith('/api/showtimes?') ? Promise.resolve(json({ items: [{ ...show, availableSeats: 0 }] })) : baseFetch(url));
     fireEvent.click(screen.getByRole('button', { name: '일반예매' }));
     await screen.findByText(/로그인 후 좌석을 선택할 수 있습니다/);
@@ -423,30 +429,131 @@ test('incomplete member deep link survives required preference setup', async () 
     await screen.findByRole('heading', { name: '선호 정보 설정' });
     expect(sessionStorage.getItem('booking.return')).toBe(path);
     fireEvent.click(screen.getByRole('button', { name: '선호 설정 완료' }));
-    await screen.findByText(/실제 결제와 자동 대기 등록은 진행되지 않습니다/);
+    await screen.findByText(/테스트 선점 실패/);
     expect(screen.getByTestId('url').textContent).toBe(path);
 });
 
-test('authenticated nearby results use DB theater IDs and preserve the existing endpoint', async () => {
-    localStorage.setItem('accessToken', 'nearby-test-token');
-    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn((ok, fail) => fail({ code: 1 })) } });
+function stubLocationMap() {
+    const initialCenters = [];
+    const setCenter = vi.fn();
+    const markers = [];
+    const overlays = [];
+    const listeners = new Map();
+    const marker = vi.fn(function (options) {
+        this.options = options;
+        this.setMap = vi.fn();
+        this.setImage = vi.fn();
+        markers.push(this);
+    });
+    const locate = vi.fn();
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: locate } });
     vi.stubGlobal('kakao', { maps: {
         load: callback => callback(),
         LatLng: class { constructor(lat, lng) { this.lat = lat; this.lng = lng; } },
-        Map: class { getCenter() { return { getLat: () => 37.5665, getLng: () => 126.978 }; } },
-        Marker: class { setMap() {} },
-        event: { addListener: vi.fn(), removeListener: vi.fn() },
+        Map: class {
+            constructor(container, options) { initialCenters.push(options.center); this.setCenter = setCenter; }
+            getProjection() { return { containerPointFromCoords: () => ({ y: 100 }) }; }
+        },
+        CustomOverlay: class {
+            constructor(options) { this.options = options; this.setMap = vi.fn(); this.setPosition = vi.fn(); overlays.push(this); }
+            getContent() { return this.options.content; }
+        },
+        Marker: marker,
+        event: {
+            addListener: (target, event, handler) => { if (!listeners.has(target)) listeners.set(target, new Map()); listeners.get(target).set(event, handler); },
+            removeListener: (target, event) => { const events = listeners.get(target); events?.delete(event); if (!events?.size) listeners.delete(target); },
+        },
     } });
-    fetch.mockImplementation(url => url.startsWith('/api/theaters/nearby?') ? Promise.resolve(json([{ theaterId: 72, kakaoPlaceId: 'external-999', name: '주변 극장', latitude: 37.5, longitude: 127 }])) : baseFetch(url));
+    return { initialCenters, setCenter, marker, locate, markers, listeners, overlays };
+}
+
+test.each([false, true])('map starts in Seoul and only moves on location button click, member: %s', async loggedIn => {
+    if (loggedIn) localStorage.setItem('accessToken', 'map-test-token');
+    const { initialCenters, setCenter, marker, locate } = stubLocationMap();
     mount('/theaters?map=1');
-    const nearbyButton = await screen.findByRole('button', { name: '이 지도 위치 주변 검색' });
-    await waitFor(() => expect(nearbyButton.disabled).toBe(false));
-    fireEvent.click(nearbyButton);
-    fireEvent.click(await screen.findByRole('button', { name: '주변 극장', exact: true }));
-    expect(screen.getByTestId('url').textContent).toContain('theater=72');
+    const button = await screen.findByRole('button', { name: '현재 위치로 이동' });
+    await waitFor(() => expect(button.disabled).toBe(false));
+    expect(initialCenters.length).toBeGreaterThan(0);
+    expect(initialCenters.every(center => center.lat === 37.5665 && center.lng === 126.978)).toBe(true);
+    expect(locate).not.toHaveBeenCalled();
+    expect(marker).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '이 지도 위치 주변 검색' })).toBe(null);
+    expect(screen.getByRole('dialog').querySelectorAll('button')).toHaveLength(2);
+    fireEvent.click(button);
+    expect(locate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: '현재 위치 확인 중…' }).disabled).toBe(true);
+    act(() => locate.mock.calls[0][0]({ coords: { latitude: 35.1796, longitude: 129.0756 } }));
+    expect(setCenter).toHaveBeenCalledWith(expect.objectContaining({ lat: 35.1796, lng: 129.0756 }));
+    expect(screen.getByRole('button', { name: '현재 위치로 이동' }).disabled).toBe(false);
+    expect(screen.getByTestId('url').textContent).toBe('/theaters?map=1');
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters/nearby'))).toBe(false);
+});
+
+test.each([false, true])('theater pins remain selectable without nearby search, member: %s', async loggedIn => {
+    if (loggedIn) localStorage.setItem('accessToken', 'map-test-token');
+    const { markers, listeners, locate, overlays } = stubLocationMap();
+    fetch.mockImplementation(url => url.startsWith('/api/theaters?')
+        ? Promise.resolve(json({ items: [{ ...theater, brand: 'CGV', latitude: 37.5665, longitude: 126.978 }], totalElements: 1 }))
+        : baseFetch(url));
+    mount('/theaters?map=1');
+    await screen.findByRole('dialog', { name: '극장 지도' });
+    await waitFor(() => expect(listeners.size).toBe(1));
+    const pin = [...listeners.keys()][0];
+    await waitFor(() => expect(pin.setImage).toHaveBeenCalledWith({ brand: 'CGV' }));
+    act(() => listeners.get(pin).get('mouseover')());
+    const tooltip = overlays.find(overlay => overlay.getContent().textContent === '서울 극장');
+    expect(tooltip.setMap).toHaveBeenLastCalledWith(pin.options.map);
+    const callsWhileVisible = tooltip.setMap.mock.calls.length;
+    act(() => listeners.get(pin).get('mouseover')());
+    expect(tooltip.setMap.mock.calls).toHaveLength(callsWhileVisible);
+    act(() => listeners.get(pin).get('mouseout')());
+    expect(tooltip.setMap).toHaveBeenLastCalledWith(null);
+    expect(pin.options.position).toEqual(expect.objectContaining({ lat: 37.5665, lng: 126.978 }));
+    expect(locate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '이 지도 위치 주변 검색' })).toBe(null);
+    act(() => listeners.get(pin).get('click')());
+    await waitFor(() => expect(screen.getByTestId('url').textContent).toContain('theater=71'));
     expect(screen.queryByRole('dialog')).toBe(null);
-    const call = fetch.mock.calls.find(([url]) => url.startsWith('/api/theaters/nearby?'));
-    expect(call[1].headers.Authorization).toBe('Bearer nearby-test-token');
+    expect(markers.every(marker => marker.setMap.mock.calls.some(([map]) => map === null))).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => url.includes('/nearby'))).toBe(false);
+});
+
+test('leaving the previous marker cannot dismiss the current theater tooltip', async () => {
+    const { listeners, overlays } = stubLocationMap();
+    fetch.mockImplementation(url => url.startsWith('/api/theaters?')
+        ? Promise.resolve(json({ items: [
+            { ...theater, brand: 'CGV', latitude: 37.5665, longitude: 126.978 },
+            { ...theater, id: 72, name: '두 번째 극장', brand: 'MEGABOX', latitude: 37.567, longitude: 126.979 },
+        ], totalElements: 2 })) : baseFetch(url));
+    mount('/theaters?map=1');
+    await waitFor(() => expect(listeners.size).toBe(2));
+    const [first, second] = [...listeners.keys()];
+    act(() => listeners.get(first).get('mouseover')());
+    act(() => listeners.get(second).get('mouseover')());
+    const tooltip = overlays.find(overlay => overlay.getContent().textContent === '두 번째 극장');
+    act(() => listeners.get(first).get('mouseout')());
+    expect(tooltip.setMap).toHaveBeenLastCalledWith(second.options.map);
+    act(() => listeners.get(second).get('mouseout')());
+    expect(tooltip.setMap).toHaveBeenLastCalledWith(null);
+    cleanup();
+    expect(listeners.size).toBe(0);
+});
+
+test('location denial keeps the map in place and permits retry; a closed map ignores late results', async () => {
+    const { setCenter, locate } = stubLocationMap();
+    mount('/theaters?map=1');
+    const button = await screen.findByRole('button', { name: '현재 위치로 이동' });
+    await waitFor(() => expect(button.disabled).toBe(false));
+    fireEvent.click(button);
+    act(() => locate.mock.calls[0][1]({ code: 1 }));
+    expect(screen.getByText(/위치 권한이 허용되지 않았습니다/)).toBeTruthy();
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: '지도 닫기' }));
+    act(() => locate.mock.calls[1][0]({ coords: { latitude: 35.1796, longitude: 129.0756 } }));
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBe(null);
 });
 
 test('movie details retain main metadata with spaced fields instead of middle dots', async () => {
@@ -512,7 +619,7 @@ test('date changes keep controls but discard stale availability', async () => {
     await screen.findByLabelText('성인 인원');
     fireEvent.click(screen.getByRole('button', { name: days[1] }));
     expect(screen.getByLabelText('성인 인원')).toBeTruthy();
-    expect(screen.getByText('상영회차를 확인하고 있습니다. 인원과 시간은 먼저 선택할 수 있습니다.')).toBeTruthy();
+    expect(screen.queryByText('상영회차를 확인하고 있습니다. 인원과 시간은 먼저 선택할 수 있습니다.')).toBeNull();
     await waitFor(() => expect(finish).toBeTruthy());
     await act(async () => finish(json({ available: false, latestStartTime: null })));
     await screen.findByText('선택한 날짜에 예매 가능한 상영회차가 없습니다.');
@@ -532,3 +639,17 @@ test('schedule errors are retryable and are not presented as an empty schedule',
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await screen.findByLabelText('성인 인원');
 });
+
+test.each(['/movies?movie=41', '/theaters?theater=71&movie=41&showtime=91'])('youth default and adult restriction apply at %s', async path => {
+    localStorage.setItem('accessToken', 'youth-test');
+    fetch.mockImplementation(url => url === '/api/users/me' ? Promise.resolve(json({ ...member, birthDate:'2010-01-01' })) : baseFetch(url));
+    mount(path);
+    await waitFor(() => expect(screen.getByLabelText('청소년 인원').textContent).toBe('1'));
+    expect(screen.getByLabelText('성인 인원').textContent).toBe('0');
+    expect(screen.getByRole('button', {name:'성인 인원 늘리기'}).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', {name:'청소년 인원 늘리기'}));
+    expect(screen.getByLabelText('총인원').textContent).toBe('2명');
+    expect(screen.queryByRole('checkbox', {name:/관람등급/})).toBeNull();
+});
+
+

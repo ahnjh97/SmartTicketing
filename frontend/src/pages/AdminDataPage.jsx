@@ -195,7 +195,7 @@ function DataConsole() {
                     {!optionsLoading && !browse.theaters.some(t => t.brand === brand) && <p>등록된 영화관이 없습니다.</p>}
                 </div></div></div></div>
                 <div><h3>3. 날짜</h3><div className="admin-choice-list" role="group" aria-label="날짜 선택">
-                    {!applied.movieId || !applied.theaterId ? <p>영화와 영화관을 선택해주세요.</p> : dateOptions.key !== dateKey ? <p>날짜를 불러오는 중…</p> : dateOptions.error ? <><span role="alert">날짜 조회 실패: {dateOptions.error}</span><button onClick={() => { setDateOptions({ key: '', items: [] }); setDateRetry(n => n + 1); }}>날짜 다시 불러오기</button></> : dateOptions.items.length === 0 ? <p>등록된 상영회차가 없습니다.</p> : dateOptions.items.map(d => <button key={d.date} aria-pressed={applied.date === d.date} disabled={busy} onClick={() => choose({ ...applied, date: d.date })}>{d.date}</button>)}
+                    {!applied.movieId || !applied.theaterId ? <p>영화와 영화관을 선택해주세요.</p> : dateOptions.key !== dateKey ? null : dateOptions.error ? <><span role="alert">날짜 조회 실패: {dateOptions.error}</span><button onClick={() => { setDateOptions({ key: '', items: [] }); setDateRetry(n => n + 1); }}>날짜 다시 불러오기</button></> : dateOptions.items.length === 0 ? <p>등록된 상영회차가 없습니다.</p> : dateOptions.items.map(d => <button key={d.date} aria-pressed={applied.date === d.date} disabled={busy} onClick={() => choose({ ...applied, date: d.date })}>{d.date}</button>)}
                 </div></div>
             </div>}
             <div className="admin-actions admin-refresh"><CollectionButton disabled={disabled} onClick={reload} disabledReason={busy ? '관리자 작업이 진행 중입니다.' : '목록을 불러오는 중입니다.'}>새로고침</CollectionButton></div>
@@ -213,7 +213,7 @@ function DataConsole() {
             <p className="admin-hint">{kind === 'movies' ? '현재 탭 전체 삭제: 현재 분류의 모든 페이지 · 영화 전부 삭제: 상영작·예정작 모두 (개봉일 미정은 예정작에 포함)' : '‘전부 삭제’는 선택한 영화관·영화·날짜와 페이지에 관계없이 해당 종류 전체가 대상입니다. 삭제 전 연결 데이터 건수를 확인할 수 있습니다.'}</p>
             {kind === 'movies' ? <>
                 <label className="admin-check"><input type="checkbox" aria-label="현재 페이지 전체 선택" checked={allChecked} disabled={disabled} onChange={e => { setSelected(e.target.checked ? data.items.map(item => item.id) : []); setPreview(null); }} />현재 페이지 전체 선택</label>
-                {loading ? <p>불러오는 중…</p> : data.items.length === 0 ? <p>표시할 데이터가 없습니다.</p> : <div className="admin-movie-grid">{data.items.map(item => <label className={`admin-movie-card${selected.includes(item.id) ? ' is-selected' : ''}`} key={item.id}>
+                {loading ? null : data.items.length === 0 ? <p>표시할 데이터가 없습니다.</p> : <div className="admin-movie-grid">{data.items.map(item => <label className={`admin-movie-card${selected.includes(item.id) ? ' is-selected' : ''}`} key={item.id}>
                     <input type="checkbox" aria-label={`${item.id} 선택`} checked={selected.includes(item.id)} disabled={disabled} onChange={e => { setSelected(old => e.target.checked ? [...old, item.id] : old.filter(id => id !== item.id)); setPreview(null); }} />
                     <MoviePoster item={item} />
                     <strong>{item.title}</strong><small>{item.running_time ?? '—'}분 · {item.rating || '등급 미설정'}</small>
@@ -221,7 +221,7 @@ function DataConsole() {
                     <small>#{item.id} · {enabled(item.is_active) ? '서비스 노출' : '서비스 비노출'}</small>
                 </label>)}</div>}
             </> : <div className="admin-table-scroll"><table><thead><tr><th><input type="checkbox" aria-label="현재 페이지 전체 선택" checked={allChecked} disabled={disabled} onChange={e => { setSelected(e.target.checked ? data.items.map(item => item.id) : []); setPreview(null); }} /></th><th>ID</th><th>{kind === 'showtimes' ? '영화 / 영화관' : '이름'}</th><th>정보</th><th>상태</th>{kind === 'showtimes' && <th>관리</th>}</tr></thead>
-                <tbody>{!ready ? <tr><td colSpan="6">영화·영화관·날짜를 선택하면 상영회차가 표시됩니다.</td></tr> : loading ? <tr><td colSpan="6">불러오는 중…</td></tr> : data.items.length === 0 ? <tr><td colSpan="6">표시할 데이터가 없습니다.</td></tr> : data.items.map(item => <tr key={item.id}>
+                <tbody>{!ready ? <tr><td colSpan="6">영화·영화관·날짜를 선택하면 상영회차가 표시됩니다.</td></tr> : loading ? null : data.items.length === 0 ? <tr><td colSpan="6">표시할 데이터가 없습니다.</td></tr> : data.items.map(item => <tr key={item.id}>
                     <td><input type="checkbox" aria-label={`${item.id} 선택`} checked={selected.includes(item.id)} disabled={disabled} onChange={e => { setSelected(old => e.target.checked ? [...old, item.id] : old.filter(id => id !== item.id)); setPreview(null); }} /></td>
                     <td>{item.id}</td><td><strong>{item.title || item.name}</strong>{kind === 'showtimes' && <small>{item.theater_name} · {item.screen_name}</small>}</td>
                     <td>{kind === 'showtimes' ? <>{dateTime(item.start_time)}<small>{item.available_seats} / {item.total_seats}석 · {item.price_per_person?.toLocaleString() ?? '미설정'}원</small></> : item.address}</td>
@@ -390,7 +390,7 @@ function SeatPanel({ show, close, onBusy, onChanged }) {
     return <AdminModal title="좌석 현황" busy={busy} onClose={close} wide><section className="admin-seat-panel"><div className="admin-table-toolbar"><div><h2>좌석 현황 · {show.title}</h2><p>{show.theater_name} · {show.screen_name} · {dateTime(show.start_time)}</p></div><button disabled={busy} onClick={close}>닫기</button></div>
         <div className="admin-actions"><CollectionButton disabled={busy || seatsLoading} disabledReason={seatReason} onClick={() => { setPreview(null); setRevision(x => x + 1); }}>좌석 새로고침</CollectionButton><label className="admin-check"><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} />5초마다 갱신</label><span>최근 조회 {updated ? updated.toLocaleTimeString('ko-KR') : '—'}</span></div>
         {error && <p role="alert">{error}</p>}
-        {seatsLoading && <p role="status">좌석 정보를 불러오는 중…</p>}
+        
         {seatError && !seatsLoading && <p role="alert">좌석 조회 실패: {seatError}{updated && ' · 표시된 좌석은 마지막 조회 정보입니다.'}</p>}
         <div className="admin-seat-legend">{Object.entries(STATUS).map(([state, name]) => <span key={state}><i className={`admin-seat ${state}`} />{name} {seats.filter(s => (s.status || 'MISSING') === state).length}</span>)}</div>
         <div className="admin-seat-scroll"><div className="admin-screen">SCREEN</div>{Object.entries(rows).map(([row, items]) => <div className="admin-seat-row" key={row}><b>{row}</b>{items.map((seat, index) => <button key={seat.id} className={`admin-seat ${seat.status || 'MISSING'}${index > 0 && seat.adjacency_segment !== items[index - 1].adjacency_segment ? ' admin-aisle' : ''}`} aria-label={`${seat.seat_row}${seat.seat_number} ${STATUS[seat.status || 'MISSING']}`} aria-pressed={picked.includes(seat.id)} disabled={busy || seatsUnavailable} onClick={() => { setPicked(old => old.includes(seat.id) ? old.filter(id => id !== seat.id) : [...old, seat.id]); setPreview(null); }}>{seat.seat_number}</button>)}</div>)}</div>

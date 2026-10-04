@@ -15,13 +15,13 @@ export default function BookingMapDialog({ onClose, onSelect }) {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = overflow; previous?.focus(); };
     }, []);
-    return createPortal(<dialog ref={dialog} className={styles.dialog} aria-label="지도에서 극장 선택"
+    return createPortal(<dialog ref={dialog} className={styles.dialog} aria-label="극장 지도"
         onCancel={event => { event.preventDefault(); onClose(); }}
         onClick={event => { if (event.target === dialog.current) {
             const rect = dialog.current.getBoundingClientRect();
             if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
         } }}>
-        <header className={styles.dialogHeading}><h2>지도에서 극장 선택</h2><button type="button" aria-label="지도 닫기" onClick={onClose}>×</button></header>
+        <header className={styles.dialogHeading}><h2>극장 지도</h2><button type="button" aria-label="지도 닫기" onClick={onClose}>×</button></header>
         <QueryStatus query={theaters} />
         <BookingMap theaters={theaters.data?.items || []} onSelect={onSelect} />
     </dialog>, document.body);

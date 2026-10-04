@@ -46,7 +46,7 @@ public class BookingGroupService {
             String rating = BookingAudiencePolicy.rating(movie.getRating());
             BookingAudiencePolicy.validate(user, rating, request.viewingDate(), request.partySize(), request.audience());
             group.setRatingSnapshot(rating); group.setAdultCount(request.audience().adultCount()); group.setYouthCount(request.audience().youthCount());
-            group.setCompanionsEligible(request.audience().companionsEligible()); group.setGuardianAccompanying(request.audience().guardianAccompanying());
+            group.setCompanionsEligible(false); group.setGuardianAccompanying(false);
             group.setCreatedAt(now); group.setUpdatedAt(now);
             // 기존 우선순위와 중복 선호 좌석을 그대로 복사한다. 생성 이후 변경 API는 없다.
             group.getTheaterPreferences().addAll(em.createQuery("select p.theater from UserPreferredTheater p where p.user.id=:id order by p.priority, p.id", Theater.class)

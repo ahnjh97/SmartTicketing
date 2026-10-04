@@ -9,7 +9,7 @@ export default function SeatPicker({ seats, selected, limit, onChange, disabled 
     const toggle = id => onChange(selected.includes(id) ? selected.filter(value => value !== id)
         : selected.length < limit ? [...selected, id] : selected);
     return <section className={styles.picker} aria-label="좌석 직접 선택">
-        <div className={styles.screen}>SCREEN<span>스크린 방향</span></div>
+        <div className={styles.screen} aria-label="스크린">SCREEN</div>
         <div className={styles.viewport} tabIndex={0} aria-label="좌석 배치, 좁은 화면에서는 가로로 이동할 수 있습니다">
             <div className={styles.rows}>{[...rows].map(([row, items]) => <div key={row} className={styles.row}>
                 <span className={styles.rowName}>{row}</span>

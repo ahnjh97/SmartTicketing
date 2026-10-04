@@ -1,32 +1,21 @@
 import InlineDetails from '../components/InlineDetails.jsx';
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import GlassButton from '../components/GlassButton.jsx';
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
 const PUBLIC_TICKET_BASE_URL = new URL(import.meta.env.BASE_URL || '/', window.location.origin).href.replace(/\/$/, '');
 
-function formatDate(value) {
-    return value
-        ? new Date(value).toLocaleString("ko-KR", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-        : "-";
-}
-
 function formatTime(value) {
     return value
         ? new Date(value)
-            .toLocaleTimeString("en-US", {
-                hour: "numeric",
+            .toLocaleTimeString("ko-KR", {
+                timeZone: 'Asia/Seoul',
+                hour: "2-digit",
                 minute: "2-digit",
-                hour12: true,
+                hourCycle: 'h23',
             })
-            .toLowerCase()
         : "-";
 }
 
@@ -45,16 +34,16 @@ function formatTicketStatus(status) {
 
 function formatDateOnly(value) {
     return value
-        ? new Date(value).toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            weekday: "long",
-        })
+        ? dateKey(value).replaceAll('-', '.')
         : "-";
 }
 
+function dateKey(value) {
+    return new Date(value).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+}
+
 export default function TicketsPage() {
+    const modal = useRef(null);
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -62,6 +51,28 @@ export default function TicketsPage() {
     const [verificationPhase, setVerificationPhase] = useState("idle");
     const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
+
+    useEffect(() => {
+        if (!expandedTicketId) return;
+        const previous = document.activeElement;
+        const overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        modal.current?.querySelector('button')?.focus();
+        const onKeyDown = event => {
+            if (event.key === 'Escape') setExpandedTicketId(null);
+            if (event.key === 'Tab') {
+                // The close button is the only interactive control inside this dialog.
+                event.preventDefault();
+                modal.current?.querySelector('button')?.focus();
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            document.body.style.overflow = overflow;
+            previous?.focus();
+        };
+    }, [expandedTicketId]);
 
     useEffect(() => {
         let mounted = true;
@@ -79,21 +90,6 @@ export default function TicketsPage() {
             mounted = false;
         };
     }, []);
-
-    useEffect(() => {
-        if (!expandedTicketId) {
-            setVerificationPhase("idle");
-            return;
-        }
-
-        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (!selected) {
-            setVerificationPhase("idle");
-            return;
-        }
-
-        setVerificationPhase(selected.status === "USED" ? "used" : "idle");
-    }, [expandedTicketId, tickets]);
 
     useEffect(() => {
         if (verificationPhase !== "processing") return;
@@ -147,28 +143,34 @@ export default function TicketsPage() {
         };
     }, [expandedTicketId, tickets]);
 
-    const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? new Date(ticket.startTime).toLocaleDateString("sv-SE") : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
-    const filteredTickets = selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && new Date(ticket.startTime).toLocaleDateString("sv-SE") === selectedDate);
+    function selectTicket(id) {
+        setExpandedTicketId(id);
+        setVerificationPhase(tickets.find(ticket => ticket.ticketId === id)?.status === 'USED' ? 'used' : 'idle');
+        setVerificationSeconds(5);
+    }
+    const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? dateKey(ticket.startTime) : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+    const filteredTickets = (selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && dateKey(ticket.startTime) === selectedDate))
+        .toSorted((a, b) => (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0));
 
     return (
         <section className={styles.page}>
             <h1>내 티켓</h1>
             <div className={styles.panel}>
                 <div className={styles.ticketFilterHeader}>
-                    <h2>발급된 티켓</h2>
-                    <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setExpandedTicketId(null); }} aria-label="티켓 날짜 필터">
+                    <h2>발급된 티켓 <span className={styles.count}>{filteredTickets.length}</span></h2>
+                    <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); selectTicket(null); }} aria-label="티켓 날짜 필터">
                         <option value="ALL">전체 날짜</option>
-                        {ticketDates.map((date) => <option key={date} value={date}>{new Date(date + "T00:00:00").toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}</option>)}
+                        {ticketDates.map((date) => <option key={date} value={date}>{date.replaceAll('-', '.')}</option>)}
                     </select>
                 </div>
-                {loading ? <p role="status">티켓을 불러오는 중입니다.</p> : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? (
-                    <p>발급된 티켓이 없습니다.</p>
+                {loading ? null : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? (
+                    <p className={styles.empty}>{selectedDate === 'ALL' ? '발급된 티켓이 없습니다.' : '선택한 날짜의 티켓이 없습니다.'}</p>
                 ) : (
                     <div className={styles.ticketGroups}>
                         {Object.entries(
                             filteredTickets.reduce((groups, ticket) => {
                                 const dateKey = ticket.startTime
-                                    ? new Date(ticket.startTime).toLocaleDateString("ko-KR")
+                                    ? formatDateOnly(ticket.startTime)
                                     : "날짜 미정";
                                 if (!groups[dateKey]) groups[dateKey] = [];
                                 groups[dateKey].push(ticket);
@@ -191,20 +193,19 @@ export default function TicketsPage() {
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
                                                         onClick={() =>
-                                                            setExpandedTicketId((current) =>
-                                                                current === ticket.ticketId ? null : ticket.ticketId
-                                                            )
+                                                            selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId)
                                                         }
                                                     >
-                                                        <span className={styles.summaryMovie}>{ticket.movieTitle}</span>
+                                                        <span className={styles.summaryTop}>
+                                                            <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>
+                                                        </span>
+                                                        <strong className={styles.summaryMovie}>{ticket.movieTitle}</strong>
                                                         <span className={styles.summaryTheater}>
-                                                            <InlineDetails items={[ticket.theaterName]} />
+                                                            <InlineDetails items={[ticket.theaterName, ticket.screenName]} />
                                                         </span>
-                                                        <span className={styles.summaryTime}>
-                                                            {formatDate(ticket.startTime)}
-                                                        </span>
-                                                        <span className={styles.summaryStatus}>
-                                                            {formatTicketStatus(ticket.status)}
+                                                        <span className={styles.summaryBottom}>
+                                                            <span className={styles.summaryTime}>{formatTime(ticket.startTime)}<small>종료 {formatTime(ticket.endTime)}</small></span>
+                                                            <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
                                                         </span>
                                                     </button>
                                                 </article>
@@ -225,9 +226,10 @@ export default function TicketsPage() {
                     <div
                         className={styles.ticketModalBackdrop}
                         role="presentation"
-                        onClick={() => setExpandedTicketId(null)}
+                        onClick={() => selectTicket(null)}
                     >
                         <section
+                            ref={modal}
                             className={styles.ticketModal}
                             role="dialog"
                             aria-modal="true"
@@ -236,41 +238,41 @@ export default function TicketsPage() {
                         >
                             <div className={styles.ticketCard}>
                                 <div className={styles.ticketCardHeader}>
-                                    <span className={styles.ticketLabel}>CINEMA PASS</span>
-                                    <span className={styles.ticketStatus}>
+                                    <span className={styles.ticketStatus} data-status={selectedTicket.status}>
                                         {verificationPhase === "used" ? "사용 처리됨" : formatTicketStatus(selectedTicket.status)}
                                     </span>
+                                    <GlassButton className={styles.closeButton} aria-label="티켓 상세 닫기" onClick={() => selectTicket(null)}>×</GlassButton>
                                 </div>
 
                                 <div className={styles.ticketCardContent}>
                                     <div className={styles.ticketCardLeft}>
                                         <div className={styles.ticketCardMovie}>
-                                            <span className={styles.ticketInfoLabel}>MOVIE</span>
                                             <h2>{selectedTicket.movieTitle}</h2>
+                                            <p className={styles.detailDate}>{formatDateOnly(selectedTicket.startTime)}</p>
                                         </div>
 
                                         <div className={styles.ticketCardInfo}>
                                             <div>
-                                                <span>THEATER</span>
+                                                <span>극장</span>
                                                 <strong>
-                                                    {selectedTicket.theaterName || "-"} , {selectedTicket.screenName || "-"}
+                                                    <InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} />
                                                 </strong>
                                             </div>
                                             <div>
-                                                <span>SEAT</span>
+                                                <span>좌석</span>
                                                 <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
                                             </div>
                                             <div>
-                                                <span>TIME</span>
-                                                <strong>
-                                                    {formatTime(selectedTicket.startTime)} ~ {formatTime(selectedTicket.endTime)}
+                                                <span>상영 시간</span>
+                                                <strong className={styles.detailTime}>
+                                                    {formatTime(selectedTicket.startTime)} <small>→ {formatTime(selectedTicket.endTime)}</small>
                                                 </strong>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className={styles.ticketCardRight}>
-                                        <span className={styles.ticketStubLabel}>ADMIT ONE</span>
+                                        <span className={styles.ticketStubLabel}>입장 QR</span>
                                         <div className={styles.ticketQrPlaceholder}>
                                             <QRCodeSVG
                                                 value={`${PUBLIC_TICKET_BASE_URL}/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
@@ -292,7 +294,7 @@ export default function TicketsPage() {
                                         )}
 
                                         <div className={styles.ticketNumber}>
-                                            <span>TICKET NO.</span>
+                                            <span>티켓 번호</span>
                                             <strong>{selectedTicket.ticketNumber}</strong>
                                         </div>
                                     </div>

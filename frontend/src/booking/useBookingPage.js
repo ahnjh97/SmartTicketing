@@ -1,3 +1,4 @@
+import { audienceCounts, isYouthMember } from './audience.js';
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.js';
@@ -19,8 +20,8 @@ export default function useBookingPage(mode) {
     const dateValid = dates(today).includes(date);
     const from = params.get('from') || '';
     const until = params.get('until') || '';
-    const adultCount = params.has('adult') ? Number(params.get('adult')) : validParty(params.get('party')) ? Number(params.get('party')) : 1;
-    const youthCount = params.has('youth') ? Number(params.get('youth')) : 0;
+    const youthMember = isYouthMember(user, date);
+    const { adultCount, youthCount } = audienceCounts(params, youthMember);
     const audienceValid = [adultCount, youthCount].every(n => Number.isInteger(n) && n >= 0 && n <= 6) && validParty(adultCount + youthCount);
     const party = String(adultCount + youthCount);
     const rangeValid = validRange(from, until) && halfHour(from) && halfHour(until);
@@ -71,8 +72,8 @@ export default function useBookingPage(mode) {
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
     const selectedShow = items.find(s => String(s.id) === params.get('showtime'));
     const selectedMovie = theaterMode ? movies.data?.items.find(m => String(m.movieId) === movieId) : detail.data;
-    const valid = Boolean(dateValid && selectedMovieExists && !shows.loading && !shows.error && (theaterMode
-        ? selectedShow
+    const valid = Boolean(!authLoading && dateValid && selectedMovieExists && !shows.loading && !shows.error && (theaterMode
+        ? selectedShow && audienceValid
         : !authLoading && !needsPreferences && hasDayShows && !dayShows.loading && !dayShows.error && audienceValid && rangeFuture));
     const smartReady = theaterMode ? Boolean(selectedShow) : true;
     const enter = kind => {
@@ -81,13 +82,13 @@ export default function useBookingPage(mode) {
         setParams(previous => {
             const next = new URLSearchParams(previous);
             next.set('entry', kind); next.set('date', date);
+            next.set('adult', String(adultCount)); next.set('youth', String(youthCount)); next.set('party', party);
             // Movie smart booking selects a time range, not a specific showtime.
             if (!theaterMode) {
                 next.delete('showtime');
-                next.set('adult', String(adultCount)); next.set('youth', String(youthCount)); next.set('party', party);
             }
             return next;
         });
     };
-    return { theaterMode, user, authLoading, needsPreferences, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, adultCount, youthCount, audienceValid, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, dayShows, hasDayShows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
+    return { youthMember, theaterMode, user, authLoading, needsPreferences, params, expanded, setExpanded, columns, today, now, rangeFuture, movieId, theaterId, date, dateValid, from, until, party, adultCount, youthCount, audienceValid, rangeValid, page, search, entry, entryValid, update, selectTheater, brand, selectBrand, list, theater, movies, detail, shows, dayShows, hasDayShows, items, selectedShow, selectedMovie, selectedMovieExists, preferences, valid, smartReady, enter };
 }

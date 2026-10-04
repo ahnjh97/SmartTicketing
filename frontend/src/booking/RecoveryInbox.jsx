@@ -18,7 +18,7 @@ export default function RecoveryInbox() {
     return <section className={styles.inbox} aria-labelledby="recovery-title">
         <div className={styles.heading}><div><p className={styles.eyebrow}>YOUR NEXT MOVIE</p><h2 id="recovery-title">예약 및 대기 이어보기</h2>
             <p>다시 로그인해도, 창을 닫아도. 저장된 요청에서 이어가세요.</p></div><GlassButton onClick={retry}>새로고침</GlassButton></div>
-        {!result && <p className={styles.loading} role="status">저장된 예매와 알림을 확인하고 있습니다…</p>}
+        
         {groups?.status === 'rejected' && <p role="alert">예매 목록을 불러오지 못했습니다. {groups.reason.message}</p>}
         {groups?.status === 'fulfilled' && <>
             <div className={styles.grid}>{items.map(group => <article className={styles.card} key={group.id} data-holding={group.status === 'HOLDING'}>

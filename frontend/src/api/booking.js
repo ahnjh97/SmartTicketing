@@ -6,6 +6,7 @@ export const catalog = (path, query, signal) => request(`/api/${path}`, {
 });
 
 export const bookingApi = {
+    active: signal => request('/api/booking-groups/active', { signal }),
     mine: (before, signal) => request('/api/booking-groups', { query: { before }, signal }),
     recovery: (id, signal) => request(`/api/booking-groups/${id}/recovery`, { signal }),
     waiting: (id, signal) => request(`/api/booking-groups/${id}/waiting-queues`, { signal }),

@@ -4,7 +4,7 @@ import ui from './BookingComponents.module.css';
 import { dates } from './state.js';
 
 export function QueryStatus({ query, empty = false }) {
-    if (query.loading) return <p className={ui.feedback} role="status">불러오는 중…</p>;
+    if (query.loading) return null;
     if (query.error) return <div className={ui.feedback} role="alert">{query.error.message} <GlassButton onClick={query.retry}>다시 시도</GlassButton></div>;
     if (empty) return <p className={ui.feedback} role="status">조건에 맞는 결과가 없습니다.</p>;
     return null;

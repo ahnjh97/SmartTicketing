@@ -25,7 +25,7 @@ export default function WaitingPanel({ flow }) {
     return <section className={styles.panel} aria-label="복수 회차 대기" aria-busy={queue.busy}>
         <header className={styles.heading}><div><p className={styles.eyebrow}>MORE POSSIBILITIES</p><h3>기다리는 동안, 기회는 넓게.</h3>
             <p>원하는 회차를 직접 골라 신청하세요. 한 곳이 확보되면 나머지는 잠시 멈춥니다.</p></div><span className={styles.badge}>WAITLIST</span></header>
-        {!data && !queue.error && <div className={styles.loading} role="status">대기 가능한 회차와 현재 상태를 확인하고 있습니다…</div>}
+        
         {queue.error && <div className={styles.error} role="alert"><h4 ref={heading} tabIndex={-1}>대기 상태를 확인해주세요</h4><p>{queue.error.message}</p><GlassButton onClick={queue.retry} disabled={busy}>다시 확인</GlassButton></div>}
         {data && <>
             <div className={styles.rules}><span><b>01</b> 연석 우선, 허용 조합으로 분할</span><span><b>02</b> 선점 후 5분 결제</span><span><b>03</b> 만료 시 다른 회차 재개</span></div>

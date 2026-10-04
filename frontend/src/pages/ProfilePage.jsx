@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
 import useAuth from "../hooks/useAuth.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
-import { getSeatLabel } from "../utils/seatLabels.js";
+import SeatPreferenceMap from "../components/SeatPreferenceMap.jsx";
+import GlassButton from "../components/GlassButton.jsx";
+import styles from "./ProfilePage.module.css";
 
 export default function ProfilePage() {
     const { user, logout: logoutSession, withdraw: withdrawSession } = useAuth();
@@ -62,16 +64,16 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="page">
-            <div className="card profile-card">
-                <div className="profile-header">
+        <div className={styles.page}>
+            <div>
+                <div className={styles.header}>
                     <div><h1>회원정보</h1></div>
-                    <button type="button" disabled={pending} className="logout-button" onClick={logout}>
+                    <GlassButton disabled={pending} onClick={logout}>
                         로그아웃
-                    </button>
+                    </GlassButton>
                 </div>
 
-                <div className="user-info">
+                <div className={styles.info}>
                     <div><span>이름</span><strong>{user.name}</strong></div>
                     <div><span>아이디</span><strong>{user.loginId ?? "소셜 로그인"}</strong></div>
                     <div><span>생년월일</span><strong>{user.birthDate ?? "미등록"}</strong></div>
@@ -94,44 +96,40 @@ export default function ProfilePage() {
                             </div>
                         ) : <strong>일반 회원</strong>}
                     </div>
-                    <div>
-                        <span>선호 영화관</span>
-                        <div>
-                            {user.preferredTheaters?.length ? user.preferredTheaters.map((theater) => (
-                                <div key={theater.theaterId} style={{ marginBottom: "6px" }}>
-                                    <strong>{theater.priority}위</strong>{" "}
-                                    {theater.theaterName} ({theater.brand})
-                                </div>
-                            )) : <span>미설정</span>}
-                        </div>
+                    <div className={styles.preferences}>
+                        <h2>선호 영화관</h2>
+                        {user.preferredTheaters?.length ? (
+                            <ol className={styles.theaters}>
+                                {user.preferredTheaters.map((theater, index) => (
+                                    <li key={theater.theaterId} className={styles.theater}>
+                                        <span className={styles.theaterRank}>
+                                            <strong>{theater.priority ?? index + 1}</strong><small>위</small>
+                                        </span>
+                                        <span className={styles.theaterName}>{theater.theaterName}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        ) : <p className={styles.empty}>미설정</p>}
                     </div>
-                    <div>
-                        <span>선호 좌석</span>
-                        <div>
-                            {user.preferredSeats?.length ? user.preferredSeats.map((seat, index) => {
-                                const position = typeof seat === "string" ? seat : seat.position;
-                                const priority = typeof seat === "string" ? index + 1 : seat.priority ?? index + 1;
-                                return (
-                                    <div key={`${position}-${priority}-${index}`} style={{ marginBottom: "6px" }}>
-                                        <strong>{priority}위</strong>{" "}{getSeatLabel(position)}
-                                    </div>
-                                );
-                            }) : <span>미설정</span>}
-                        </div>
+                    <div className={styles.preferences}>
+                        <h2>선호 좌석</h2>
+                        {user.preferredSeats?.length
+                            ? <SeatPreferenceMap seats={user.preferredSeats} />
+                            : <p className={styles.empty}>미설정</p>}
                     </div>
                 </div>
 
-                <div className="profile-action-area">
-                    <button type="button" disabled={pending} className="primary-button" onClick={() => {
+                <div className={styles.actions}>
+                    <button type="button" disabled={pending} className={styles.withdraw} onClick={withdraw}>
+                        회원 탈퇴
+                    </button>
+                    <GlassButton disabled={pending} onClick={() => {
                         navigate("preferences");
                         setError("");
                         setMessage("");
                     }}>
                         회원정보 수정
-                    </button>
-                    <button type="button" disabled={pending} className="withdraw-button" onClick={withdraw}>
-                        회원 탈퇴
-                    </button>
+                    </GlassButton>
                 </div>
 
                 {error && <p className="error-message">{error}</p>}

@@ -67,12 +67,13 @@ async function api(url, options = {}) {
 }
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem('accessToken','test-token'); saved = null; group = null; paymentStatus = null; attempts = 0; });
 function Probe() { const location = useLocation(); return <output data-testid="path">{location.pathname}{location.search}</output>; }
-const initial = `/theaters?theater=71&movie=41&showtime=91&date=${day}&entry=THEATER_NORMAL`;
+const initial = `/theaters?theater=71&movie=41&showtime=91&date=${day}&entry=THEATER_NORMAL&adult=1&youth=1`;
 function mount(path=initial) { return render(<MemoryRouter initialEntries={[path]}><App /><Probe /></MemoryRouter>); }
 async function selectAndHold() {
-    fireEvent.change(await screen.findByLabelText('성인 인원'),{ target: { value: '1' } });
-    fireEvent.change(screen.getByLabelText('청소년 인원'),{ target: { value: '1' } });
-    fireEvent.click(screen.getByLabelText(/동반 관객 모두/));
+    expect((await screen.findByLabelText('관람 인원')).textContent).toContain('총인원2명');
+    expect(screen.queryByRole('combobox', { name:'성인 인원' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name:'청소년 인원' })).toBeNull();
+    
     fireEvent.click(await screen.findByRole('button',{ name: 'A1 좌석' }));
     fireEvent.click(screen.getByRole('button',{ name: 'A2 좌석' }));
     fireEvent.click(screen.getByRole('button',{ name: '선택한 좌석 5분 선점' }));
@@ -81,13 +82,13 @@ async function selectAndHold() {
 test('real route connects audience, seats, hold, reload, payment failure/retry and whole cancellation', async () => {
     vi.stubGlobal('fetch',vi.fn(api)); mount(); await selectAndHold();
     const create = fetch.mock.calls.find(([url])=>url==='/api/booking-groups');
-    expect(JSON.parse(create[1].body).audience).toEqual({ adultCount:1,youthCount:1,companionsEligible:true,guardianAccompanying:false });
+    expect(JSON.parse(create[1].body).audience).toEqual({ adultCount:1,youthCount:1 });
     expect(create[1].headers['Idempotency-Key']).toMatch(/^[a-z0-9-]{16,64}$/);
     const path = screen.getByTestId('path').textContent; cleanup(); mount(path);
     await screen.findByRole('timer');
-    fireEvent.click(screen.getByRole('button',{ name:'18,000원 모의결제' }));
+    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
     await screen.findByText(/모의결제에 실패했습니다/);
-    fireEvent.click(screen.getByRole('button',{ name:'모의결제 다시 시도' }));
+    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
     await screen.findByRole('heading',{ name:'예매가 완료되었습니다' });
     expect(screen.getByText('ST-TEST')).toBeTruthy();
     const pays = fetch.mock.calls.filter(([url])=>url.endsWith('/mock-payments'));
@@ -101,9 +102,8 @@ test('real route connects audience, seats, hold, reload, payment failure/retry a
 test('network failure retries the same hold identity without showing premature success', async () => {
     let calls=0;
     vi.stubGlobal('fetch',vi.fn((url,options)=> { if(url.endsWith('/manual-hold') && ++calls===1) throw new TypeError('연결 끊김'); return api(url,options); }));
-    mount();
-    fireEvent.change(await screen.findByLabelText('성인 인원'),{target:{value:'1'}});
-    fireEvent.click(screen.getByLabelText(/동반 관객 모두/)); fireEvent.click(await screen.findByRole('button',{name:'A1 좌석'}));
+    mount(initial.replace('&youth=1','&youth=0'));
+     fireEvent.click(await screen.findByRole('button',{name:'A1 좌석'}));
     fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}));
     await screen.findByText('연결 끊김'); expect(screen.queryByText('좌석을 선점했습니다')).toBeNull();
     expect(screen.getByTestId('path').textContent).toContain('group=401');
@@ -116,7 +116,7 @@ test('expired restored reservation offers restart and never offers payment', asy
     saved={...reservation,status:'EXPIRED'}; group={id:401}; vi.stubGlobal('fetch',vi.fn(api));
     mount('/theaters?entry=THEATER_NORMAL&group=401&reservation=501');
     await screen.findByRole('heading',{name:'선점 시간이 만료되었습니다'});
-    expect(screen.queryByRole('button',{name:'18,000원 모의결제'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'모의결제'})).toBeNull();
 });
 test('foreign reservation restoration shows the server ownership error without details', async () => {
     vi.stubGlobal('fetch',vi.fn((url,options)=>url==='/api/booking-groups/401' ? Promise.resolve(new Response(JSON.stringify({message:'관람 요청을 찾을 수 없습니다.'}),{status:404})) : api(url,options)));

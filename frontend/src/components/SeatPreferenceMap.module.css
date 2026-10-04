@@ -1,0 +1,33 @@
+.map {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    column-gap: 10px;
+    row-gap: 0;
+    width: 300px;
+    max-width: 100%;
+}
+
+.zone { position: relative; display: flex; min-width: 0; }
+.chair { display: block; flex: 1 1 0; min-width: 0; width: 100%; aspect-ratio: 330 / 275; overflow: hidden; }
+.rank {
+    position: absolute;
+    top: 64%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 2px;
+    min-width: 34px;
+    padding: 4px 6px;
+    border: 1px solid color-mix(in srgb, var(--booking-accent) 40%, transparent);
+    border-radius: 7px;
+    background: rgb(20 20 22 / 92%);
+    color: var(--booking-accent);
+    box-shadow: 0 2px 5px #0005;
+    font-family: var(--booking-font);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.rank strong { font-size: 22px; font-weight: 700; line-height: 1; }
+.rank small { font-size: 10px; font-weight: 500; line-height: 1; }

@@ -54,6 +54,7 @@ beforeEach(() => {
         if (url === "/api/users/me") return new Response(JSON.stringify(completedUser));
         if (url === "/api/tickets") return new Response('[]');
         if (url === '/api/booking-groups') return new Response('{"items":[],"hasMore":false}');
+        if (url === '/api/booking-groups/active') return new Response('[]');
         if (url.startsWith('/api/notifications')) return new Response('[]');
         throw new Error(`Unexpected API: ${url}`);
     }));
@@ -132,18 +133,25 @@ test('all public pages reuse the home header without route-specific appearance',
     }
 });
 
-test('member header exposes ticket, notification, logout and profile controls', async () => {
+test('member header exposes tickets, notifications, active bookings and profile', async () => {
     localStorage.setItem('accessToken', 'header-test-token');
-    for (const path of ['/', '/movies', '/theaters', '/profile', '/tickets']) {
+    for (const path of ['/', '/movies', '/theaters', '/profile', '/tickets', '/bookings']) {
         mount(path);
-        await within(screen.getByRole('banner')).findByRole('button', { name: '로그아웃' });
+        await waitFor(() => expect(within(screen.getByRole('banner')).getByRole('link', { name: '내 대기 및 선점' })).toBeTruthy());
         const header = screen.getByRole('banner');
         expect(header.className).toBe('common-header');
         const account = within(header).getByRole('navigation', { name: '회원 메뉴' });
-        expect(within(account).getAllByRole('button').map(item => item.getAttribute('aria-label'))).toEqual(['내 티켓 열기', '알림 열기', '로그아웃']);
+        expect(within(account).getAllByRole('button').map(item => item.getAttribute('aria-label'))).toEqual(['내 티켓 열기', '알림 열기']);
+        expect(within(account).getByRole('link', { name: '내 대기 및 선점' }).getAttribute('href')).toBe('/bookings');
         expect(within(account).getByRole('link', { name: '마이페이지' }).getAttribute('href')).toBe('/profile');
         cleanup();
     }
+});
+
+test('active bookings require login and preserve the return destination', async () => {
+    mount('/bookings');
+    await at('/login');
+    expect(sessionStorage.getItem('booking.return')).toBe('/bookings');
 });
 
 test("social signup retains its direct route and loads provider information", async () => {

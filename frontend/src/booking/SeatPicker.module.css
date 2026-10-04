@@ -1,6 +1,5 @@
 .picker { min-width: 0; }
-.screen { width: 78%; margin: 16px auto 48px; border-top: 3px solid var(--booking-ink); border-radius: 50%; padding-top: 18px; text-align: center; font-size: 12px; letter-spacing: .45em; background: linear-gradient(var(--booking-screen-glow), transparent); }
-.screen span { display: block; color: var(--booking-muted); font-size: 10px; letter-spacing: .15em; margin-top: 8px; }
+.screen { width: 78%; border-top: 4px solid var(--booking-ink); margin: 20px auto 20px; padding-top: 8px; text-align: center; color: var(--booking-muted); font-size: 11px; letter-spacing: .2em; }
 .viewport { overflow-x: auto; padding: 8px 6px 20px; border-radius: var(--booking-radius-large); }
 .viewport:focus-visible { outline: 2px solid var(--booking-accent); }
 .rows { display: grid; gap: 10px; width: max-content; min-width: 100%; }
