@@ -12,7 +12,7 @@ export default function PreferencesPage() {
     }
     return (
         <div className="page">
-            <div className="card profile-card">
+            <div className="card profile-card preference-card">
                 <div className="profile-header">
                     <div>
                         <h1>회원정보 수정</h1>
