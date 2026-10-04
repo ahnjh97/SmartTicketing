@@ -1,0 +1,12 @@
+.logo {
+    display: block;
+    width: 72px;
+    height: 48px;
+    flex: 0 0 auto;
+    object-fit: contain;
+}
+
+.large {
+    width: 132px;
+    height: 88px;
+}

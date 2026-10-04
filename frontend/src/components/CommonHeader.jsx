@@ -1,9 +1,9 @@
 import InlineDetails from './InlineDetails.jsx';
+import BrandLogo from './BrandLogo.jsx';
 import { useEffect, useRef, useState } from "react";
 import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
 import { Link, matchPath, NavLink, useLocation, useNavigate } from "react-router-dom";
-import glass from "./GlassButton.module.css";
 import { notificationApi } from "../api/notifications.js";
 import { ticketApi } from "../api/tickets.js";
 
@@ -45,7 +45,7 @@ export default function CommonHeader({
     const [notificationLoading, setNotificationLoading] = useState(false);
     const [ticketLoading, setTicketLoading] = useState(false);
 
-    const menuOpen = compact && openLocation === pathname;
+    const menuOpen = Boolean(user) && compact && openLocation === pathname;
     const activeMenu = pathname === PAGE_PATHS.home || matchPath(`${PAGE_PATHS.movies}/*`, pathname)
         ? "movies"
         : matchPath(`${PAGE_PATHS.theaters}/*`, pathname) ? "theaters" : null;
@@ -53,22 +53,22 @@ export default function CommonHeader({
 
     function renderGuestItems() {
         return (
-            <>
                 <NavLink
                     to={PAGE_PATHS.login}
-                    className="common-header-link common-header-signup"
+                    className="common-header-icon-trigger"
+                    aria-label="로그인"
+                    title="로그인"
+                    aria-disabled={navigationDisabled || undefined}
+                    tabIndex={navigationDisabled ? -1 : undefined}
                     onClick={handleNavigation}
                 >
-                    로그인
+                    <span className="common-header-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="8" r="3.2" />
+                            <path d="M5.5 20c.8-3.3 3.1-5 6.5-5s5.7 1.7 6.5 5" />
+                        </svg>
+                    </span>
                 </NavLink>
-                <NavLink
-                    to={PAGE_PATHS.signup}
-                    className={`common-header-link ${glass.button}`}
-                    onClick={handleNavigation}
-                >
-                    회원가입
-                </NavLink>
-            </>
         );
     }
 
@@ -264,10 +264,9 @@ export default function CommonHeader({
                     disabled={navigationDisabled}
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M4 7h16v10H4z" />
-                            <path d="M8 7v10" strokeDasharray="1.5 2" />
-                            <path d="M16 7v10" strokeDasharray="1.5 2" />
+                        <svg className="common-header-ticket-icon" viewBox="0 0 24 24" fill="none">
+                            <path d="M4 5h16a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 1 2-2Z" />
+                            <path d="M13 5v2m0 4v2m0 4v2" />
                         </svg>
                     </span>
                 </button>
@@ -336,11 +335,12 @@ export default function CommonHeader({
                     end
                     className="common-header-brand"
                     ref={brandRef}
+                    aria-label="SmartTicketing"
                     aria-disabled={navigationDisabled || undefined}
                     tabIndex={navigationDisabled ? -1 : undefined}
                     onClick={handleNavigation}
                 >
-                    SmartTicketing
+                    <BrandLogo decorative />
                 </NavLink>
 
                 <div className="common-header-desktop" aria-hidden={compact || undefined} inert={compact || undefined}>
@@ -375,7 +375,7 @@ export default function CommonHeader({
                                 onClick={handleNavigation}>{label}</Link>
                         ))}
                     </nav>
-                    <button ref={toggleRef} type="button" className="common-header-menu-toggle"
+                    {user ? <button ref={toggleRef} type="button" className="common-header-menu-toggle"
                         aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"}
                         aria-expanded={menuOpen} aria-controls="common-header-mobile-menu"
                         onClick={() => {
@@ -385,7 +385,7 @@ export default function CommonHeader({
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             {menuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
                         </svg>
-                    </button>
+                    </button> : <nav className="common-header-account" aria-label="회원 메뉴">{renderGuestItems()}</nav>}
                 </>}
             </div>
 
@@ -461,7 +461,7 @@ export default function CommonHeader({
             )}
 
             {menuOpen && <nav id="common-header-mobile-menu" className="common-header-mobile-menu" aria-label="전체 메뉴">
-                {user ? renderAccountItems() : renderGuestItems()}
+                {renderAccountItems()}
             </nav>}
         </header>
     );

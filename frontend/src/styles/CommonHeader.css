@@ -1,5 +1,6 @@
 /* Common header */
 .common-header {
+    --header-menu-font-size: 20px;
     position: absolute;
     inset: 0 0 auto;
     z-index: 100;
@@ -44,11 +45,7 @@
 
 .common-header-brand {
     justify-content: flex-start;
-    padding-left: 0;
-    font-size: 24px;
-    font-weight: 800;
-    line-height: 28px;
-    white-space: nowrap;
+    padding: 0;
 }
 
 .common-header-nav,
@@ -64,7 +61,7 @@
 
 .common-header-nav .common-header-link {
     min-width: 68px;
-    font-size: 20px;
+    font-size: var(--header-menu-font-size);
     font-weight: 600;
     border-radius: 0;
     color: rgb(255 255 255 / 70%);
@@ -179,9 +176,10 @@
 
 .common-header-trigger-icon {
     display: inline-flex;
-    width: 23px;
-    height: 23px;
-    flex: 0 0 23px;
+    font-size: var(--header-menu-font-size);
+    width: 1.6em;
+    height: 1.6em;
+    flex: 0 0 1.6em;
 }
 
 .common-header-trigger-icon svg {
@@ -193,7 +191,15 @@
     stroke-linejoin: round;
 }
 
+.common-header-ticket-icon {
+    transform: rotate(-28deg);
+    transform-origin: center;
+}
+
 .common-header-notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -411,10 +417,11 @@
 }
 
 .common-header-compact-nav {
-    margin-left: auto;
+    margin-left: 0;
 }
 
 .common-header-menu-toggle {
+    margin-left: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -492,15 +499,9 @@
         padding-inline: 12px;
     }
 
-    .common-header-compact .common-header-brand {
-        font-size: clamp(14px, 4.3vw, 18px);
-        padding-right: 0;
-    }
-
     .common-header-compact-nav .common-header-link {
         min-width: 44px;
         padding-inline: 6px;
-        font-size: 16px;
     }
 
     .common-header-compact-nav {
