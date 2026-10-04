@@ -6,7 +6,7 @@ import useCatalog from './useCatalog.js';
 import { formatRating } from './format.js';
 import { Link } from 'react-router-dom';
 import { DateCards, MovieCard, Pagination, QueryStatus } from './BookingComponents.jsx';
-import BookingMap from './BookingMap.jsx';
+import BookingMapDialog from './BookingMapDialog.jsx';
 import TimeRangeMenu from './TimeRangeMenu.jsx';
 import HorizontalRail from '../components/HorizontalRail.jsx';
 
@@ -69,40 +69,38 @@ export function BookingConfirmation({ booking }) {
         </section>);
 }
 export function TheaterBooking({ booking }) {
-    const { user, params, expanded, setExpanded, movieId, theaterId, dateValid, page, search, update, selectTheater, brand, selectBrand, list, theater, movies, selectedMovieExists, preferences, selectedShow } = booking;
-    const brands = { CGV: 'CGV', LOTTE_CINEMA: '롯데시네마', MEGABOX: '메가박스' };
+    const { user, authLoading, params, movieId, theaterId, dateValid, update, selectTheater, brand, selectBrand, list, theater, movies, selectedMovieExists, preferences, selectedShow } = booking;
+    const brands = { FAVORITES: '선호극장', CGV: 'CGV', LOTTE_CINEMA: '롯데시네마', MEGABOX: '메가박스' };
     const chart = useCatalog(theaterId ? 'main' : null, {});
     const rank = new Map((chart.data?.nowShowing || []).map((m, index) => [m.id, index]));
     const sortedMovies = [...(movies.data?.items || [])]
         .sort((a, b) => (rank.get(a.movieId) ?? 999) - (rank.get(b.movieId) ?? 999));
     return (<>
-            <div className={styles.brandTabs} role="tablist" aria-label="영화관 브랜드">
-                {Object.entries(brands).map(([key, label]) => <button key={key} type="button" role="tab" data-brand={key} aria-selected={brand === key} onClick={() => selectBrand(key)}>{label}</button>)}
-            </div>
-            <div className={styles.theaterToolbar}>
-                <form className={styles.search} onSubmit={e => { e.preventDefault(); list.retry(); }}>
-                    <label className={ui.srOnly} htmlFor="theater-query">극장 이름 또는 주소 검색</label>
-                    <input id="theater-query" value={search} maxLength={100} onChange={e => update({ q: e.target.value, page: 0 })} placeholder={`${brands[brand]} 지점 검색`} />
-                    <button className={ui.primary} type="submit">검색</button>
-                </form>
-                <GlassButton className={styles.mapToggle} aria-expanded={params.get('map') === '1'} onClick={() => update({ map: params.get('map') === '1' ? null : '1' })} aria-label={`지도 ${params.get('map') === '1' ? '닫기' : '열기'}`}>지도</GlassButton>
-                <span className={styles.note}>선호 극장</span>
-                <div className={styles.favorites}>
-                    {!user ? <Link to="/login">로그인 후 선호 극장</Link> : !preferences.length ? <span>저장한 선호 극장이 없습니다.</span>
-                        : (expanded ? preferences : preferences.slice(0, 3)).map(t => <GlassButton key={t.theaterId} aria-label={`${t.priority}순위 ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>★ {t.theaterName || `극장 ${t.theaterId}`}</GlassButton>)}
-                    {preferences.length > 3 && <GlassButton onClick={() => setExpanded(!expanded)}>{expanded ? '접기' : '나머지 선호 극장 보기'}</GlassButton>}
+        <section className={styles.theaterSelector} aria-label="극장 선택">
+            <div className={styles.selectorHeading}><h2>극장 선택</h2></div>
+            <div className={styles.selectorTop}>
+                <div className={styles.brandTabs} role="tablist" aria-label="영화관 브랜드">
+                    {Object.entries(brands).map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={brand === key} onClick={() => selectBrand(key)}>{label}</button>)}
                 </div>
+                <button type="button" className={styles.mapSelect} aria-haspopup="dialog" onClick={() => update({ map: '1' })}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    지도에서 선택
+                </button>
             </div>
-            {params.get('map') === '1' && <BookingMap theaters={list.data?.items || []} onSelect={selectTheater} />}
-            {(!theaterId || search) && <>
-                <QueryStatus query={list} empty={list.data?.items.length === 0} />
-                {!theaterId && <p className={styles.note}>{brands[brand]} 지점을 선택해주세요. 선호 극장에서도 바로 선택할 수 있습니다.</p>}
-                <div className={styles.theaters}>{list.data?.items.map(t => <GlassButton key={t.id} aria-pressed={theaterId === String(t.id)} onClick={() => selectTheater(t.id)}><strong>{t.name}</strong><small>{t.address}</small></GlassButton>)}</div>
-                <Pagination data={list.data} page={page} onChange={value => update({ page: value })} />
-            </>}
+            <div className={styles.branchPanel}>
+                {brand === 'FAVORITES' ? authLoading ? <p role="status" className={styles.note}>선호극장을 불러오는 중…</p>
+                    : !user ? <p className={styles.emptyBranches}>로그인하면 선호극장을 바로 선택할 수 있습니다. <Link to="/login">로그인</Link></p>
+                    : !preferences.length ? <p className={styles.emptyBranches}>등록된 선호극장이 없습니다. <Link to="/preferences">선호극장 설정</Link></p>
+                    : <div className={styles.theaters} role="group" aria-label="선호극장 선택">{preferences.map((t, index) => <button type="button" key={t.theaterId} aria-label={`${index + 1}순위 ${t.theaterName || `극장 ${t.theaterId}`}`} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}><span className={styles.preferenceRank}>{index + 1}</span>{t.theaterName || `극장 ${t.theaterId}`}</button>)}</div>
+                    : <>
+                        <QueryStatus query={list} empty={list.data?.items.length === 0} />
+                        <div className={styles.theaters} role="group" aria-label={`${brands[brand]} 지점 선택`}>{list.data?.items.map(t => <button type="button" key={t.id} title={t.address} aria-pressed={theaterId === String(t.id)} onClick={() => selectTheater(t.id)}>{t.name}</button>)}</div>
+                    </>}
+            </div>
+            {params.get('map') === '1' && <BookingMapDialog onClose={() => update({ map: null })} onSelect={selectTheater} />}
+        </section>
         {theaterId && <>
             <QueryStatus query={theater} />
-            {theater.data && <div className={styles.selectedTheater}><strong>{theater.data.name}</strong><span>{theater.data.address}</span><GlassButton onClick={() => update({ brand, theater: null, movie: null, showtime: null })}>극장 변경</GlassButton></div>}
             <BookingDates booking={booking} />
             {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
             <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.js';
 import useCatalog from './useCatalog.js';
+import useTheaterCatalog from './useTheaterCatalog.js';
 import { dates, positive, rememberBooking, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
 
 export default function useBookingPage(mode) {
@@ -36,7 +37,7 @@ export default function useBookingPage(mode) {
         }
         return next;
     }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams]);
-    const selectTheater = useCallback(id => update({ theater: id, brand: null, q: null, page: 0, movie: null, showtime: null }), [update]);
+    const selectTheater = useCallback(id => update({ theater: id, map: null, q: null, page: null, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
         const refreshClock = () => setNow(Date.now());
@@ -49,11 +50,13 @@ export default function useBookingPage(mode) {
     useEffect(() => { rememberBooking(`${theaterMode ? '/theaters' : '/movies'}?${params}`); }, [params, theaterMode]);
     const theater = useCatalog(theaterMode && theaterId ? `theaters/${theaterId}` : null);
     const brands = ['CGV', 'LOTTE_CINEMA', 'MEGABOX'];
-    const brand = (theaterId && brands.includes(theater.data?.brand) ? theater.data.brand : null)
-        || (brands.includes(params.get('brand')) ? params.get('brand') : 'CGV');
-    const selectBrand = value => update({ brand: value, theater: null, movie: null, showtime: null, q: null, page: 0 });
-    const catalogList = useCatalog(theaterMode ? (theaterId && theater.loading ? null : 'theaters') : 'movies', { page, size: 20, ...(theaterMode ? { query: search, brand } : { landscapeOnly: true }) });
-    const list = !theaterMode && catalogList.data ? { ...catalogList, data: { ...catalogList.data,
+    const requestedBrand = params.get('brand');
+    const brand = [...brands, 'FAVORITES'].includes(requestedBrand) ? requestedBrand
+        : theaterId && brands.includes(theater.data?.brand) ? theater.data.brand : 'FAVORITES';
+    const selectBrand = value => update({ brand: value, theater: null, movie: null, showtime: null, q: null, page: null });
+    const theaterList = useTheaterCatalog(theaterMode && brand !== 'FAVORITES', brand);
+    const catalogList = useCatalog(!theaterMode ? 'movies' : null, { page, size: 20, landscapeOnly: true });
+    const list = theaterMode ? theaterList : catalogList.data ? { ...catalogList, data: { ...catalogList.data,
         items: catalogList.data.items.filter(movie => movie.backdropUrl?.trim()) } } : catalogList;
     const movies = useCatalog(theaterMode && theaterId && dateValid ? `theaters/${theaterId}/movies` : null, { date });
     const detail = useCatalog(!theaterMode && movieId ? `movies/${movieId}` : null);

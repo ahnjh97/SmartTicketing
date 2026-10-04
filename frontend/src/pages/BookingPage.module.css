@@ -1,4 +1,7 @@
 .container { max-width: 1440px; margin: 0 auto; padding: 28px 64px 24px; }
+.content { display: contents; }
+.theaterContainer { min-height: calc(100dvh - var(--common-header-height, 72px)); display: flex; flex-direction: column; }
+.theaterContent { flex: 1; min-width: 0; }
 .footer { margin-top: 80px; border-top: 1px solid var(--booking-border); color: var(--booking-muted); font-size: 12px; padding: 28px 0; }
 @media (max-width: 999px) { .container { padding: 24px 32px; } }
 @media (max-width: 599px) { .container { padding: 20px 16px; } }

@@ -28,8 +28,9 @@ async function baseFetch(url) {
 }
 function Probe() { const navigate = useNavigate(); const location = useLocation(); return <><output data-testid="url">{location.pathname}{location.search}</output><button onClick={() => navigate(-1)}>뒤로</button><button onClick={() => navigate(`/movies?movie=42&party=2&date=${seoulDate()}`)}>다른 영화</button></>; }
 function mount(path) { window.history.replaceState({}, '', path); return render(<StrictMode><MemoryRouter initialEntries={[path]}><App /><Probe /></MemoryRouter></StrictMode>); }
-beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T09:00:00+09:00`)); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T09:00:00+09:00`)); });
+afterEach(() => { cleanup(); if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal; else delete HTMLDialogElement.prototype.showModal; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 test('details and availability load in parallel while audience controls already work', async () => {
     let detailDone, availabilityDone;
@@ -211,17 +212,18 @@ test('brand tabs filter branches and clear previous booking selections', async (
     await screen.findByRole('button', { name: /MEGABOX 지점/ });
     const params = new URL(screen.getByTestId('url').textContent, 'http://localhost').searchParams;
     expect(params.get('brand')).toBe('MEGABOX');
-    expect(params.get('page')).toBe('0');
+    expect(params.has('page')).toBe(false);
     for (const key of ['theater', 'movie', 'showtime', 'q']) expect(params.has(key)).toBe(false);
     expect(screen.queryByRole('button', { name: /LOTTE_CINEMA 지점/ })).toBe(null);
 });
 
-test('changing a directly opened theater retains its brand', async () => {
+test('a directly opened theater retains its brand without a duplicate theater summary', async () => {
     fetch.mockImplementation(url => url === '/api/theaters/71'
         ? Promise.resolve(json({ ...theater, brand: 'MEGABOX' })) : baseFetch(url));
     mount('/theaters?theater=71');
-    fireEvent.click(await screen.findByRole('button', { name: '극장 변경' }));
-    expect(screen.getByRole('tab', { name: '메가박스' }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() => expect(screen.getByRole('tab', { name: '메가박스' }).getAttribute('aria-selected')).toBe('true'));
+    expect(screen.queryByRole('button', { name: '극장 변경' })).toBe(null);
+    expect(screen.queryByText(theater.address)).toBe(null);
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?') && url.includes('brand=MEGABOX'))).toBe(true));
 });
 
@@ -257,26 +259,34 @@ test('loading, error, retry and empty states stay distinct', async () => {
     await screen.findByText('조건에 맞는 결과가 없습니다.');
     expect(screen.queryByRole('alert')).toBe(null);
 });
-test('map entry requests location, denial keeps manual public search', async () => {
+test('map opens in a dismissible dialog and guests can use brand tabs without search', async () => {
     const locate = vi.fn((success, failure) => failure({ code: 1 }));
     vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: locate } });
     vi.stubEnv('VITE_KAKAO_MAP_JS_KEY', '');
-    mount('/theaters'); await screen.findByRole('button', { name: /서울 극장/ });
+    mount('/theaters');
+    expect((await screen.findByRole('tab', { name: '선호극장' })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByLabelText('극장 이름 또는 주소 검색')).toBe(null);
     expect(locate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '지도 열기' }));
+    fireEvent.click(screen.getByRole('button', { name: '지도에서 선택' }));
+    expect(await screen.findByRole('dialog', { name: '지도에서 극장 선택' })).toBeTruthy();
     await screen.findByText(/주변 극장 검색은 로그인이 필요/);
     expect(locate).toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('극장 이름 또는 주소 검색'), { target: { value: '부산' } });
-    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes('query=%EB%B6%80%EC%82%B0'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: '지도 닫기' }));
+    expect(screen.queryByRole('dialog')).toBe(null);
+    expect(document.body.style.overflow).not.toBe('hidden');
+    fireEvent.click(await screen.findByRole('tab', { name: 'CGV' }));
+    await screen.findByRole('button', { name: /서울 극장/ });
     expect(fetch.mock.calls.some(([url]) => url.includes('/nearby'))).toBe(false);
 });
-test('first three preferred theaters and remaining preferences are accessible', async () => {
+
+test('all preferred theaters are visible in the default first tab', async () => {
     localStorage.setItem('accessToken', 'saved-token'); mount('/theaters');
     await screen.findByRole('button', { name: '1순위 선호1' });
-    expect(screen.queryByRole('button', { name: '4순위 선호4' })).toBe(null);
-    fireEvent.click(screen.getByRole('button', { name: '나머지 선호 극장 보기' }));
     expect(screen.getByRole('button', { name: '4순위 선호4' })).toBeTruthy();
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['선호극장', 'CGV', '롯데시네마', '메가박스']);
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?'))).toBe(false);
 });
+
 test('login and reload restore selection without booking mutation', async () => {
     const path = `/movies?movie=41&party=2&from=22:00&until=02:00&date=${seoulDate()}&entry=MOVIE_SMART`;
     mount(path);
@@ -312,20 +322,33 @@ test('late movie detail cannot replace the new detail and its query signal is ab
     expect(screen.queryByRole('heading', { name: '오래된 상세' })).toBe(null);
 });
 
-test('quick theater search ignores the older result even if cancellation is ignored', async () => {
+test('changing brands ignores an older branch response even when cancellation is ignored', async () => {
     let finishOld;
     fetch.mockImplementation(url => {
-        if (url.includes('query=old')) return new Promise(resolve => { finishOld = resolve; });
-        if (url.includes('query=new')) return Promise.resolve(json({ items: [{ ...theater, name: '새 검색 극장' }], size: 20, totalElements: 1 }));
+        if (url.startsWith('/api/theaters?') && url.includes('brand=CGV')) return new Promise(resolve => { finishOld = resolve; });
+        if (url.startsWith('/api/theaters?') && url.includes('brand=MEGABOX')) return Promise.resolve(json({ items: [{ ...theater, name: '새 브랜드 극장' }], totalElements: 1 }));
         return baseFetch(url);
     });
     mount('/theaters');
-    fireEvent.change(await screen.findByLabelText('극장 이름 또는 주소 검색'), { target: { value: 'old' } });
+    fireEvent.click(await screen.findByRole('tab', { name: 'CGV' }));
     await waitFor(() => expect(finishOld).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('극장 이름 또는 주소 검색'), { target: { value: 'new' } });
-    await screen.findByRole('button', { name: /새 검색 극장/ });
-    await act(async () => finishOld(json({ items: [{ ...theater, name: '이전 검색 극장' }], size: 20, totalElements: 1 })));
-    expect(screen.queryByRole('button', { name: /이전 검색 극장/ })).toBe(null);
+    fireEvent.click(screen.getByRole('tab', { name: '메가박스' }));
+    await screen.findByRole('button', { name: '새 브랜드 극장' });
+    await act(async () => finishOld(json({ items: [{ ...theater, name: '이전 브랜드 극장' }], totalElements: 1 })));
+    expect(screen.queryByRole('button', { name: '이전 브랜드 극장' })).toBe(null);
+});
+
+test('brand tabs fetch every catalog page without paging controls', async () => {
+    fetch.mockImplementation(url => {
+        if (!url.startsWith('/api/theaters?')) return baseFetch(url);
+        const page = Number(new URL(url, 'http://localhost').searchParams.get('page'));
+        return Promise.resolve(json({ items: page === 0 ? Array.from({ length: 100 }, (_, id) => ({ ...theater, id: id + 1, name: `지점${id + 1}` })) : [{ ...theater, id: 101, name: '마지막 지점' }], totalElements: 101 }));
+    });
+    mount('/theaters');
+    fireEvent.click(await screen.findByRole('tab', { name: 'CGV' }));
+    await screen.findByRole('button', { name: '마지막 지점' });
+    expect(screen.queryByRole('button', { name: '다음 페이지' })).toBe(null);
+    expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/theaters?') && url.includes('page=1'))).toBe(true);
 });
 
 test('date change clears movie and showtime, preserves the theater and seven dates', async () => {
@@ -367,8 +390,10 @@ test('administrator without preference information can open theater pages direct
         ? Promise.resolve(json({ id: 1, nickname: '관리자', admin: true, preferredTheaters: [], preferredSeats: [] }))
         : baseFetch(url));
     mount('/theaters');
-    await screen.findByRole('button', { name: /서울 극장/ });
+    await screen.findByText(/등록된 선호극장이 없습니다/);
     expect(screen.getByTestId('url').textContent).toBe('/theaters');
+    fireEvent.click(await screen.findByRole('tab', { name: 'CGV' }));
+    await screen.findByRole('button', { name: /서울 극장/ });
     expect(screen.queryByRole('heading', { name: '선호 정보 설정' })).toBe(null);
 });
 
@@ -401,6 +426,7 @@ test('authenticated nearby results use DB theater IDs and preserve the existing 
     fireEvent.click(nearbyButton);
     fireEvent.click(await screen.findByRole('button', { name: '주변 극장', exact: true }));
     expect(screen.getByTestId('url').textContent).toContain('theater=72');
+    expect(screen.queryByRole('dialog')).toBe(null);
     const call = fetch.mock.calls.find(([url]) => url.startsWith('/api/theaters/nearby?'));
     expect(call[1].headers.Authorization).toBe('Bearer nearby-test-token');
 });

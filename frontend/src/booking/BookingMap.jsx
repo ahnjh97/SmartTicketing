@@ -12,7 +12,7 @@ export default function BookingMap({ theaters, onSelect }) {
     const map = useRef(null);
     const [ready, setReady] = useState(false);
     const [center, setCenter] = useState(null);
-    const [message, setMessage] = useState('위치 권한을 요청합니다. 거절해도 지도를 움직이거나 극장 검색을 이용할 수 있습니다.');
+    const [message, setMessage] = useState('위치 권한을 요청합니다. 지도에서 극장 핀을 선택할 수 있습니다.');
     const [nearby, setNearby] = useState([]);
     const [busy, setBusy] = useState(false);
     const sequence = useRef({ value: 0 });
@@ -20,12 +20,12 @@ export default function BookingMap({ theaters, onSelect }) {
         let active = true;
         const requestSequence = sequence.current;
         navigator.geolocation?.getCurrentPosition(position => {
-            if (active) { setCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude }); setMessage('현재 위치를 표시했습니다. 지도 이동 또는 극장 검색이 가능합니다.'); }
-        }, () => { if (active) setMessage('위치 정보를 사용할 수 없습니다. 지도를 움직이거나 아래 검색으로 직접 탐색해주세요.'); }, { timeout: 10000 });
-        if (!navigator.geolocation) queueMicrotask(() => { if (active) setMessage('위치 기능을 지원하지 않습니다. 직접 검색해주세요.'); });
+            if (active) { setCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude }); setMessage('현재 위치를 표시했습니다. 지도에서 극장 핀을 선택해주세요.'); }
+        }, () => { if (active) setMessage('위치 정보를 사용할 수 없습니다. 지도를 움직여 극장 핀을 선택해주세요.'); }, { timeout: 10000 });
+        if (!navigator.geolocation) queueMicrotask(() => { if (active) setMessage('위치 기능을 지원하지 않습니다. 지도에서 극장 핀을 선택해주세요.'); });
         const key = import.meta.env.VITE_KAKAO_MAP_JS_KEY;
         let script;
-        const fail = () => { if (active) setMessage('지도를 불러올 수 없습니다. 아래 극장 검색을 이용해주세요.'); };
+        const fail = () => { if (active) setMessage('지도를 불러올 수 없습니다. 모달을 닫고 브랜드 탭에서 지점을 선택해주세요.'); };
         const load = () => window.kakao?.maps ? window.kakao.maps.load(() => {
             if (!active || !container.current) return;
             map.current = new window.kakao.maps.Map(container.current, { center: new window.kakao.maps.LatLng(37.5665, 126.978), level: 7 });
@@ -70,13 +70,13 @@ export default function BookingMap({ theaters, onSelect }) {
             const result = await theaterApi.nearby({ latitude: point.getLat(), longitude: point.getLng() });
             if (sequence.current.value !== current) return;
             setNearby(result.map(t => ({ ...t, id: t.theaterId })));
-            setMessage(result.length ? '주변 극장을 선택해주세요.' : '주변 극장이 없습니다. 지도 이동 또는 검색을 이용해주세요.');
+            setMessage(result.length ? '주변 극장을 선택해주세요.' : '주변 극장이 없습니다. 지도를 다른 위치로 옮겨 다시 찾아주세요.');
         } catch (error) { if (sequence.current.value === current) setMessage(error.message); }
         finally { if (sequence.current.value === current) setBusy(false); }
     }
     return <section className={ui.panel}><p role="status">{message}</p>
         <div ref={container} className={styles.map} aria-label="극장 지도" />
-        {user ? <GlassButton disabled={!ready || busy} onClick={searchNearby}>{busy ? '검색 중…' : '이 지도 위치 주변 검색'}</GlassButton> : <p>주변 극장 검색은 로그인이 필요합니다. 아래 공개 극장 검색은 비회원도 이용할 수 있습니다.</p>}
+        {user ? <GlassButton disabled={!ready || busy} onClick={searchNearby}>{busy ? '검색 중…' : '이 지도 위치 주변 검색'}</GlassButton> : <p>주변 극장 검색은 로그인이 필요합니다. 지도에 표시된 극장 핀은 비회원도 선택할 수 있습니다.</p>}
         {user && nearby.map(t => <GlassButton key={t.id} onClick={() => onSelect(t.id)}>{t.name}</GlassButton>)}
     </section>;
 }
