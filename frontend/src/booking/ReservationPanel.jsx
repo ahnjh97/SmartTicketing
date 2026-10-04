@@ -1,5 +1,6 @@
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
 import useReservationClock from './useReservationClock.js';
@@ -54,11 +55,33 @@ export default function ReservationPanel({ flow, onRestart }) {
         {r.status === 'CANCELLED' && <p>예약 전체가 취소되었습니다. 결제 완료 건은 수수료 없이 모의 전액 환불됩니다.</p>}
         {r.status === 'EXPIRED' && <p>좌석을 다시 선택해주세요. 이전 선점은 연장되지 않습니다.</p>}
         {!pending && !confirmed && <div className={styles.resultActions}><GlassButton onClick={onRestart}>다시 예매하기</GlassButton></div>}
-        {confirmCancel && cancellable && <div className={styles.cancelBox} role="group" aria-label="전체 취소 확인">
-            <strong>{pending ? '선점한 모든 좌석을 해제할까요?' : '모든 좌석을 취소하고 모의 전액 환불할까요?'}</strong>
+        {confirmCancel && cancellable && <CancelDialog busy={busy} onClose={() => setConfirmCancel(false)}>
+            <h2 id="reservation-cancel-title">{pending ? '선점을 취소할까요?' : '예매를 취소할까요?'}</h2>
+            <p>{pending ? '선점한 모든 좌석이 해제됩니다.' : '모든 좌석이 취소되고 결제 금액은 모의 전액 환불됩니다.'}</p>
             <p>부분 취소는 지원하지 않으며, 취소한 좌석의 재확보는 보장되지 않습니다.</p>
             <div className={styles.resultActions}><GlassButton disabled={busy} onClick={() => setConfirmCancel(false)}>유지하기</GlassButton>
                 <button className={ui.primary} disabled={busy} onClick={async () => { await cancel(); setConfirmCancel(false); }}>전체 취소 확정</button></div>
-        </div>}
+        </CancelDialog>}
     </section>;
+}
+
+function CancelDialog({ busy, onClose, children }) {
+    const dialog = useRef(null);
+    useEffect(() => {
+        const previous = document.activeElement;
+        const overflow = document.body.style.overflow;
+        const element = dialog.current;
+        element.showModal();
+        document.body.style.overflow = 'hidden';
+        return () => {
+            element.close();
+            document.body.style.overflow = overflow;
+            if (previous?.isConnected && !previous.disabled) previous.focus();
+        };
+    }, []);
+    return createPortal(<dialog ref={dialog} className={`${ui.surface} ${styles.cancelDialog}`}
+        aria-labelledby="reservation-cancel-title" aria-busy={busy}
+        onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+        {children}
+    </dialog>, document.body);
 }

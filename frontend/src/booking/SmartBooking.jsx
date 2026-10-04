@@ -53,7 +53,7 @@ export default function SmartBooking({ booking }) {
             : !flow.error && flow.group && !flow.busy ? <section className={styles.notice}><p>현재 확보된 좌석이 없습니다.</p><GlassButton disabled={!valid} onClick={hold}>다시 좌석 찾기</GlassButton></section>
             : !flow.error && (flow.busy || choiceLoading || (!flow.groupId && !flow.reservationId && valid)) ? <section className={styles.notice} role="status"><h3>가능한 좌석을 찾고 있습니다…</h3><p>성인 {audience.adultCount}명 · 청소년 {audience.youthCount}명 · 총 {party}명</p><p>좌석이 확보되면 결제로 이동합니다.</p></section>
             : !flow.error && !flow.groupId && !flow.reservationId && !valid ? <p role="alert">인원 또는 상영 조건을 확인해주세요. <GlassButton onClick={back}>선택 화면으로 돌아가기</GlassButton></p> : null}
-        {flow.error && <section className={styles.failure} role="alert"><p className={styles.eyebrow}>CHOOSE YOUR NEXT STEP</p>
+        {flow.error && <section className={styles.failure} role="alert">
             <h3 ref={failureHeading} tabIndex={-1}>{choices ? '이번에는 자리를 확보하지 못했어요' : '요청을 완료하지 못했습니다'}</h3><p>{flow.error.message}</p>
             <div className={styles.actions}><GlassButton disabled={flow.busy || !valid} onClick={hold}>다시 좌석 찾기</GlassButton>{(flow.groupId || flow.reservationId) && <GlassButton disabled={flow.busy} onClick={flow.refresh}>현재 예약 확인</GlassButton>}
                 <GlassButton disabled={flow.busy} onClick={back}>조건 변경</GlassButton>

@@ -131,6 +131,7 @@ public class BookingSmartService {
                 .thenComparingInt(c -> c.block.preferenceRank())
                 .thenComparingInt(Ranked::theaterRank).thenComparing(Ranked::start)
                 .thenComparing(Ranked::theaterId).thenComparing(Ranked::showId)
+                .thenComparingDouble(c -> c.block.centerDistance())
                 .thenComparing(c -> c.block.row()).thenComparing(c -> c.block.segment())
                 .thenComparingInt(c -> c.block.firstPosition()));
         if (best.isPresent()) return new Search(new BookingHoldService.Candidate(best.get().showId, best.get().block.seatIds()), null, null);

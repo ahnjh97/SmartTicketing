@@ -70,6 +70,7 @@ public class BookingWaitingDispatcher {
                 var best = SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences())
                         .blocks().stream().min(Comparator.comparing(SmartSeatCandidates.Block::split)
                                 .thenComparingInt(SmartSeatCandidates.Block::preferenceRank)
+                                .thenComparingDouble(SmartSeatCandidates.Block::centerDistance)
                                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // An unsatisfiable earlier party must not block a later party.

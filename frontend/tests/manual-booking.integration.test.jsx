@@ -7,7 +7,20 @@ import { seoulDate } from '../src/booking/state.js';
 import SeatPicker from '../src/booking/SeatPicker.jsx';
 import { secondsRemaining } from '../src/booking/useReservationClock.js';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+const nativeClose = HTMLDialogElement.prototype.close;
+beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+});
+afterEach(() => {
+    cleanup();
+    if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal;
+    else delete HTMLDialogElement.prototype.showModal;
+    if (nativeClose) HTMLDialogElement.prototype.close = nativeClose;
+    else delete HTMLDialogElement.prototype.close;
+    vi.unstubAllGlobals(); vi.unstubAllEnvs();
+});
 const seats = [
     { id: 1, row: 'A', number: 1, segment: 'left', status: 'AVAILABLE' },
     { id: 2, row: 'A', number: 2, segment: 'left', status: 'AVAILABLE' },
@@ -95,7 +108,11 @@ test('real route connects audience, seats, hold, reload, payment failure/retry a
     expect(pays[0][1].headers['Idempotency-Key']).not.toBe(pays[1][1].headers['Idempotency-Key']);
     expect(JSON.parse(pays[0][1].body)).toEqual({paymentMethod:'MOCK',simulateFailure:false});
     fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
+    expect(screen.getByRole('dialog', { name: '예매를 취소할까요?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '유지하기' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(fetch.mock.calls.some(([url])=>url.endsWith('/cancel'))).toBe(false);
+    fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
     fireEvent.click(screen.getByRole('button',{name:'전체 취소 확정'}));
     await screen.findByRole('heading',{name:'예매가 취소되었습니다'});
 });
