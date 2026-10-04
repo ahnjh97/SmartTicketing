@@ -35,7 +35,7 @@ export default function useBookingPage(mode) {
             if (value === null || value === '') next.delete(key); else next.set(key, String(value));
         }
         return next;
-    }), [setParams]);
+    }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams]);
     const selectTheater = useCallback(id => update({ theater: id, brand: null, q: null, page: 0, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);

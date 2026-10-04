@@ -60,7 +60,7 @@ export function BookingConfirmation({ booking }) {
             {valid && (entry !== 'THEATER_SMART' || smartReady) ? <>
                 <p><InlineDetails items={[selectedMovie?.title, date]} /></p>
                 {theaterMode ? <><p><InlineDetails items={[theater.data?.name, <>{selectedShow.startTime.slice(11, 16)} → {selectedShow.endTime.slice(11, 16)}</>]} /></p><p>인원은 다음 단계에서 선택합니다.</p></>
-                    : <p><InlineDetails items={[<>{from} 이상 ~ {until} 미만</>, `총 ${party}명`]} /></p>}
+                    : <p><InlineDetails items={[<>시작시간 {from} ~ {until} (양 끝 포함)</>, `총 ${party}명`]} /></p>}
                 <p>{entry === 'THEATER_NORMAL' ? '일반예매' : '스마트예매'}를 위한 선택입니다. 아직 좌석 선점, 결제, 대기 신청은 실행되지 않았습니다.</p>
                 {!user && <Link to="/login">로그인하고 이 선택으로 돌아오기</Link>}
             </> : (shows.loading || detail.loading || theater.loading || movies.loading) ? null
@@ -137,7 +137,7 @@ export function MovieBooking({ booking }) {
                         </div>)}<div className={styles.partyTotal}><span>총인원</span><output aria-label="총인원" aria-live="polite"><strong>{total}</strong>명</output></div></div>
                 </fieldset>
                 <div className={styles.timePicker}><span className={styles.fieldLabel}>상영 시작 시간</span>
-                    <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} update={update} />
+                    <TimeRangeMenu key={date} date={date} now={now} from={from} until={until} runningTime={booking.selectedMovie?.runningTime} update={update} />
                 </div>
                 <button className={ui.primary + ' ' + styles.movieSubmit} disabled={!valid} onClick={() => enter('MOVIE_SMART')}>스마트예매</button>
             </div>

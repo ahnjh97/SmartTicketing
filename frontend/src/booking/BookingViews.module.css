@@ -164,10 +164,10 @@ section.showPanel { max-width: 900px; margin-top: 16px; border-top: 2px solid va
 .rowBody { --rail-arrow-top: 50%; }
 
 .slotSelection { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.bookingRail { max-width: 830px; margin: 0 auto; overflow-x: auto; padding: 4px 2px 12px; scrollbar-width: thin; }
-.movieFields { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 28px; min-width: 720px; padding: 24px; border: 1px solid var(--booking-border); border-radius: 20px; background: linear-gradient(130deg, rgb(255 255 255 / 6%), rgb(255 255 255 / 2%)); }
+.bookingRail { max-width: 830px; margin: -6px auto 0; overflow-x: auto; padding: 4px 2px 12px; scrollbar-width: thin; }
+.movieFields { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 24px; min-width: 720px; padding: 18px 20px; border: 1px solid var(--booking-border); border-radius: 20px; background: linear-gradient(130deg, rgb(255 255 255 / 6%), rgb(255 255 255 / 2%)); }
 .audiencePicker { flex: 0 0 auto; border: 0; padding: 0; margin: 0; }
-.audiencePicker legend, .fieldLabel { display: block; padding: 0; margin-bottom: 12px; color: var(--booking-ink); font-size: 13px; font-weight: 600; }
+.audiencePicker legend, .fieldLabel { display: block; padding: 0; margin-bottom: 8px; color: var(--booking-ink); font-size: 13px; font-weight: 600; }
 .audiencePicker legend span { margin-left: 8px; font-size: 11px; color: var(--booking-muted); font-weight: 400; }
 .audienceRow { display: flex; flex-wrap: nowrap; gap: 20px; }
 .counter { display: flex; flex-direction: column; align-items: center; gap: 10px; white-space: nowrap; }
@@ -182,4 +182,4 @@ section.showPanel { max-width: 900px; margin-top: 16px; border-top: 2px solid va
 .timePicker { flex: 0 0 250px; margin-left: auto; }
 .movieSubmit { flex: 0 0 auto; height: 54px; padding-inline: 22px; white-space: nowrap; font-weight: 700; border-radius: 12px; }
 
-@media (max-width: 999px) { .movieFields { gap: 20px; padding: 20px; } }
+@media (max-width: 999px) { .movieFields { gap: 18px; padding: 16px; } }

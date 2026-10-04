@@ -61,8 +61,9 @@ public class ShowtimeQueryService {
         var request = em.createQuery("""
                 select s from Showtime s join fetch s.movie m join fetch s.screen c join fetch c.theater t
                 where m.active = true and c.active = true and t.active = true and s.status = :status
-                and s.startTime >= :from and s.startTime < :until and s.startTime > :now
-                """ + filters + " order by s.startTime, s.id", Showtime.class)
+                and s.startTime >= :from and s.startTime > :now
+                """ + (startUntil == null ? " and s.startTime < :until" : " and s.startTime <= :until")
+                + filters + " order by s.startTime, s.id", Showtime.class)
                 .setParameter("status", ShowtimeStatus.SCHEDULED).setParameter("from", from)
                 .setParameter("until", until).setParameter("now", now);
         if (movieId != null) request.setParameter("movie", movieId);

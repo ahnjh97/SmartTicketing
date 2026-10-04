@@ -3,7 +3,7 @@ import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import App from '../src/App.jsx';
-import { seoulDate } from '../src/booking/state.js';
+import { dates, seoulDate } from '../src/booking/state.js';
 vi.mock('../src/components/ResidencePreference.jsx', () => ({
     default: ({ user, onSaved }) => <button onClick={() => onSaved({ ...user, birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3].map(theaterId => ({ theaterId })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] })}>선호 설정 완료</button>,
 }));
@@ -144,16 +144,16 @@ test('showtimes are never queried until both time bounds are selected', async ()
     await screen.findByRole('heading', { name: '서울의 밤' });
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '영화 최소 시작시간 선택' }));
     fireEvent.click(screen.getByRole('button', { name: '10:00', exact: true }));
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
     expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '+2시간 12:00' }));
+    fireEvent.click(screen.getByRole('button', { name: '12:00', exact: true }));
     expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/showtimes'))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: '이 시간으로 적용' }));
     await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false));
     expect(fetch.mock.calls.some(([url]) => url.includes('startFrom=10%3A00&startUntil=12%3A00'))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '시작시간 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '영화 최소 시작시간 선택' }));
     fireEvent.click(screen.getByRole('button', { name: '다시 선택' }));
     expect(screen.getByRole('button', { name: '이 시간으로 적용' }).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '시간 선택 닫기' }));
@@ -383,9 +383,11 @@ test('movie details retain main metadata with spaced fields instead of middle do
         ? Promise.resolve(json({ ...movie, rating: '12', releaseDate: '2026-10-01', genres: '액션, 모험', director: '감독 이름', castNames: '배우 이름' }))
         : baseFetch(url));
     mount('/movies?movie=41');
-    await screen.findByText('2026.10.01 개봉');
+    await screen.findByText('2026.10.01');
+    expect(screen.getByText('개봉일')).toBeTruthy();
     expect(screen.getByText('12세')).toBeTruthy();
-    expect(screen.getByText('액션, 모험')).toBeTruthy();
+    expect(screen.getByText('액션 / 모험')).toBeTruthy();
+    expect([...screen.getByText('개봉일').parentElement.querySelectorAll('dt')].map(label => label.textContent)).toEqual(['개봉일', '감독', '출연']);
     expect(screen.getByText('감독 이름')).toBeTruthy();
     expect(screen.getByText('배우 이름')).toBeTruthy();
     expect(screen.getByRole('region', { name: '서울의 밤 영화 소개' }).textContent).not.toContain('·');
@@ -403,3 +405,15 @@ test('movie details retain main metadata with spaced fields instead of middle do
     });
     expect(screen.getByRole('tab', { name: 'CGV' })).toBeTruthy();
  });
+
+test('changing movie dates replaces history so back returns to the previous page', async () => {
+    mount('/');
+    fireEvent.click(await screen.findByRole('link', { name: '서울의 밤 이미지로 예매하기' }));
+    await screen.findByLabelText('성인 인원');
+    const days = dates(seoulDate());
+    fireEvent.click(screen.getByRole('button', { name: days[1] }));
+    fireEvent.click(screen.getByRole('button', { name: days[2] }));
+    expect(screen.getByTestId('url').textContent).toContain(`date=${days[2]}`);
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+    await waitFor(() => expect(screen.getByTestId('url').textContent).toBe('/'));
+});

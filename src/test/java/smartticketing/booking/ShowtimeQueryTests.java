@@ -67,7 +67,7 @@ class ShowtimeQueryTests {
         assertThat(query.theaterMovies(theaterId, date).items()).extracting(item -> item.movieId()).contains(movieId);
     }
 
-    @Test void overnightRangeIncludesLowerAndExcludesUpperWithSeoulDates() {
+    @Test void overnightRangeIncludesBothStartTimeBoundsWithSeoulDates() {
         var first = showtime("normal"); var second = showtime("sold-out"); var excluded = showtime("fragmented");
         first.setStartTime(LocalDateTime.of(2026, 10, 1, 22, 0));
         first.setEndTime(LocalDateTime.of(2026, 10, 2, 0, 20));
@@ -77,7 +77,9 @@ class ShowtimeQueryTests {
         excluded.setEndTime(LocalDateTime.of(2026, 10, 2, 4, 0));
         em.flush(); em.clear();
         var result = query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), LocalTime.of(22, 0), LocalTime.of(2, 0));
-        assertThat(result.items()).extracting(i -> i.id()).containsExactly(first.getId(), second.getId());
+        assertThat(result.items()).extracting(i -> i.id()).containsExactly(first.getId(), second.getId(), excluded.getId());
+        assertThat(query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), LocalTime.of(22, 0), LocalTime.of(1, 59)).items())
+                .extracting(i -> i.id()).containsExactly(first.getId(), second.getId());
         assertThat(result.items().getFirst().endsNextDay()).isTrue();
         assertThat(result.items().getFirst().startTime().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
         assertThat(result.items().getFirst().pricePerPerson()).isEqualTo(10000);

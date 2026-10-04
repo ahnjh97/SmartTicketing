@@ -97,8 +97,8 @@ public class BookingSmartService {
         var query = em.createQuery("""
                 select s from Showtime s join fetch s.screen sc join fetch sc.theater t
                 where s.movie.id=:movie and s.movie.active=true and sc.active=true and t.active=true
-                and s.status=:status and s.startTime>:now and s.startTime>=:from and s.startTime<:until
-                """ + (movie ? " and t.id in :theaters" : " and s.id=:show"), Showtime.class)
+                and s.status=:status and s.startTime>:now and s.startTime>=:from
+                """ + (movie ? " and s.startTime<=:until and t.id in :theaters" : " and s.startTime<:until and s.id=:show"), Showtime.class)
                 .setParameter("movie", group.getMovie().getId()).setParameter("status", ShowtimeStatus.SCHEDULED)
                 .setParameter("now", holds.now()).setParameter("from", from).setParameter("until", until);
         if (movie) query.setParameter("theaters", theaters);
