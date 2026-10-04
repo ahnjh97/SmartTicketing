@@ -9,7 +9,7 @@ export default function PreferenceSetupPage() {
     const navigate = useNavigate();
     function handleSaved(data) {
         updateUser(data);
-        navigate(bookingReturn() || PAGE_PATHS.profile, { replace: true, state: { message: "회원정보가 저장되었습니다." } });
+        navigate(bookingReturn() || PAGE_PATHS.home, { replace: true, state: { message: "회원정보가 저장되었습니다." } });
     }
     return (
         <div className="page">
