@@ -33,19 +33,13 @@ public class TicketController {
     }
 
     @GetMapping("/verify/{qrCode}")
-    public ResponseEntity<?> verifyStatus(
-            @PathVariable String qrCode,
-            @RequestHeader(value = "Accept", defaultValue = "application/json") String accept
-    ) {
-        if (accept.contains("text/html")) {
-            String verifyPageUrl = "https://ahnj97.github.io/SmartTicketing/#/ticket/verify/"
-                    + java.net.URLEncoder.encode(qrCode, java.nio.charset.StandardCharsets.UTF_8);
-            return ResponseEntity.status(302)
-                    .header("Location", verifyPageUrl)
-                    .build();
-        }
+    public ResponseEntity<Void> verifyPage(@PathVariable String qrCode) {
+        String verifyPageUrl = "https://ahnj97.github.io/SmartTicketing/#/ticket/verify/"
+                + java.net.URLEncoder.encode(qrCode, java.nio.charset.StandardCharsets.UTF_8);
 
-        return ResponseEntity.ok(service.verifyStatus(qrCode));
+        return ResponseEntity.status(302)
+                .header("Location", verifyPageUrl)
+                .build();
     }
 
     @GetMapping
