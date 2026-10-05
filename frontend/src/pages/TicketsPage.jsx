@@ -168,7 +168,7 @@ export default function TicketsPage() {
 
     function selectTicket(id) {
         const selected = tickets.find(ticket => ticket.ticketId === id);
-        if (selected?.status === "USED") {
+        if (selected?.status === "EXPIRED") {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
             return;
@@ -183,7 +183,7 @@ export default function TicketsPage() {
         if (!expandedTicketId) return;
 
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (selected?.status === "USED") {
+        if (selected?.status === "EXPIRED") {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
         }
@@ -240,10 +240,10 @@ export default function TicketsPage() {
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
                                                         onClick={() => {
-                                                            if (ticket.status === "USED") return;
+                                                            if (ticket.status === "EXPIRED") return;
                                                             selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId);
                                                         }}
-                                                        disabled={ticket.status === "USED"}
+                                                        disabled={ticket.status === "EXPIRED"}
                                                     >
                                                         <span className={styles.summaryTop}>
                                                             <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>
