@@ -266,10 +266,11 @@ test('sold out and unknown layouts have distinct button behavior', async () => {
     mount(`/theaters?theater=71&movie=41&showtime=91&date=${seoulDate()}`);
     await screen.findByRole('button', { name: /20 \/ 108석 배치 미확인/ });
     expect(screen.getByRole('button', { name: /0 \/ 108석 매진/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: '스마트예매' }).disabled).toBe(false);
+    expect((await screen.findByRole('button', { name: '스마트예매' })).disabled).toBe(false);
     expect(screen.getByRole('button', { name: '일반예매' }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: '예매 방식 선택 닫기' }));
     fireEvent.click(screen.getByRole('button', { name: /0 \/ 108석 매진/ }));
-    expect(screen.getByRole('button', { name: '일반예매' }).disabled).toBe(true);
+    expect((await screen.findByRole('button', { name: '일반예매' })).disabled).toBe(true);
 });
 test('loading, error, retry and empty states stay distinct', async () => {
     let finish;

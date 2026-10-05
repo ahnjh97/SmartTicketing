@@ -1,7 +1,6 @@
 import InlineDetails from '../components/InlineDetails.jsx';
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
-import GlassButton from '../components/GlassButton.jsx';
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
@@ -168,7 +167,7 @@ export default function TicketsPage() {
 
     function selectTicket(id) {
         const selected = tickets.find(ticket => ticket.ticketId === id);
-        if (selected?.status === "EXPIRED") {
+        if (["EXPIRED", "CANCELLED"].includes(selected?.status)) {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
             return;
@@ -183,7 +182,7 @@ export default function TicketsPage() {
         if (!expandedTicketId) return;
 
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (selected?.status === "EXPIRED") {
+        if (["EXPIRED", "CANCELLED"].includes(selected?.status)) {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
         }
@@ -229,34 +228,38 @@ export default function TicketsPage() {
                                         return (
                                             <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
                                                 <article className={styles.ticket}>
-                                                    {ticket.status === "CANCELLED" && (
-                                                        <div className={styles.ticketCancelledStamp}>CANCELLED</div>
-                                                    )}
-                                                    {ticket.status === "EXPIRED" && (
-                                                        <div className={styles.ticketCancelledStamp}>EXPIRED</div>
+                                                    {["EXPIRED", "CANCELLED"].includes(ticket.status) && (
+                                                        <div className={styles.ticketCancelledStamp}>{ticket.status}</div>
                                                     )}
                                                     <button
                                                         type="button"
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
                                                         onClick={() => {
-                                                            if (ticket.status === "EXPIRED") return;
+                                                            if (["EXPIRED", "CANCELLED"].includes(ticket.status)) return;
                                                             selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId);
                                                         }}
-                                                        disabled={ticket.status === "EXPIRED"}
+                                                        disabled={["EXPIRED", "CANCELLED"].includes(ticket.status)}
                                                     >
                                                         <span className={styles.summaryTop}>
                                                             <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>
+                                                            <span className={styles.summaryDate}>{formatDateOnly(ticket.startTime)}</span>
                                                         </span>
-                                                        <strong className={styles.summaryMovie}>{ticket.movieTitle}</strong>
-                                                        <span className={styles.summaryTheater}>
-                                                            <InlineDetails items={[ticket.theaterName, ticket.screenName]} />
-                                                        </span>
-                                                        <span className={styles.summaryBottom}>
-                                                            <span className={styles.summaryTime}>{formatTime(ticket.startTime)}<small>종료 {formatTime(ticket.endTime)}</small></span>
-                                                            <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
+                                                        <span className={styles.summaryDetails}>
+                                                            <span className={styles.summaryMovieInfo}>
+                                                                <strong className={styles.summaryMovie}>{ticket.movieTitle}</strong>
+                                                                <span className={styles.summaryTheater}>
+                                                                    <InlineDetails items={[ticket.theaterName, ticket.screenName]} />
+                                                                </span>
+                                                            </span>
+                                                            <span className={styles.summaryTime}>
+                                                                <span>{formatTime(ticket.startTime)}</span>
+                                                                <small>종료 {formatTime(ticket.endTime)}</small>
+                                                            </span>
                                                         </span>
                                                     </button>
+                                                    <div className={styles.summaryBottom}>
+                                                        <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
                                                     {ticket.status === "VALID" && (
                                                         <button
                                                             type="button"
@@ -267,6 +270,7 @@ export default function TicketsPage() {
                                                             {cancelling ? "취소 중..." : "예매 취소"}
                                                         </button>
                                                     )}
+                                                    </div>
                                                 </article>
                                             </div>
                                         );
@@ -288,50 +292,51 @@ export default function TicketsPage() {
                         onClick={() => selectTicket(null)}
                     >
                         <section
-                            ref={modal}
                             className={styles.ticketModal}
+                            ref={modal}
+                            tabIndex={-1}
                             role="dialog"
                             aria-modal="true"
                             aria-label="티켓 상세"
                             onClick={(event) => event.stopPropagation()}
                         >
+                            <button type="button" className={styles.closeButton} aria-label="티켓 상세 닫기" onClick={() => selectTicket(null)}>×</button>
                             <div className={styles.ticketCard}>
                                 <div className={styles.ticketCardHeader}>
-                                    <span className={styles.ticketStatus} data-status={selectedTicket.status}>
+                                    <span className={styles.ticketLabel}>CINEMA PASS</span>
+                                    <span className={styles.ticketStatus}>
                                         {verificationPhase === "used" ? "사용 처리됨" : formatTicketStatus(selectedTicket.status)}
                                     </span>
-                                    <GlassButton className={styles.closeButton} aria-label="티켓 상세 닫기" onClick={() => selectTicket(null)}>×</GlassButton>
                                 </div>
 
                                 <div className={styles.ticketCardContent}>
                                     <div className={styles.ticketCardLeft}>
                                         <div className={styles.ticketCardMovie}>
+                                            <span className={styles.ticketInfoLabel}>MOVIE</span>
                                             <h2>{selectedTicket.movieTitle}</h2>
-                                            <p className={styles.detailDate}>{formatDateOnly(selectedTicket.startTime)}</p>
                                         </div>
 
                                         <div className={styles.ticketCardInfo}>
                                             <div>
-                                                <span>극장</span>
+                                                <span>THEATER</span>
                                                 <strong>
-                                                    <InlineDetails items={[selectedTicket.theaterName, selectedTicket.screenName]} />
+                                                    {selectedTicket.theaterName || "-"} , {selectedTicket.screenName || "-"}
                                                 </strong>
                                             </div>
                                             <div>
-                                                <span>좌석</span>
+                                                <span>SEAT</span>
                                                 <strong>{selectedTicket.seats?.join(", ") || "-"}</strong>
                                             </div>
                                             <div>
-                                                <span>상영 시간</span>
-                                                <strong className={styles.detailTime}>
-                                                    {formatTime(selectedTicket.startTime)} <small>→ {formatTime(selectedTicket.endTime)}</small>
+                                                <span>TIME</span>
+                                                <strong>
+                                                    {formatTime(selectedTicket.startTime)} ~ {formatTime(selectedTicket.endTime)}
                                                 </strong>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div className={styles.ticketCardRight}>
-                                        <span className={styles.ticketStubLabel}>입장 QR</span>
                                         <div className={styles.ticketQrPlaceholder}>
                                             <QRCodeSVG
                                                 value={`${TICKET_VERIFY_PAGE_URL}/#/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
@@ -353,7 +358,7 @@ export default function TicketsPage() {
                                         )}
 
                                         <div className={styles.ticketNumber}>
-                                            <span>티켓 번호</span>
+                                            <span>TICKET NO.</span>
                                             <strong>{selectedTicket.ticketNumber}</strong>
                                         </div>
                                     </div>
