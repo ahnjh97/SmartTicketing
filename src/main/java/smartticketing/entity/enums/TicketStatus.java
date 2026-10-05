@@ -3,5 +3,6 @@ package smartticketing.entity.enums;
 public enum TicketStatus {
     VALID,
     USED,
-    CANCELLED
+    CANCELLED,
+    EXPIRED
 }
