@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 @Transactional
 public class TicketService {
     private static final String VERIFY_PROCESSING_PREFIX = "ticket:verify:processing:";
-    private static final long VERIFY_DELAY_SECONDS = 5L;
+    private static final long VERIFY_DELAY_SECONDS = 2L;
 
     private final TicketRepository tickets;
     private final ReservationRepository reservations;
