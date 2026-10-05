@@ -222,9 +222,11 @@ export default function TicketsPage() {
                                                         type="button"
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
-                                                        onClick={() =>
-                                                            selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId)
-                                                        }
+                                                        onClick={() => {
+                                                            if (ticket.status === "USED") return;
+                                                            selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId);
+                                                        }}
+                                                        disabled={ticket.status === "USED"}
                                                     >
                                                         <span className={styles.summaryTop}>
                                                             <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>
