@@ -5,6 +5,7 @@ import smartticketing.dto.ticket.TicketVerifyResponse;
 import smartticketing.service.TicketService;
 import smartticketing.util.CurrentUser;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -16,10 +17,16 @@ import java.util.List;
 public class TicketController {
     private final TicketService service;
     private final CurrentUser current;
+    private final String frontendUrl;
 
-    public TicketController(TicketService s, CurrentUser c) {
+    public TicketController(
+            TicketService s,
+            CurrentUser c,
+            @Value("${app.frontend-url}") String frontendUrl
+    ) {
         service = s;
         current = c;
+        this.frontendUrl = frontendUrl;
     }
 
     @PostMapping("/verify/complete/{qrCode}")
@@ -34,7 +41,8 @@ public class TicketController {
 
     @GetMapping("/verify/{qrCode}")
     public ResponseEntity<Void> verifyPage(@PathVariable String qrCode) {
-        String verifyPageUrl = "https://ahnj97.github.io/SmartTicketing/#/ticket/verify/"
+        String baseUrl = frontendUrl.replaceAll("/+$", "");
+        String verifyPageUrl = baseUrl + "/#/ticket/verify/"
                 + java.net.URLEncoder.encode(qrCode, java.nio.charset.StandardCharsets.UTF_8);
 
         return ResponseEntity.status(302)
