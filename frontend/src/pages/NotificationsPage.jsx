@@ -57,6 +57,11 @@ export default function NotificationsPage() {
         }
     }
 
+    function openNotification(item) {
+        if (!item.groupId || !["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) return;
+        window.location.href = `/booking/restore?group=${encodeURIComponent(item.groupId)}`;
+    }
+
     return (
         <section className="page notification-page">
             <div className="card notification-card">
@@ -86,7 +91,16 @@ export default function NotificationsPage() {
                         {notifications.map((item) => (
                             <article
                                 key={item.id}
-                                className={`notification-item${item.read ? "" : " is-unread"}`}
+                                className={`notification-item${item.read ? "" : " is-unread"}${item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? " is-actionable" : ""}`}
+                                role={item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? "link" : undefined}
+                                tabIndex={item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? 0 : undefined}
+                                onClick={() => openNotification(item)}
+                                onKeyDown={(event) => {
+                                    if ((event.key === "Enter" || event.key === " ") && item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) {
+                                        event.preventDefault();
+                                        openNotification(item);
+                                    }
+                                }}
                             >
                                 <div className="notification-item-main">
                                     <div className="notification-item-title">
@@ -98,11 +112,11 @@ export default function NotificationsPage() {
                                 </div>
                                 <div className="notification-item-actions">
                                     {!item.read && (
-                                        <button type="button" onClick={() => markRead(item.id)}>
+                                        <button type="button" onClick={(event) => { event.stopPropagation(); markRead(item.id); }}>
                                             읽음
                                         </button>
                                     )}
-                                    <button type="button" onClick={() => remove(item.id)}>
+                                    <button type="button" onClick={(event) => { event.stopPropagation(); remove(item.id); }}>
                                         삭제
                                     </button>
                                 </div>
