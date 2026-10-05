@@ -52,8 +52,6 @@ export default function ReservationPanel({ flow, onRestart }) {
         {pending && <>
             {import.meta.env.DEV && import.meta.env.VITE_BOOKING_MOCK_FAILURE === 'true' && <GlassButton disabled={busy || remaining === 0} onClick={() => pay(true)}>개발용 결제 실패 확인</GlassButton>}
         </>}
-        {r.status === 'CANCELLED' && <p>예약 전체가 취소되었습니다. 결제 완료 건은 수수료 없이 모의 전액 환불됩니다.</p>}
-        {r.status === 'EXPIRED' && <p>좌석을 다시 선택해주세요. 이전 선점은 연장되지 않습니다.</p>}
         {!pending && !confirmed && <div className={styles.resultActions}><GlassButton onClick={onRestart}>다시 예매하기</GlassButton></div>}
         {confirmCancel && cancellable && <CancelDialog busy={busy} onClose={() => setConfirmCancel(false)}>
             <h2 id="reservation-cancel-title">{pending ? '선점을 취소할까요?' : '예매를 취소할까요?'}</h2>
