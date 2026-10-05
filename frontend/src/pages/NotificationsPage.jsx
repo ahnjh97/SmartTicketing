@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { notificationApi } from "../api/notifications.js";
 import "./NotificationsPage.css";
 
@@ -15,6 +16,7 @@ function formatDate(value) {
 }
 
 export default function NotificationsPage() {
+    const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -59,7 +61,7 @@ export default function NotificationsPage() {
 
     function openNotification(item) {
         if (!item.groupId || !["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) return;
-        window.location.href = `/booking/restore?group=${encodeURIComponent(item.groupId)}`;
+        navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
     }
 
     return (
