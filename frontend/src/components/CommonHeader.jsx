@@ -218,6 +218,13 @@ function HeaderContent({
         }
     }
 
+    function openNotification(item) {
+        if (!item.groupId || !["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) return;
+        setOpenPanel(null);
+        setOpenLocation(null);
+        navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
+    }
+
     function handleNavigation(event) {
         if (navigationDisabled) {
             event.preventDefault();
@@ -241,7 +248,7 @@ function HeaderContent({
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none">
-                            <path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l1.5 1.4a8 8 0 0 0 0 2.2L3 14.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2-2 .6A8 8 0 0 0 15 5l-.5-2Z" />
+                            <path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l1.5 1.4a8 8 0 0 0 0 2.2L3 14.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2-2.5.6A8 8 0 0 0 15 5l-.5-2Z" />
                             <circle cx="12" cy="12" r="3" />
                         </svg>
                     </span>
@@ -258,7 +265,7 @@ function HeaderContent({
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg className="common-header-ticket-icon" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 5h16a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 1 2-2Z" />
+                            <path d="M4 5h16a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a3 3 0 0 0-0-6V7a2 2 0 0 1 2-2Z" />
                             <path d="M13 5v2m0 4v2m0 4v2" />
                         </svg>
                     </span>
@@ -401,19 +408,34 @@ function HeaderContent({
                             ) : notifications.length === 0 ? (
                                 <p className="common-header-popover-empty">새로운 알림이 없습니다.</p>
                             ) : (
-                                notifications.slice(0, 8).map((item) => (
-                                    <article key={item.id} className={`common-header-notification-item${item.read ? "" : " is-unread"}`}>
-                                        <div>
-                                            <strong>{TYPE_LABELS[item.type] ?? "알림"}</strong>
-                                            <p>{item.message}</p>
-                                            <time>{formatDate(item.createdAt)}</time>
-                                        </div>
-                                        <div className="common-header-popover-actions">
-                                            {!item.read && <button type="button" onClick={() => markNotificationRead(item.id)}>읽음</button>}
-                                            <button type="button" onClick={() => removeNotification(item.id)}>삭제</button>
-                                        </div>
-                                    </article>
-                                ))
+                                notifications.slice(0, 8).map((item) => {
+                                    const actionable = item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type);
+                                    return (
+                                        <article
+                                            key={item.id}
+                                            className={`common-header-notification-item${item.read ? "" : " is-unread"}${actionable ? " is-actionable" : ""}`}
+                                            role={actionable ? "link" : undefined}
+                                            tabIndex={actionable ? 0 : undefined}
+                                            onClick={() => openNotification(item)}
+                                            onKeyDown={(event) => {
+                                                if ((event.key === "Enter" || event.key === " ") && actionable) {
+                                                    event.preventDefault();
+                                                    openNotification(item);
+                                                }
+                                            }}
+                                        >
+                                            <div>
+                                                <strong>{TYPE_LABELS[item.type] ?? "알림"}</strong>
+                                                <p>{item.message}</p>
+                                                <time>{formatDate(item.createdAt)}</time>
+                                            </div>
+                                            <div className="common-header-popover-actions">
+                                                {!item.read && <button type="button" onClick={(event) => { event.stopPropagation(); markNotificationRead(item.id); }}>읽음</button>}
+                                                <button type="button" onClick={(event) => { event.stopPropagation(); removeNotification(item.id); }}>삭제</button>
+                                            </div>
+                                        </article>
+                                    );
+                                })
                             )}
                         </div>
                     </div>
