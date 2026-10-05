@@ -88,6 +88,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ""
+        VITE_TICKET_VERIFY_PAGE_URL: https://ahnj97.github.io/SmartTicketing
         VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
         VITE_BASE_PATH: /
     container_name: smartticketing-frontend
