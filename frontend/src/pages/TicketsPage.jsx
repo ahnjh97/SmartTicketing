@@ -5,8 +5,7 @@ import GlassButton from '../components/GlassButton.jsx';
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
-const TICKET_VERIFY_PAGE_URL = (import.meta.env?.VITE_TICKET_VERIFY_PAGE_URL ?? window.location.origin).trim().replace(/\/+$/, '');
+const TICKET_VERIFY_PAGE_URL = window.location.origin;
 
 function formatTime(value) {
     return value
