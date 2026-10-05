@@ -5,7 +5,8 @@ import GlassButton from '../components/GlassButton.jsx';
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_VERIFY_URL = 'https://smartticketing.duckdns.org/api/tickets/verify';
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+const PUBLIC_TICKET_VERIFY_URL = `${API_BASE_URL || window.location.origin}/api/tickets/verify`;
 
 function formatTime(value) {
     return value
