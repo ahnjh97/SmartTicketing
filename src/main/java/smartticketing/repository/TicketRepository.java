@@ -20,6 +20,20 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Modifying
     @Query("update Ticket t set t.status = :used, t.updatedAt = :updatedAt where t.qrCode = :qrCode and t.status = :valid")
     int markUsedIfValid(@Param("qrCode") String qrCode, @Param("valid") TicketStatus valid, @Param("used") TicketStatus used, @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying
+    @Query("""
+        update Ticket t
+        set t.status = :expired,
+            t.updatedAt = :now
+        where t.status = :valid
+          and t.reservation.showtime.endTime < :now
+    """)
+    int expireValidTickets(
+            @Param("valid") TicketStatus valid,
+            @Param("expired") TicketStatus expired,
+            @Param("now") LocalDateTime now
+    );
     List<Ticket> findByReservationUserIdOrderByCreatedAtDesc(Long userId);
     List<Ticket> findByStatus(TicketStatus status);
 }
