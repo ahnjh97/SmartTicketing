@@ -64,5 +64,5 @@ test('foreign or missing recovery group shows server denial without navigation',
     render(<AuthContext.Provider value={{ user: { id: 1 } }}><MemoryRouter initialEntries={['/booking/restore?group=88']}><BookingRestorePage/></MemoryRouter></AuthContext.Provider>);
     await screen.findByRole('alert');
     expect(screen.getByRole('alert').textContent).toContain('찾을 수 없습니다');
-    expect(screen.getByRole('link', { name: '내 티켓과 예매 목록' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: '내 대기 및 선점' }).getAttribute('href')).toBe('/bookings');
 });

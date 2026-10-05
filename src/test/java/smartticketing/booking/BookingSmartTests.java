@@ -117,11 +117,11 @@ class BookingSmartTests {
         var result=hold(f); assertThat(result.status()).isEqualTo(201); assertThat(value(result,"showtimeId")).isEqualTo(f.shows.getLast());
         assertThat(JSON.readTree(result.body()).get("expiresAt").asText()).isEqualTo("2026-10-02T09:05:00+09:00");
     }
-    @Test void theaterPriorityPrecedesTimeAndTiesUseFirstPosition() {
+    @Test void theaterPriorityPrecedesTimeAndSeatsPreferCenter() {
         var f=fixture(true,2,4);
         tx(em -> { inventory(em,f.shows.getFirst()).forEach(i -> i.getSeat().setSeatPosition(SeatPosition.MIDDLE_MIDDLE)); return null; });
         var r=hold(f); assertThat(value(r,"showtimeId")).isEqualTo(f.shows.getFirst());
-        assertThat(JSON.readTree(r.body()).get("seatLabels").toString()).isEqualTo("[\"A1\",\"A2\"]");
+        assertThat(JSON.readTree(r.body()).get("seatLabels").toString()).isEqualTo("[\"A2\",\"A3\"]");
     }
     @Test void theaterModeStaysInSelectedShowAndFallsBackToUnpreferredSeats() {
         var f=fixture(false,2,4);
@@ -240,7 +240,8 @@ class BookingSmartTests {
         assertThat(results).extracting(BookingResult::status).containsExactlyInAnyOrder(201,409);
     }
     @Test void contentionRequeriesAndAcquiresADifferentWholeBlock() throws Exception {
-        var f=fixture(false,2,4); var s=service(firstSearchBarrier());
+        // The central pair must leave another contiguous pair available for the retry.
+        var f=fixture(false,2,6); var s=service(firstSearchBarrier());
         var results=race(() -> s.hold(f.user,f.group,key()),()->s.hold(f.other,f.otherGroup,key()));
         assertThat(results).extracting(BookingResult::status).containsOnly(201);
         assertThat(seatIds(results.getFirst())).doesNotContainAnyElementsOf(seatIds(results.getLast()));
@@ -256,7 +257,10 @@ class BookingSmartTests {
     @Test void retriesAreBoundedAtThreeAndDoNotLeaveProcessingOperations() {
         var f=fixture(false,1,5); var attempts=new AtomicInteger();
         var s=service(() -> { attempts.incrementAndGet(); tx(em -> { inventory(em,f.shows.getFirst()).stream()
-                .filter(i->i.getStatus()==SeatStatus.AVAILABLE).findFirst().orElseThrow().setStatus(SeatStatus.BLOCKED); return null; }); });
+                .filter(i->i.getStatus()==SeatStatus.AVAILABLE)
+                .min(Comparator.comparingInt((ShowtimeSeat i) -> Math.abs(i.getSeat().getSeatNumber() - 3))
+                        .thenComparingInt(i -> i.getSeat().getSeatNumber()))
+                .orElseThrow().setStatus(SeatStatus.BLOCKED); return null; }); });
         code(s.hold(f.user,f.group,key()),"RETRY_EXHAUSTED"); assertThat(attempts.get()).isEqualTo(3); noBooking(f);
         tx(em -> { assertThat(em.createQuery("select count(o) from BookingOperation o where o.user.id=:user and o.status=:status",Long.class)
                 .setParameter("user",f.user).setParameter("status",BookingOperationStatus.PROCESSING).getSingleResult()).isZero(); return null; });
