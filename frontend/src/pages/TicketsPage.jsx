@@ -51,6 +51,7 @@ export default function TicketsPage() {
     const [verificationPhase, setVerificationPhase] = useState("idle");
     const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
+    const [cancellingTicketId, setCancellingTicketId] = useState(null);
 
     useEffect(() => {
         if (!expandedTicketId) return;
@@ -141,6 +142,28 @@ export default function TicketsPage() {
         };
     }, [expandedTicketId, tickets]);
 
+    async function cancelTicket(ticket) {
+        if (ticket.status !== "VALID" || !ticket.reservationId) return;
+        if (!window.confirm("이 예매를 취소하시겠습니까?\n취소하면 좌석이 다시 예매 가능 상태가 됩니다.")) return;
+
+        setCancellingTicketId(ticket.ticketId);
+        setError("");
+        try {
+            await ticketApi.cancelReservation(ticket.reservationId, crypto.randomUUID());
+            setTickets((currentTickets) =>
+                currentTickets.map((current) =>
+                    current.ticketId === ticket.ticketId
+                        ? { ...current, status: "CANCELLED" }
+                        : current
+                )
+            );
+        } catch (e) {
+            setError(e?.message ?? "예매 취소에 실패했습니다.");
+        } finally {
+            setCancellingTicketId(null);
+        }
+    }
+
     function selectTicket(id) {
         setExpandedTicketId(id);
         setVerificationPhase(tickets.find(ticket => ticket.ticketId === id)?.status === 'USED' ? 'used' : 'idle');
@@ -182,10 +205,14 @@ export default function TicketsPage() {
                                 <div className={styles.tickets}>
                                     {dateTickets.map((ticket) => {
                                         const expanded = expandedTicketId === ticket.ticketId;
+                                        const cancelling = cancellingTicketId === ticket.ticketId;
 
                                         return (
                                             <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
                                                 <article className={styles.ticket}>
+                                                    {ticket.status === "CANCELLED" && (
+                                                        <div className={styles.ticketCancelledStamp}>CANCELLED</div>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         className={styles.ticketSummary}
@@ -206,6 +233,16 @@ export default function TicketsPage() {
                                                             <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
                                                         </span>
                                                     </button>
+                                                    {ticket.status === "VALID" && (
+                                                        <button
+                                                            type="button"
+                                                            className={styles.cancelButton}
+                                                            disabled={cancelling}
+                                                            onClick={() => cancelTicket(ticket)}
+                                                        >
+                                                            {cancelling ? "취소 중..." : "예매 취소"}
+                                                        </button>
+                                                    )}
                                                 </article>
                                             </div>
                                         );
