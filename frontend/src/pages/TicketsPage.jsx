@@ -6,7 +6,7 @@ import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
-const PUBLIC_TICKET_VERIFY_URL = `${API_BASE_URL || window.location.origin}/api/tickets/verify`;
+const TICKET_VERIFY_PAGE_URL = (import.meta.env?.VITE_TICKET_VERIFY_PAGE_URL ?? window.location.origin).trim().replace(/\/+$/, '');
 
 function formatTime(value) {
     return value
@@ -335,7 +335,7 @@ export default function TicketsPage() {
                                         <span className={styles.ticketStubLabel}>입장 QR</span>
                                         <div className={styles.ticketQrPlaceholder}>
                                             <QRCodeSVG
-                                                value={`${PUBLIC_TICKET_VERIFY_URL}/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
+                                                value={`${TICKET_VERIFY_PAGE_URL}/#/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
                                                 size={220}
                                                 marginSize={2}
                                                 level="M"
