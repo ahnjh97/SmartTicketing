@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_BASE_URL = 'https://ahnj97.github.io/SmartTicketing';
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+const TICKET_VERIFY_PAGE_URL = (import.meta.env?.VITE_TICKET_VERIFY_PAGE_URL ?? window.location.origin).trim().replace(/\/+$/, '');
 
 function formatTime(value) {
     return value
@@ -339,7 +340,7 @@ export default function TicketsPage() {
                                     <div className={styles.ticketCardRight}>
                                         <div className={styles.ticketQrPlaceholder}>
                                             <QRCodeSVG
-                                                value={`${PUBLIC_TICKET_BASE_URL}/#/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
+                                                value={`${TICKET_VERIFY_PAGE_URL}/#/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
                                                 size={220}
                                                 marginSize={2}
                                                 level="M"
