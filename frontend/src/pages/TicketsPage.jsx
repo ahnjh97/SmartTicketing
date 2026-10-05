@@ -26,6 +26,8 @@ function formatTicketStatus(status) {
             return "사용 처리됨";
         case "CANCELLED":
             return "취소됨";
+        case "EXPIRED":
+            return "만료됨";
         default:
             return status || "-";
     }
@@ -164,10 +166,27 @@ export default function TicketsPage() {
     }
 
     function selectTicket(id) {
+        const selected = tickets.find(ticket => ticket.ticketId === id);
+        if (selected?.status === "EXPIRED") {
+            setExpandedTicketId(null);
+            setVerificationPhase("idle");
+            return;
+        }
+
         setExpandedTicketId(id);
-        setVerificationPhase(tickets.find(ticket => ticket.ticketId === id)?.status === 'USED' ? 'used' : 'idle');
+        setVerificationPhase(selected?.status === "USED" ? "used" : "idle");
         setVerificationSeconds(5);
     }
+
+    useEffect(() => {
+        if (!expandedTicketId) return;
+
+        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+        if (selected?.status === "EXPIRED") {
+            setExpandedTicketId(null);
+            setVerificationPhase("idle");
+        }
+    }, [tickets, expandedTicketId]);
     const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? dateKey(ticket.startTime) : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
     const filteredTickets = (selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && dateKey(ticket.startTime) === selectedDate))
         .toSorted((a, b) => (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0));
@@ -212,13 +231,18 @@ export default function TicketsPage() {
                                                     {ticket.status === "CANCELLED" && (
                                                         <div className={styles.ticketCancelledStamp}>CANCELLED</div>
                                                     )}
+                                                    {ticket.status === "EXPIRED" && (
+                                                        <div className={styles.ticketCancelledStamp}>EXPIRED</div>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
-                                                        onClick={() =>
-                                                            selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId)
-                                                        }
+                                                        onClick={() => {
+                                                            if (ticket.status === "EXPIRED") return;
+                                                            selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId);
+                                                        }}
+                                                        disabled={ticket.status === "EXPIRED"}
                                                     >
                                                         <span className={styles.summaryTop}>
                                                             <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>

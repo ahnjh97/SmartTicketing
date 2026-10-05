@@ -71,6 +71,7 @@ public class TicketService {
         if (ticket == null) return new TicketVerifyResponse(false, false, "유효하지 않은 티켓입니다.", null);
         if (ticket.getStatus() == TicketStatus.USED) return new TicketVerifyResponse(false, false, "이미 사용된 티켓입니다.", to(ticket));
         if (ticket.getStatus() == TicketStatus.CANCELLED) return new TicketVerifyResponse(false, false, "취소된 티켓입니다.", to(ticket));
+        if (ticket.getStatus() == TicketStatus.EXPIRED) return new TicketVerifyResponse(false, false, "만료된 티켓입니다.", to(ticket));
         int updated = tickets.markUsedIfValid(ticket.getQrCode(), TicketStatus.VALID, TicketStatus.USED, LocalDateTime.now());
         if (updated == 0) return new TicketVerifyResponse(false, false, "티켓 사용 처리에 실패했습니다.", to(ticket));
         ticket.setStatus(TicketStatus.USED);
@@ -96,6 +97,9 @@ public class TicketService {
 
         if (ticket.getStatus() == TicketStatus.CANCELLED) {
             return new TicketVerifyResponse(false, false, "취소된 티켓입니다.", to(ticket));
+        }
+        if (ticket.getStatus() == TicketStatus.EXPIRED) {
+            return new TicketVerifyResponse(false, false, "만료된 티켓입니다.", to(ticket));
         }
 
         String key = processingKey(ticket);
@@ -148,6 +152,9 @@ public class TicketService {
         }
         if (ticket.getStatus() == TicketStatus.CANCELLED) {
             return new TicketVerifyResponse(false, false, "취소된 티켓입니다.", to(ticket));
+        }
+        if (ticket.getStatus() == TicketStatus.EXPIRED) {
+            return new TicketVerifyResponse(false, false, "만료된 티켓입니다.", to(ticket));
         }
         if (processing) {
             return new TicketVerifyResponse(false, true, "처리 중입니다.", to(ticket));
