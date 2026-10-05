@@ -27,6 +27,8 @@ function formatTicketStatus(status) {
             return "사용 처리됨";
         case "CANCELLED":
             return "취소됨";
+        case "EXPIRED":
+            return "만료됨";
         default:
             return status || "-";
     }
@@ -212,6 +214,9 @@ export default function TicketsPage() {
                                                 <article className={styles.ticket}>
                                                     {ticket.status === "CANCELLED" && (
                                                         <div className={styles.ticketCancelledStamp}>CANCELLED</div>
+                                                    )}
+                                                    {ticket.status === "EXPIRED" && (
+                                                        <div className={styles.ticketCancelledStamp}>EXPIRED</div>
                                                     )}
                                                     <button
                                                         type="button"
