@@ -167,7 +167,7 @@ export default function TicketsPage() {
 
     function selectTicket(id) {
         const selected = tickets.find(ticket => ticket.ticketId === id);
-        if (selected?.status === "EXPIRED") {
+        if (["EXPIRED", "CANCELLED"].includes(selected?.status)) {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
             return;
@@ -182,7 +182,7 @@ export default function TicketsPage() {
         if (!expandedTicketId) return;
 
         const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (selected?.status === "EXPIRED") {
+        if (["EXPIRED", "CANCELLED"].includes(selected?.status)) {
             setExpandedTicketId(null);
             setVerificationPhase("idle");
         }
@@ -228,21 +228,18 @@ export default function TicketsPage() {
                                         return (
                                             <div key={ticket.ticketId} className={`${styles.ticketItem}${expanded ? ` ${styles.isExpanded}` : ""}`}>
                                                 <article className={styles.ticket}>
-                                                    {ticket.status === "CANCELLED" && (
-                                                        <div className={styles.ticketCancelledStamp}>CANCELLED</div>
-                                                    )}
-                                                    {ticket.status === "EXPIRED" && (
-                                                        <div className={styles.ticketCancelledStamp}>EXPIRED</div>
+                                                    {["EXPIRED", "CANCELLED"].includes(ticket.status) && (
+                                                        <div className={styles.ticketCancelledStamp}>{ticket.status}</div>
                                                     )}
                                                     <button
                                                         type="button"
                                                         className={styles.ticketSummary}
                                                         aria-expanded={expanded}
                                                         onClick={() => {
-                                                            if (ticket.status === "EXPIRED") return;
+                                                            if (["EXPIRED", "CANCELLED"].includes(ticket.status)) return;
                                                             selectTicket(expandedTicketId === ticket.ticketId ? null : ticket.ticketId);
                                                         }}
-                                                        disabled={ticket.status === "EXPIRED"}
+                                                        disabled={["EXPIRED", "CANCELLED"].includes(ticket.status)}
                                                     >
                                                         <span className={styles.summaryTop}>
                                                             <span className={styles.summaryStatus} data-status={ticket.status}>{formatTicketStatus(ticket.status)}</span>

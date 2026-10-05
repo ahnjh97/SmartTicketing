@@ -30,7 +30,7 @@ test('account changes close the panel and discard the previous account response'
 test('notification effect ignores an older response after cleanup', async () => {
     const responses = [];
     notificationApi.list.mockImplementation(() => new Promise(resolve => responses.push(resolve)));
-    render(<StrictMode><NotificationsPage /></StrictMode>);
+    render(<StrictMode><MemoryRouter><NotificationsPage /></MemoryRouter></StrictMode>);
     expect(responses).toHaveLength(2);
     await act(async () => responses[1]([{id:2,message:'현재 알림',read:true}]));
     await act(async () => responses[0]([{id:1,message:'이전 알림',read:true}]));
@@ -55,4 +55,18 @@ test('a valid ticket does not inherit the previous used ticket verification stat
     fireEvent.keyDown(document, {key:'Escape'});
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.body.style.overflow).not.toBe('hidden');
+});
+
+
+test.each(['CANCELLED', 'EXPIRED'])('%s tickets show a list stamp and cannot open details', async status => {
+    ticketApi.mine.mockResolvedValue([
+        { ticketId: 3, ticketNumber: 'INACTIVE-3', movieTitle: '비활성 티켓 영화', status, startTime: '2026-10-05T12:00:00+09:00' },
+    ]);
+    render(<TicketsPage />);
+    const summary = await screen.findByRole('button', { name: /비활성 티켓 영화/ });
+    expect(summary.disabled).toBe(true);
+    expect(screen.getByText(status)).toBeTruthy();
+    fireEvent.click(summary);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(ticketApi.verifyStatus).not.toHaveBeenCalled();
 });
