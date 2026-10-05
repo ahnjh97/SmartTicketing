@@ -5,7 +5,7 @@ import GlassButton from '../components/GlassButton.jsx';
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const PUBLIC_TICKET_BASE_URL = 'https://ahnj97.github.io/SmartTicketing';
+const PUBLIC_TICKET_VERIFY_URL = 'https://smartticketing.duckdns.org/api/tickets/verify';
 
 function formatTime(value) {
     return value
@@ -334,7 +334,7 @@ export default function TicketsPage() {
                                         <span className={styles.ticketStubLabel}>입장 QR</span>
                                         <div className={styles.ticketQrPlaceholder}>
                                             <QRCodeSVG
-                                                value={`${PUBLIC_TICKET_BASE_URL}/#/ticket/verify/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
+                                                value={`${PUBLIC_TICKET_VERIFY_URL}/${encodeURIComponent(selectedTicket.qrCode || selectedTicket.ticketNumber)}`}
                                                 size={220}
                                                 marginSize={2}
                                                 level="M"
