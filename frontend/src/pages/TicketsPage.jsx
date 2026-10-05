@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
 import styles from './TicketsPage.module.css';
 
-const TICKET_VERIFY_PAGE_URL = window.location.origin;
+const TICKET_VERIFY_PAGE_URL = import.meta.env.DEV
+    ? window.location.origin
+    : 'https://smartticketing.duckdns.org';
 
 function formatTime(value) {
     return value
