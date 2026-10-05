@@ -167,10 +167,27 @@ export default function TicketsPage() {
     }
 
     function selectTicket(id) {
+        const selected = tickets.find(ticket => ticket.ticketId === id);
+        if (selected?.status === "USED") {
+            setExpandedTicketId(null);
+            setVerificationPhase("idle");
+            return;
+        }
+
         setExpandedTicketId(id);
-        setVerificationPhase(tickets.find(ticket => ticket.ticketId === id)?.status === 'USED' ? 'used' : 'idle');
+        setVerificationPhase(selected?.status === "USED" ? "used" : "idle");
         setVerificationSeconds(5);
     }
+
+    useEffect(() => {
+        if (!expandedTicketId) return;
+
+        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
+        if (selected?.status === "USED") {
+            setExpandedTicketId(null);
+            setVerificationPhase("idle");
+        }
+    }, [tickets, expandedTicketId]);
     const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? dateKey(ticket.startTime) : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
     const filteredTickets = (selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && dateKey(ticket.startTime) === selectedDate))
         .toSorted((a, b) => (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0));
