@@ -119,6 +119,28 @@
     margin-top:6px;
 }
 
+.queuePosition {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    margin-top:12px;
+    padding:10px 12px;
+    border:1px solid var(--glass-border);
+    border-radius:12px;
+    background:var(--booking-soft);
+    font-size:13px;
+    line-height:1.5;
+}
+
+.queuePosition span {
+    color:var(--booking-muted);
+}
+
+.queuePosition b {
+    color:var(--booking-accent);
+    font-weight:700;
+}
+
 .choices {
     border:0;
     padding:0;
@@ -256,6 +278,9 @@
     .rules {
         display:grid;
         gap:12px;
+    }
+    .queuePosition {
+        gap:6px 12px;
     }
 }
 
