@@ -109,7 +109,13 @@ test.each([true, false])("map confirmation keeps a fixed pin only after successf
 
         const save = screen.getByRole("button", { name: "선호 정보 저장" });
 
-        // 현재 초기 선택 영화관은 3개이므로 저장 가능하다.
+        // 위치를 새로 조회하면 주변 영화관 선택은 초기화된다.
+        // 따라서 조회 성공 직후에는 3곳을 다시 선택해야 저장할 수 있다.
+        expect(save.disabled).toBe(true);
+
+        fireEvent.click(screen.getByRole("button", { name: "극장1" }));
+        fireEvent.click(screen.getByRole("button", { name: "극장2" }));
+        fireEvent.click(screen.getByRole("button", { name: "극장3" }));
         expect(save.disabled).toBe(false);
 
         // 3개 → 2개
