@@ -1431,7 +1431,7 @@ export default function ResidencePreference({
     const canSave = birthDateValid && locationConfirmed && Boolean(location && address.trim())
         && selectedTheaters.length >= 3 && selectedTheaters.length <= 5
         && selectedTheaters.every(id => Number.isInteger(Number(id)) && Number(id) > 0)
-        && selectedSeats.length >= 1 && selectedSeats.length <= 6
+        && selectedSeats.length === 6
         && !isMapSelectionMode && !currentLocationLoading && !mapSearchLoading
         && !theaterLoading && !placeSearchLoading && !saving;
 
@@ -1477,14 +1477,9 @@ export default function ResidencePreference({
             return;
         }
 
-        if (
-            selectedSeats.length <
-            1 ||
-            selectedSeats.length >
-            6
-        ) {
+        if (selectedSeats.length !== 6) {
             setError(
-                "선호 좌석 위치를 1~6개 선택해주세요."
+                "선호 좌석 6개를 모두 선택해주세요."
             );
 
             return;
@@ -1883,7 +1878,7 @@ export default function ResidencePreference({
                 </div>
 
                 <p className="help">
-                    선호하는 좌석 위치를 우선순위대로 선택해주세요.
+                    선호하는 좌석 위치 6곳을 모두 선택해주세요.
                 </p>
 
                 <div className="screen preference-screen">
@@ -2026,22 +2021,29 @@ export default function ResidencePreference({
                 </p>
             )}
 
-            <button
-                type="button"
-                className="preference-action-button save-preference-button"
-                onClick={
-                    save
-                }
-                disabled={
-                    !canSave
-                }
-            >
-                {
-                    saving
-                        ? "저장 중..."
-                        : "선호 정보 저장"
-                }
-            </button>
+            <div className="save-preference-row">
+                {selectedSeats.length !== 6 && (
+                    <p className="save-preference-warning" role="status">
+                        선호 좌석 6개를 모두 선택해주세요. (현재 {selectedSeats.length}/6)
+                    </p>
+                )}
+                <button
+                    type="button"
+                    className="preference-action-button save-preference-button"
+                    onClick={
+                        save
+                    }
+                    disabled={
+                        !canSave
+                    }
+                >
+                    {
+                        saving
+                            ? "저장 중..."
+                            : "선호 정보 저장"
+                    }
+                </button>
+            </div>
 
         </div>
     );

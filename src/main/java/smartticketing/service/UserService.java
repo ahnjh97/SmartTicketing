@@ -343,11 +343,10 @@ public class UserService {
     ) {
         if (
                 positions == null
-                        || positions.size() < 1
-                        || positions.size() > 6
+                        || positions.size() != 6
         ) {
             throw new IllegalArgumentException(
-                    "선호 좌석은 1~6개까지 선택할 수 있습니다."
+                    "선호 좌석 6개를 모두 선택해주세요."
             );
         }
 
