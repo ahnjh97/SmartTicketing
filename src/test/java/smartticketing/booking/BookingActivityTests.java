@@ -59,4 +59,38 @@ class BookingActivityTests {
         var ended = tx(em -> new BookingActivityService(em, holds(em, later)).active(f.user()));
         assertThat(ended).isEmpty();
     }
+
+    @Test void historyIncludesCancelledQueuesAndElapsedHoldsWithoutMutatingOrLeakingOtherUsers() {
+        var f = fixture(2, 2); register(f);
+        var other = another(f, 2, false); register(other);
+        tx(em -> service(em, CLOCK).cancel(other.user(), other.group(), key()));
+        var cancelled = tx(em -> new BookingActivityService(em, holds(em, CLOCK)).history(other.user(), null));
+        assertThat(cancelled.items()).hasSize(2).allMatch(i -> i.groupId().equals(other.group()) && i.status().equals("CANCELLED"));
+        assertThat(tx(em -> new BookingActivityService(em, holds(em, CLOCK)).history(f.user(), null)).items()).isEmpty();
+        dispatcher(CLOCK).dispatch(f.shows().getFirst());
+        var later = Clock.offset(CLOCK, Duration.ofMinutes(6));
+        sql.clear();
+        var expired = tx(em -> new BookingActivityService(em, holds(em, later)).history(f.user(), null));
+        assertThat(expired.items()).hasSize(1).allMatch(i -> i.kind().equals("holding") && i.status().equals("EXPIRED"));
+        assertThat(sql).noneMatch(q -> q.toLowerCase().contains("for update") || q.toLowerCase().startsWith("update "));
+        assertThat(sql).hasSizeLessThanOrEqualTo(5);
+    }
+
+    @Test void endedQueuesArePaginatedWithoutMissingOrRepeatingGroups() {
+        var first = fixture(2, 2); register(first);
+        tx(em -> service(em, CLOCK).cancel(first.user(), first.group(), key()));
+        for (int i = 0; i < 21; i++) {
+            var f = another(first, 2, true); register(f);
+            tx(em -> service(em, CLOCK).cancel(f.user(), f.group(), key()));
+        }
+        var later = Clock.offset(CLOCK, Duration.ofHours(8));
+        var page = tx(em -> new BookingActivityService(em, holds(em, later)).history(first.user(), null));
+        assertThat(page.items()).hasSize(40).allMatch(i -> i.status().equals("CANCELLED"));
+        assertThat(page.nextBefore()).isNotNull();
+        var next = tx(em -> new BookingActivityService(em, holds(em, later)).history(first.user(), page.nextBefore()));
+        assertThat(next.items()).hasSize(4);
+        assertThat(next.nextBefore()).isNull();
+        assertThat(next.items().stream().map(BookingActivityService.HistoryItem::groupId))
+                .doesNotContainAnyElementsOf(page.items().stream().map(BookingActivityService.HistoryItem::groupId).toList());
+    }
 }

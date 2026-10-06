@@ -86,6 +86,7 @@ public class AdminBookingService {
         counts.put("payments", count("payments", "reservation_id in (:reservations)", p));
         counts.put("tickets", count("tickets", "reservation_id in (:reservations)", p));
         counts.put("waiting_queues", (long) plan.queues().size());
+        counts.put("waiting_queue_seats", count("waiting_queue_seats", "waiting_queue_id in (:queues)", p));
         counts.put("queue_counters", count("queue_counters", ":global=true", p));
         counts.put("booking_group_holds", count("booking_group_holds", "reservation_id in (:reservations)", p));
         if ("purge".equals(s.action())) {
@@ -176,8 +177,10 @@ public class AdminBookingService {
             db.update("delete from booking_operations where user_id in (:users)", p);
             for (String t : List.of("tickets", "payments", "reservation_seats")) db.update("delete from " + t + " where reservation_id in (:reservations)", p);
             db.update("delete from reservations where id in (:reservations)", p);
+            db.update("delete from waiting_queue_seats where waiting_queue_id in (:queues)", p);
             db.update("delete from waiting_queues where id in (:queues)", p);
             db.update("delete from queue_counters where :global=true", p);
+            db.update("delete from waiting_zone_sequences where :global=true", p);
             for (String t : List.of("booking_group_seat_preferences", "booking_group_theater_preferences")) db.update("delete from " + t + " where group_id in (:orphanGroups)", p);
             db.update("delete from booking_request_groups where id in (:orphanGroups)", p);
         } else {

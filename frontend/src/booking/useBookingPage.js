@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.js';
 import useCatalog from './useCatalog.js';
 import useTheaterCatalog from './useTheaterCatalog.js';
+import useMovieTimeDefaults from './useMovieTimeDefaults.js';
 import { dates, positive, rememberBooking, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
 
 export default function useBookingPage(mode) {
@@ -18,14 +19,10 @@ export default function useBookingPage(mode) {
     const theaterId = positive(params.get('theater')) ? params.get('theater') : null;
     const date = params.get('date') || today;
     const dateValid = dates(today).includes(date);
-    const from = params.get('from') || '';
-    const until = params.get('until') || '';
     const youthMember = isYouthMember(user, date);
     const { adultCount, youthCount } = audienceCounts(params, youthMember);
     const audienceValid = [adultCount, youthCount].every(n => Number.isInteger(n) && n >= 0 && n <= 6) && validParty(adultCount + youthCount);
     const party = String(adultCount + youthCount);
-    const rangeValid = validRange(from, until) && halfHour(from) && halfHour(until);
-    const rangeFuture = rangeValid && futureRange(date, from, until, now);
     const page = /^\d+$/.test(params.get('page') || '') ? Math.min(Number(params.get('page')), 2147483647) : 0;
     const search = params.get('q') || '';
     const entry = params.get('entry');
@@ -33,11 +30,14 @@ export default function useBookingPage(mode) {
     const update = useCallback(values => setParams(previous => {
         const next = new URLSearchParams(previous);
         next.delete('entry');
+        if (!theaterMode && values.date && values.date !== (previous.get('date') || today)) {
+            next.delete('from'); next.delete('until');
+        }
         for (const [key, value] of Object.entries(values)) {
             if (value === null || value === '') next.delete(key); else next.set(key, String(value));
         }
         return next;
-    }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams]);
+    }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams, theaterMode, today]);
     const selectTheater = useCallback(id => update({ theater: id, map: null, q: null, page: null, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
@@ -67,6 +67,11 @@ export default function useBookingPage(mode) {
     const dayShows = useCatalog(!theaterMode && movieId && dateValid && !authLoading && !needsPreferences ? 'showtimes/availability' : null,
         { movieId, date, ...(user ? { theaterIds: preferences.map(theater => theater.theaterId).join(',') } : {}) }, `${user?.id || 'guest'}:${entry || ''}`);
     const hasDayShows = Boolean(dayShows.data?.available && Date.parse(dayShows.data.latestStartTime) > now);
+    const { from, until } = useMovieTimeDefaults({ enabled: Boolean(!theaterMode && movieId && dateValid && !authLoading && detail.data
+        && !dayShows.loading && !dayShows.error && !entry && !params.has('group') && !params.has('reservation') && !params.has('smart')),
+        userId: user?.id, movieId, date, now, runningTime: detail.data?.runningTime, schedule: dayShows.data, params });
+    const rangeValid = validRange(from, until) && halfHour(from) && halfHour(until);
+    const rangeFuture = rangeValid && futureRange(date, from, until, now);
     const shows = useCatalog(theaterMode && movieId && dateValid && selectedMovieExists && theater.data ? 'showtimes' : null,
         { movieId, theaterId, date }, entry || '');
     const items = (shows.data?.items || []).filter(show => Date.parse(show.startTime) > now);
@@ -86,6 +91,7 @@ export default function useBookingPage(mode) {
             // Movie smart booking selects a time range, not a specific showtime.
             if (!theaterMode) {
                 next.delete('showtime');
+                next.set('from', from); next.set('until', until);
             }
             return next;
         });

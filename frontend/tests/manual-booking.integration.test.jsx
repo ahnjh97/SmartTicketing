@@ -22,8 +22,8 @@ afterEach(() => {
     vi.unstubAllGlobals(); vi.unstubAllEnvs();
 });
 const seats = [
-    { id: 1, row: 'A', number: 1, segment: 'left', status: 'AVAILABLE' },
-    { id: 2, row: 'A', number: 2, segment: 'left', status: 'AVAILABLE' },
+    { id: 1, position: 'MIDDLE_MIDDLE', row: 'A', number: 1, segment: 'left', status: 'AVAILABLE' },
+    { id: 2, position: 'SIDE_MIDDLE', row: 'A', number: 2, segment: 'left', status: 'AVAILABLE' },
     { id: 3, row: 'A', number: 3, segment: 'right', status: 'HOLDING' },
     { id: 4, row: 'A', number: 4, segment: 'right', status: 'BLOCKED' },
 ];
@@ -124,6 +124,7 @@ test('network failure retries the same hold identity without showing premature s
     fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}));
     await screen.findByText('연결 끊김'); expect(screen.queryByText('좌석을 선점했습니다')).toBeNull();
     expect(screen.getByTestId('path').textContent).toContain('group=401');
+    await waitFor(() => expect(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}));
     await screen.findByRole('heading',{name:'좌석을 선점했습니다'});
     const callsToHold=fetch.mock.calls.filter(([url])=>url.endsWith('/manual-hold'));
@@ -144,4 +145,62 @@ test('unknown prices disable hold rather than inventing an amount', async () => 
     vi.stubGlobal('fetch',vi.fn((url,options)=>url.startsWith('/api/showtimes?')? Promise.resolve(response({items:[{...show,pricePerPerson:null}]})) : api(url,options)));
     mount(); await screen.findByText('회차 가격을 확인할 수 없어 예매할 수 없습니다.');
     expect(screen.getByRole('button',{name:'선택한 좌석 5분 선점'}).disabled).toBe(true);
+});
+
+
+test('manual exact-seat waiting survives reload, changes seats and switches to a free-seat hold', async () => {
+    let queue = null;
+    vi.stubGlobal('fetch', vi.fn((url, options = {}) => {
+        if (url === '/api/booking-groups/401/waiting-queues') {
+            if (options.method === 'POST') {
+                const body = JSON.parse(options.body);
+                expect(body.seatZone).toBeUndefined();
+                expect(body.showtimeIds).toEqual([91]);
+                queue = { id: 701, status: 'WAITING', aheadCount: 2, seatIds: [...body.seatIds].sort((a, b) => a - b), seatLabels: [...body.seatIds].sort((a, b) => a - b).map(id => 'A' + id) };
+            }
+            return response({ items: queue ? [queue] : [], groupStatus: 'ACTIVE' });
+        }
+        return api(url, options);
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'A1 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A3 대기 가능' }));
+    expect(screen.getByRole('button', { name: 'A4 선택 불가' }).disabled).toBe(true);
+    expect(screen.queryByRole('combobox', { name: '대기할 구역' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석 대기 신청' }));
+    await screen.findByText('A1, A3 대기 중 · 앞선 신청 2건');
+    expect(fetch.mock.calls.some(([url]) => url.endsWith('/manual-hold'))).toBe(false);
+    const path = screen.getByTestId('path').textContent.replace(/&seats=[^&]*/, '');
+    cleanup(); mount(path);
+    await screen.findByText('A1, A3 대기 중 · 앞선 신청 2건');
+    expect((await screen.findByRole('button', { name: 'A3 대기 가능' })).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: '선택한 좌석 대기 중' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'A1 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A2 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석으로 대기 변경' }));
+    await screen.findByText('A2, A3 대기 중 · 앞선 신청 2건');
+    fireEvent.click(screen.getByRole('button', { name: 'A3 대기 가능' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A1 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석 5분 선점' }));
+    await screen.findByRole('heading', { name: '좌석을 선점했습니다' });
+    expect(fetch.mock.calls.filter(([url, options]) => url === '/api/booking-groups' && options.method === 'POST')).toHaveLength(1);
+    const waits = fetch.mock.calls.filter(([url, options]) => url.endsWith('/waiting-queues') && options.method === 'POST');
+    expect(waits).toHaveLength(2);
+    expect(waits[0][1].headers['Idempotency-Key']).not.toBe(waits[1][1].headers['Idempotency-Key']);
+});
+
+test('fully booked show still allows selecting reserved seats to wait', async () => {
+    vi.stubGlobal('fetch', vi.fn((url, options = {}) => {
+        if (url.startsWith('/api/showtimes?')) return response({ items: [{ ...show, availableSeats: 0 }] });
+        if (url === '/api/showtimes/91/seats') return response({ seats: seats.map(seat => ({ ...seat, status: seat.status === 'BLOCKED' ? 'BLOCKED' : 'RESERVED' })) });
+        if (url.endsWith('/waiting-queues')) return response({ items: [{ id: 701, status: 'WAITING', seatIds: [1, 2], seatLabels: ['A1', 'A2'], aheadCount: 0 }], groupStatus: 'ACTIVE' });
+        return api(url, options);
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'A1 대기 가능' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A2 대기 가능' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석 대기 신청' }));
+    await screen.findByText('A1, A2 대기 중 · 앞선 신청 0건');
+    const request = fetch.mock.calls.find(([url, options]) => url.endsWith('/waiting-queues') && options.method === 'POST');
+    expect(JSON.parse(request[1].body).seatIds).toEqual([1, 2]);
 });

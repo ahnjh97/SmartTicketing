@@ -23,9 +23,19 @@ public class BookingGroupService {
 
     public BookingResult create(Long userId, String key, CreateBookingGroupRequest request) {
         BookingIdempotency.key(key);
-        var user = holds.requireUser(userId);
+        holds.requireUser(userId);
         if (request == null || !validator.validate(request).isEmpty()) throw new IllegalArgumentException("관람 요청 입력을 확인해주세요.");
         return operations.execute(userId, BookingOperationType.CREATE_GROUP, key, request, holds.now(), () -> {
+            var group = build(userId, request);
+            em.persist(group);
+            return holds.groupResponse(group);
+        });
+    }
+
+    // Build and validate without persisting so a plan can validate every candidate first.
+    BookingRequestGroup build(Long userId, CreateBookingGroupRequest request) {
+            var user = holds.requireUser(userId);
+            if (request == null || !validator.validate(request).isEmpty()) throw new IllegalArgumentException("관람 요청 입력을 확인해주세요.");
             var now = holds.now();
             if (request.viewingDate().isBefore(now.toLocalDate()) || request.viewingDate().getYear() > 9998)
                 reject(400, "지난 날짜 또는 지원하지 않는 날짜입니다.");
@@ -53,8 +63,6 @@ public class BookingGroupService {
                     .setParameter("id", userId).getResultList());
             group.getSeatPreferences().addAll(em.createQuery("select p.seatPosition from UserPreferredSeat p where p.user.id=:id order by p.priority, p.id", SeatPosition.class)
                     .setParameter("id", userId).getResultList());
-            em.persist(group);
-            return holds.groupResponse(group);
-        });
+            return group;
     }
 }

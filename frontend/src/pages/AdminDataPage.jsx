@@ -6,7 +6,8 @@ import './AdminDataPage.css';
 const NAMES = {
     movies: '영화', theaters: '영화관', screens: '상영관', showtimes: '상영회차', seats: '좌석 배치', showtime_seats: '회차별 좌석', estimated_showtime_seats: '회차별 좌석 (예상)',
     reservations: '예약', reservation_seats: '예약 좌석', payments: '결제', tickets: '티켓', waiting_queues: '대기열',
-    queue_counters: '대기 순번', notifications: '관련 알림', booking_operations: '관련 회원의 요청 재시도 기록',
+    queue_counters: '대기 순번', waiting_queue_seats: '대기 신청 좌석', waiting_zone_sequences: '구역별 대기 순번',
+    notifications: '관련 알림', booking_operations: '관련 회원의 요청 재시도 기록',
     booking_group_holds: '그룹 선점', booking_request_groups: '예매 요청', booking_group_seat_preferences: '요청 좌석 선호',
     booking_group_theater_preferences: '요청 영화관 선호', user_preferred_theaters: '회원 선호 영화관', user_nearby_theaters: '회원 주변 영화관',
     detached_booking_groups: '선택 회차 연결 해제',

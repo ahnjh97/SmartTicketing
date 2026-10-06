@@ -56,6 +56,7 @@ public class BookingSmartService {
         return write.execute(status -> {
             // Also discard an OSIV persistence context's old search entities before locking reads.
             em.clear();
+            holds.lockCapacityUser(userId);
             holds.requireUser(userId);
             return operations.execute(userId, BookingOperationType.SMART_HOLD, key, new Intent(groupId), holds.now(), () -> {
                 var group = holds.lockOwnedGroup(userId, groupId);
@@ -120,15 +121,14 @@ public class BookingSmartService {
             if (!Integer.valueOf(10000).equals(show.getPricePerPerson())) continue;
             priced = true;
             var seats = SmartSeatCandidates.analyze(byShow.getOrDefault(show.getId(), List.of()),
-                    show.getScreen().getId(), group.getPartySize(), preferences);
+                    show.getScreen().getId(), group.getPartySize(), preferences, group.getCandidateZone());
             unknownLayout |= !seats.layoutComplete(); knownLayout |= seats.layoutComplete();
             available = Math.max(available, seats.available());
             for (var block : seats.blocks()) candidates.add(new Ranked(show.getId(),
                     Math.max(0, theaters.indexOf(show.getScreen().getTheater().getId())), show.getStartTime(),
                     show.getScreen().getTheater().getId(), block));
         }
-        var best = candidates.stream().min(Comparator.comparing((Ranked c) -> c.block.split())
-                .thenComparingInt(c -> c.block.preferenceRank())
+        var best = candidates.stream().min(Comparator.comparing(Ranked::block, SmartSeatCandidates.priorityOrder())
                 .thenComparingInt(Ranked::theaterRank).thenComparing(Ranked::start)
                 .thenComparing(Ranked::theaterId).thenComparing(Ranked::showId)
                 .thenComparingDouble(c -> c.block.centerDistance())

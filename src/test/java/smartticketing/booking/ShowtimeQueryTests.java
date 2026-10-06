@@ -57,6 +57,7 @@ class ShowtimeQueryTests {
         var date = LocalDate.of(2026, 10, 1);
         var result = query.availability(movieId, date, null);
         assertThat(result.available()).isTrue();
+        assertThat(result.earliestStartTime()).isAfter(result.serverTime()).isBeforeOrEqualTo(result.latestStartTime());
         assertThat(result.latestStartTime()).isAfter(result.serverTime());
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(1);
         assertThat(statistics.getEntityLoadCount()).isZero();

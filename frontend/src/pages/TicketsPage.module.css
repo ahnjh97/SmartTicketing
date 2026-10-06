@@ -2,7 +2,7 @@
 .page > h1 { margin: 0 0 30px; font-size: clamp(28px, 4vw, 38px); letter-spacing: -.04em; }
 .panel { min-width: 0; }
 .ticketFilterHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
-.ticketFilterHeader h2 { margin: 0; font-size: 17px; }
+.ticketFilterHeader h2 { margin: 0; font-size: 20px; }
 .count { color: var(--booking-accent); margin-left: 6px; font-variant-numeric: tabular-nums; }
 .ticketDateFilter { max-width: 100%; padding: 10px 32px 10px 14px; border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-soft); color: var(--booking-ink); font: inherit; font-size: 13px; cursor: pointer; }
 .ticketGroups { display: grid; gap: 32px; }

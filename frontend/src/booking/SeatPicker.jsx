@@ -1,6 +1,6 @@
 import styles from './SeatPicker.module.css';
 
-export default function SeatPicker({ seats, selected, limit, onChange, disabled = false }) {
+export default function SeatPicker({ seats, selected, limit, onChange, disabled = false, allowWaiting = false }) {
     const rows = new Map();
     for (const seat of [...seats].sort((a, b) => a.row.localeCompare(b.row, 'ko', { numeric: true }) || a.number - b.number)) {
         if (!rows.has(seat.row)) rows.set(seat.row, []);
@@ -16,16 +16,18 @@ export default function SeatPicker({ seats, selected, limit, onChange, disabled 
                 {items.map((seat, index) => {
                     const chosen = selected.includes(seat.id);
                     const unavailable = seat.status !== 'AVAILABLE';
+                    const waitable = allowWaiting && ['HOLDING', 'RESERVED'].includes(seat.status);
                     const aisle = index > 0 && seat.segment && items[index - 1].segment && seat.segment !== items[index - 1].segment;
                     return <button key={seat.id} type="button" className={`${styles.seat} ${aisle ? styles.aisle : ''}`}
-                        aria-label={`${seat.row}${seat.number} ${unavailable ? '선택 불가' : '좌석'}`}
-                        aria-pressed={chosen} disabled={disabled || unavailable || (!chosen && selected.length >= limit)}
-                        data-unavailable={unavailable} onClick={() => toggle(seat.id)}>{unavailable ? '×' : seat.number}</button>;
+                        aria-label={`${seat.row}${seat.number} ${waitable ? '대기 가능' : unavailable ? '선택 불가' : '좌석'}`}
+                        aria-pressed={chosen} disabled={disabled || (unavailable && !waitable) || (!chosen && selected.length >= limit)}
+                        data-unavailable={unavailable && !chosen} data-waitable={waitable} onClick={() => toggle(seat.id)}>{unavailable && !waitable ? '×' : seat.number}</button>;
                 })}
                 <span className={styles.rowName}>{row}</span>
             </div>)}</div>
         </div>
-        <div className={styles.legend}><span><i />선택 가능</span><span><i className={styles.selected} />선택 중</span><span><i className={styles.unavailable} />선택 불가</span></div>
+        <div className={styles.legend}><span><i />선택 가능</span><span><i className={styles.selected} />선택 중</span>{allowWaiting && <span><i className={styles.waitable} />대기 가능</span>}<span><i className={styles.unavailable} />선택 불가</span></div>
+        {allowWaiting && <p className={styles.note}>대기 좌석이 포함되면 선택한 좌석이 모두 비었을 때 함께 선점합니다.</p>}
         <p className={styles.note}>선택만으로 좌석이 확보되지 않습니다. ‘좌석 선점’ 후 서버가 확정한 좌석을 5분 동안 보관합니다.</p>
     </section>;
 }

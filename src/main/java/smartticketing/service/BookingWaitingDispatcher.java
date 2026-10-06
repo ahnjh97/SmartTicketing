@@ -67,13 +67,21 @@ public class BookingWaitingDispatcher {
                 try { waiting.validate(group, show); }
                 catch (BookingRejection mismatch) { continue; }
                 var inventory = holds.lockInventory(showId);
-                var best = SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences())
-                        .blocks().stream().min(Comparator.comparing(SmartSeatCandidates.Block::split)
-                                .thenComparingInt(SmartSeatCandidates.Block::preferenceRank)
+                var requested = BookingQueueLifecycle.currentSeatIds(em, q.getId());
+                if (!requested.isEmpty()) {
+                    var exact = inventory.stream().filter(i -> requested.contains(i.getSeat().getId())).toList();
+                    if (exact.size() != group.getPartySize() || exact.stream().anyMatch(i -> i.getStatus() != SeatStatus.AVAILABLE
+                            || i.getReservation() != null || i.getHoldExpiredAt() != null || !i.getSeat().isActive())) continue;
+                    holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, requested);
+                    allocated++;
+                    continue;
+                }
+                var best = SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences(), q.getSeatZone())
+                        .blocks().stream().min(SmartSeatCandidates.priorityOrder()
                                 .thenComparingDouble(SmartSeatCandidates.Block::centerDistance)
                                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
-                if (best.isEmpty()) continue; // An unsatisfiable earlier party must not block a later party.
+                if (best.isEmpty()) continue; // Allocate in number order among requests whose conditions currently match.
                 holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, best.get().seatIds());
                 allocated++;
             }

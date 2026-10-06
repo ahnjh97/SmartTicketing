@@ -20,20 +20,21 @@ public class BookingWaitingService {
     private final BookingPaymentService payments;
     private final BookingIdempotency operations;
     private static final List<QueueStatus> ACTIVE = List.of(QueueStatus.WAITING, QueueStatus.PAUSED, QueueStatus.HOLDING);
-    private record Intent(Long groupId, List<Long> showtimeIds) {}
+    private record Intent(Long groupId, List<Long> showtimeIds, SeatPosition seatZone, List<Long> seatIds) {}
 
     public BookingWaitingService(EntityManager em, BookingHoldService holds, BookingPaymentService payments, BookingIdempotency operations) {
         this.em = em; this.holds = holds; this.payments = payments; this.operations = operations;
     }
 
     public BookingResult register(Long user, Long id, String key, WaitingRequest request) {
-        BookingIdempotency.key(key); holds.requireUser(user);
+        BookingIdempotency.key(key); holds.lockCapacityUser(user); holds.requireUser(user);
         if (request == null || request.showtimeIds() == null || request.showtimeIds().isEmpty()
                 || request.showtimeIds().stream().anyMatch(s -> s == null || s < 1))
             throw new IllegalArgumentException("대기할 회차를 선택해주세요.");
         var ids = request.showtimeIds().stream().distinct().sorted().toList();
         if (ids.size() != request.showtimeIds().size()) throw new IllegalArgumentException("같은 회차를 중복 신청할 수 없습니다.");
-        return operations.execute(user, BookingOperationType.REGISTER_WAITING, key, new Intent(id, ids), holds.now(), () -> {
+        var seatIds = request.seatIds() == null ? List.<Long>of() : BookingHoldService.normalizeSeats(request.seatIds());
+        return operations.execute(user, BookingOperationType.REGISTER_WAITING, key, new Intent(id, ids, request.seatZone(), seatIds), holds.now(), () -> {
             var group = holds.lockOwnedGroup(user, id);
             if (group.getStatus() != BookingGroupStatus.ACTIVE) reject(409, "진행 중인 선점 또는 종료된 그룹에는 대기를 추가할 수 없습니다.");
             var shows = new TreeSet<>(BookingQueueLifecycle.showIds(em, id)); shows.addAll(ids);
@@ -41,6 +42,16 @@ public class BookingWaitingService {
             var existing = BookingQueueLifecycle.rows(em, id);
             if (existing.stream().anyMatch(q -> !shows.contains(q.getShowtime().getId())))
                 throw new org.springframework.dao.TransientDataAccessResourceException("대기 회차가 변경되었습니다. 같은 요청으로 재시도해주세요.");
+            if (!seatIds.isEmpty()) {
+                if (group.getEntryPoint() != BookingEntryPoint.THEATER_NORMAL || ids.size() != 1 || request.seatZone() != null)
+                    reject(400, "직접 선택한 좌석 대기는 일반예매의 한 회차에서만 가능합니다.");
+                return manualSeats(group, ids.getFirst(), seatIds, existing);
+            }
+            if (request.seatZone() != null) {
+                if (group.getEntryPoint() != BookingEntryPoint.THEATER_NORMAL || ids.size() != 1)
+                    reject(400, "구역 변경은 일반예매에서만 가능합니다.");
+                return manualZone(group, ids.getFirst(), request.seatZone(), existing);
+            }
             var additions = new ArrayList<WaitingQueue>();
             for (var showId : ids) {
                 // A terminal row is returned unchanged, never resurrected or renumbered.
@@ -49,10 +60,10 @@ public class BookingWaitingService {
                 validate(group, show);
                 var duplicates = em.createQuery("""
                         select q from WaitingQueue q where q.user.id=:user and q.showtime.id=:show
-                        and q.status in :statuses order by q.id
+                        and q.status in :statuses and (q.seatZone is null or :zone is null or q.seatZone=:zone) order by q.id
                         """, WaitingQueue.class).setParameter("user", user).setParameter("show", showId)
-                        .setParameter("statuses", ACTIVE).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-                if (!duplicates.isEmpty()) reject(409, "다른 그룹에서 이미 이 회차에 대기 중입니다.");
+                        .setParameter("statuses", ACTIVE).setParameter("zone", group.getCandidateZone()).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                if (!duplicates.isEmpty()) reject(409, "다른 요청에서 이미 이 회차와 구역에 대기 중입니다.");
                 // The show mutex serializes number issuance, including parallel groups of the same user.
                 var numbers = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.queueNumber desc", WaitingQueue.class)
                         .setParameter("s", showId).setMaxResults(1).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
@@ -60,11 +71,100 @@ public class BookingWaitingService {
                 if (previous == Integer.MAX_VALUE) reject(409, "대기 번호를 더 발급할 수 없습니다.");
                 var q = new WaitingQueue(); q.setUser(group.getUser()); q.setRequestGroup(group); q.setShowtime(show);
                 q.setQueueNumber(previous + 1); q.setStatus(QueueStatus.WAITING);
+                if (group.getCandidateZone() != null) {
+                    var zoneNumbers = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.seatZone=:z order by q.zoneQueueNumber desc", WaitingQueue.class)
+                            .setParameter("s", showId).setParameter("z", group.getCandidateZone()).setMaxResults(1)
+                            .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                    int last = zoneNumbers.isEmpty() ? 0 : zoneNumbers.getFirst().getZoneQueueNumber();
+                    if (last == Integer.MAX_VALUE) reject(409, "구역 대기 번호를 더 발급할 수 없습니다.");
+                    q.setSeatZone(group.getCandidateZone()); q.setZoneQueueNumber(nextZoneNumber(showId, group.getCandidateZone(), last));
+                }
                 q.setCreatedAt(holds.now()); q.setUpdatedAt(holds.now()); additions.add(q);
             }
+            holds.requireCapacity(user, additions.size(), null);
             additions.forEach(em::persist);
             return response(group);
         });
+    }
+
+    private WaitingResponse manualSeats(BookingRequestGroup group, Long showId, List<Long> ids, List<WaitingQueue> existing) {
+        var show = em.find(Showtime.class, showId); validate(group, show);
+        if (ids.size() != group.getPartySize()) reject(400, "관람 인원만큼 좌석을 선택해주세요.");
+        var inventory = holds.lockInventory(showId);
+        var selected = inventory.stream().filter(i -> ids.contains(i.getSeat().getId())).toList();
+        if (selected.size() != ids.size() || selected.stream().anyMatch(i -> !i.getSeat().isActive()
+                || !i.getSeat().getScreen().getId().equals(show.getScreen().getId()) || i.getStatus() == SeatStatus.BLOCKED))
+            reject(400, "이 회차에서 이용 가능한 좌석을 선택해주세요.");
+        var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
+        if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
+        if (row != null && row.getRequestedSeatIds().equals(ids)) return response(group);
+        holds.requireCapacity(group.getUser().getId(), 1, group.getId());
+        var zones = new HashSet<SeatPosition>(); selected.forEach(i -> zones.add(i.getSeat().getSeatPosition()));
+        var rows = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.id", WaitingQueue.class)
+                .setParameter("s", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        if (rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
+                && !Objects.equals(q.getRequestGroup() == null ? null : q.getRequestGroup().getId(), group.getId())
+                && ACTIVE.contains(q.getStatus()) && BookingQueueLifecycle.competing(q, ids, zones)))
+            reject(409, "다른 요청에서 이미 선택한 좌석 또는 구역에 대기 중입니다.");
+        int last = rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
+        if (last == Integer.MAX_VALUE) reject(409, "대기 번호를 더 발급할 수 없습니다.");
+        SeatPosition zone = zones.size() == 1 ? zones.iterator().next() : null;
+        if (row == null) { row = new WaitingQueue(); row.setUser(group.getUser()); row.setRequestGroup(group); row.setShowtime(show); row.setCreatedAt(holds.now()); }
+        if (row.getSeatZone() != null) rememberZoneNumber(showId, row.getSeatZone(), row.getZoneQueueNumber());
+        Integer zoneNumber = zone == null ? null : nextZoneNumber(showId, zone,
+                rows.stream().filter(q -> q.getSeatZone() == zone).map(WaitingQueue::getZoneQueueNumber).filter(Objects::nonNull).mapToInt(Integer::intValue).max().orElse(0));
+        row.setQueueNumber(last + 1); row.setSeatZone(zone); row.setZoneQueueNumber(zoneNumber);
+        row.getRequestedSeatIds().clear(); row.getRequestedSeatIds().addAll(ids);
+        row.setStatus(QueueStatus.WAITING); row.setUpdatedAt(holds.now());
+        if (row.getId() == null) em.persist(row);
+        return response(group);
+    }
+
+    private WaitingResponse manualZone(BookingRequestGroup group, Long showId, SeatPosition zone, List<WaitingQueue> existing) {
+        var show = em.find(Showtime.class, showId);
+        validate(group, show);
+        var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
+        if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
+        if (row != null && row.getSeatZone() == zone && row.getRequestedSeatIds().isEmpty()) return response(group);
+        holds.requireCapacity(group.getUser().getId(), 1, group.getId());
+        var inventory = holds.lockInventory(showId);
+        var capacity = inventory.stream().filter(i -> i.getStatus()!=SeatStatus.BLOCKED).map(i -> {
+            var free=new ShowtimeSeat(); free.setSeat(i.getSeat()); free.setStatus(SeatStatus.AVAILABLE); return free;
+        }).toList();
+        if (SmartSeatCandidates.analyze(capacity, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences(), zone).blocks().isEmpty())
+            reject(409, "이 구역에는 요청 인원에 맞는 좌석 조합이 없습니다.");
+        var rows=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.id", WaitingQueue.class)
+                .setParameter("s",showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        if(rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
+                && !Objects.equals(q.getRequestGroup()==null?null:q.getRequestGroup().getId(),group.getId())
+                && ACTIVE.contains(q.getStatus()) && (q.getSeatZone()==null || q.getSeatZone()==zone)))
+            reject(409,"다른 요청에서 이미 이 구역에 대기 중입니다.");
+        int global=rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
+        int local=rows.stream().filter(q->q.getSeatZone()==zone).mapToInt(WaitingQueue::getZoneQueueNumber).max().orElse(0);
+        if(global==Integer.MAX_VALUE || local==Integer.MAX_VALUE) reject(409,"대기 번호를 더 발급할 수 없습니다.");
+        if(row==null) { row=new WaitingQueue(); row.setUser(group.getUser()); row.setRequestGroup(group); row.setShowtime(show); row.setCreatedAt(holds.now()); }
+        if (row.getSeatZone()!=null) rememberZoneNumber(showId, row.getSeatZone(), row.getZoneQueueNumber());
+        row.setQueueNumber(global+1); row.setZoneQueueNumber(nextZoneNumber(showId, zone, local)); row.setSeatZone(zone);
+        row.setStatus(QueueStatus.WAITING); row.setUpdatedAt(holds.now());
+        row.getRequestedSeatIds().clear();
+        if(row.getId()==null) em.persist(row);
+        return response(group);
+    }
+
+    // Callers already hold the show mutex, so the initial insert is serialized too.
+    private WaitingZoneSequence rememberZoneNumber(Long show, SeatPosition zone, int previous) {
+        String id=show+"_"+zone.name();
+        var counter=em.find(WaitingZoneSequence.class,id,LockModeType.PESSIMISTIC_WRITE);
+        if(counter==null) { counter=new WaitingZoneSequence(); counter.setId(id); counter.setLastNumber(previous); em.persist(counter); }
+        else counter.setLastNumber(Math.max(previous,counter.getLastNumber()));
+        return counter;
+    }
+
+    private int nextZoneNumber(Long show, SeatPosition zone, int previous) {
+        var counter=rememberZoneNumber(show,zone,previous);
+        if(counter.getLastNumber()==Integer.MAX_VALUE) reject(409,"구역 대기 번호를 더 발급할 수 없습니다.");
+        counter.setLastNumber(counter.getLastNumber()+1);
+        return counter.getLastNumber();
     }
 
     public WaitingResponse get(Long user, Long id) {
@@ -115,15 +215,23 @@ public class BookingWaitingService {
                     && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
                 q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(now);
             }
-            // Current locking read; PAUSED and legacy rows do not participate in allocation.
+            var requestedSeats = q.getRequestedSeatIds().isEmpty() ? List.<Seat>of() : em.createQuery(
+                    "select s from Seat s where s.id in :ids order by s.seatRow, s.seatNumber", Seat.class)
+                    .setParameter("ids", q.getRequestedSeatIds()).getResultList();
+            var requestedZones = new HashSet<SeatPosition>(); requestedSeats.forEach(seat -> requestedZones.add(seat.getSeatPosition()));
+            // Current locking read; count only competing seats for an exact-seat request.
             long ahead = em.createQuery("""
                     select q from WaitingQueue q where q.showtime.id=:s and q.requestGroup is not null
-                    and q.status=:status and q.queueNumber<:number order by q.id
+                    and q.status=:status and q.queueNumber<:number
+                    and (:exact=true or (:zone is null and q.seatZone is null) or q.seatZone=:zone) order by q.id
                     """, WaitingQueue.class).setParameter("s", q.getShowtime().getId()).setParameter("status", QueueStatus.WAITING)
-                    .setParameter("number", q.getQueueNumber()).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList().size();
+                    .setParameter("number", q.getQueueNumber()).setParameter("zone", q.getSeatZone()).setParameter("exact", !requestedSeats.isEmpty())
+                    .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList().stream()
+                    .filter(other -> requestedSeats.isEmpty() || BookingQueueLifecycle.competing(other, q.getRequestedSeatIds(), requestedZones)).count();
             var show = q.getShowtime();
-            items.add(new WaitingResponse.Item(q.getId(), show.getId(), q.getQueueNumber(), ahead, q.getStatus(),
-                    offset(q.getOpportunityExpiresAt()), show.getScreen().getTheater().getName(), show.getScreen().getName(), offset(show.getStartTime())));
+            items.add(new WaitingResponse.Item(q.getId(), show.getId(), q.displayNumber(), ahead, q.getStatus(),
+                    offset(q.getOpportunityExpiresAt()), show.getScreen().getTheater().getName(), show.getScreen().getName(), offset(show.getStartTime()), q.getSeatZone(),
+                    List.copyOf(q.getRequestedSeatIds()), requestedSeats.stream().map(s -> s.getSeatRow() + s.getSeatNumber()).toList()));
         }
         var choices = new ArrayList<WaitingResponse.Choice>();
         if (group.getStatus() == BookingGroupStatus.ACTIVE) {

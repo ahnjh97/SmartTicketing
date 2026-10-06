@@ -266,7 +266,9 @@ public class AdminDataService {
         d.put("reservation_seats", "reservation_id in (:reservations)");
         d.put("showtime_seats", "showtime_id in (:shows)");
         d.put("reservations", "id in (:reservations)");
+        d.put("waiting_queue_seats", "waiting_queue_id in (select id from waiting_queues where showtime_id in (:shows))");
         d.put("waiting_queues", "showtime_id in (:shows)");
+        d.put("waiting_zone_sequences", "substring_index(id, '_', 1) in (:shows)");
         d.put("queue_counters", "showtime_id in (:shows)");
         d.put("booking_group_seat_preferences", "group_id in (:groups)");
         d.put("booking_group_theater_preferences", "group_id in (:groups)" + ("theaters".equals(t) ? " or theater_id in (:roots)" : ""));

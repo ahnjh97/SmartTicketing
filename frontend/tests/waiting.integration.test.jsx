@@ -25,7 +25,7 @@ test('explicit multi-show selection is required and renders number separately fr
     fireEvent.click(screen.getByRole('button',{name:'선택한 2개 회차에 대기 신청'}));
     await screen.findByRole('list',{name:'신청한 회차'});
     expect(bookingApi.registerWaiting).toHaveBeenCalledWith(7,[1,2],expect.any(String));
-    expect(screen.getAllByText('17')).toHaveLength(2); expect(screen.getAllByText('2명')).toHaveLength(2);
+    expect(screen.getAllByText('17')).toHaveLength(2); expect(screen.getAllByText('2건')).toHaveLength(2);
 });
 test('paused and holding are distinct and server allocation refreshes the shared reservation flow',async()=>{
     data={...initial(),groupStatus:'HOLDING',activeReservationId:99,items:[item('HOLDING'),item('PAUSED',2)],choices:[]};

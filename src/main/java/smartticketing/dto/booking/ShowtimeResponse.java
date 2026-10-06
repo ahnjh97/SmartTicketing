@@ -9,7 +9,7 @@ import java.util.List;
 public final class ShowtimeResponse {
     private ShowtimeResponse() {}
     public record Items<T>(List<T> items, OffsetDateTime serverTime) {}
-    public record ScheduleAvailability(boolean available, OffsetDateTime latestStartTime, OffsetDateTime serverTime) {}
+    public record ScheduleAvailability(boolean available, OffsetDateTime earliestStartTime, OffsetDateTime latestStartTime, OffsetDateTime serverTime) {}
     public record MovieItem(Long movieId, String title, String posterUrl, Integer runningTime, String rating) {}
     public record ShowtimeItem(Long id, Long movieId, Long theaterId, Long screenId, String screenName,
             OffsetDateTime startTime, OffsetDateTime endTime, boolean endsNextDay, Integer pricePerPerson,

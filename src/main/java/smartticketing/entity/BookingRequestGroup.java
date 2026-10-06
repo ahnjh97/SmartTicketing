@@ -29,6 +29,13 @@ public class BookingRequestGroup {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "candidate_kind", length = 20, updatable = false)
+    private String candidateKind;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "candidate_zone", length = 30, updatable = false, columnDefinition = "varchar(30)")
+    private SeatPosition candidateZone;
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, updatable = false)

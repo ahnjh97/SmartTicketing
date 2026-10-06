@@ -1,16 +1,20 @@
 package smartticketing.entity;
 
 import smartticketing.entity.enums.QueueStatus;
+import smartticketing.entity.enums.SeatPosition;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
         name = "waiting_queues",
         uniqueConstraints = {
+                @UniqueConstraint(name = "uk_waiting_queue_zone_number", columnNames = {"showtime_id", "seat_zone", "zone_queue_number"}),
                 @UniqueConstraint(
                         name = "uk_waiting_queue_showtime_number",
                         columnNames = {"showtime_id", "queue_number"}
@@ -54,6 +58,23 @@ public class WaitingQueue {
 
     @Column(name = "queue_number", nullable = false)
     private Integer queueNumber;
+
+    // Existing rows retain their original show-wide number. New smart candidates use zone numbers.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seat_zone", length = 30, columnDefinition = "varchar(30)")
+    private SeatPosition seatZone;
+
+    @Column(name = "zone_queue_number")
+    private Integer zoneQueueNumber;
+
+    @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 100)
+    @CollectionTable(name = "waiting_queue_seats", joinColumns = @JoinColumn(name = "waiting_queue_id"))
+    @Column(name = "seat_id", nullable = false)
+    @OrderColumn(name = "seat_order")
+    private List<Long> requestedSeatIds = new ArrayList<>();
+
+    public int displayNumber() { return zoneQueueNumber == null ? queueNumber : zoneQueueNumber; }
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")

@@ -6,12 +6,15 @@ export const catalog = (path, query, signal) => request(`/api/${path}`, {
 });
 
 export const bookingApi = {
+    createSmartCandidates: (body, key) => request('/api/smart-booking-candidates', { method: 'POST', body, idempotencyKey: key }),
+    smartCandidates: (selected, signal) => request('/api/smart-booking-candidates', { query: { selected }, signal }),
     active: signal => request('/api/booking-groups/active', { signal }),
+    history: (before, signal) => request('/api/booking-groups/history', { query: { before }, signal }),
     mine: (before, signal) => request('/api/booking-groups', { query: { before }, signal }),
     recovery: (id, signal) => request(`/api/booking-groups/${id}/recovery`, { signal }),
     waiting: (id, signal) => request(`/api/booking-groups/${id}/waiting-queues`, { signal }),
-    registerWaiting: (id, showtimeIds, key) => request(`/api/booking-groups/${id}/waiting-queues`, {
-        method: 'POST', body: { showtimeIds }, idempotencyKey: key,
+    registerWaiting: (id, showtimeIds, key, seatZone, seatIds) => request(`/api/booking-groups/${id}/waiting-queues`, {
+        method: 'POST', body: { showtimeIds, ...(seatZone ? { seatZone } : {}), ...(seatIds ? { seatIds } : {}) }, idempotencyKey: key,
     }),
     cancelGroup: (id, key) => request(`/api/booking-groups/${id}/cancel`, { method: 'POST', idempotencyKey: key }),
     createGroup: (body, key) => request('/api/booking-groups', { method: 'POST', body, idempotencyKey: key }),

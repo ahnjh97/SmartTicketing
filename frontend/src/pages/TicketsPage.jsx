@@ -50,7 +50,9 @@ export default function TicketsPage() {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [expandedTicketId, setExpandedTicketId] = useState(null);
+    const [selectedTicketId, setExpandedTicketId] = useState(null);
+    const selectedTicket = tickets.find(ticket => ticket.ticketId === selectedTicketId);
+    const expandedTicketId = selectedTicket && !["EXPIRED", "CANCELLED"].includes(selectedTicket.status) ? selectedTicketId : null;
     const [verificationPhase, setVerificationPhase] = useState("idle");
     const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
@@ -95,14 +97,14 @@ export default function TicketsPage() {
     }, []);
 
     useEffect(() => {
-        if (verificationPhase !== "processing") return;
+        if (!expandedTicketId || verificationPhase !== "processing") return;
 
         const timer = window.setInterval(() => {
             setVerificationSeconds((current) => Math.max(0, current - 1));
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [verificationPhase]);
+    }, [verificationPhase, expandedTicketId]);
 
     useEffect(() => {
         if (!expandedTicketId) return;
@@ -180,15 +182,6 @@ export default function TicketsPage() {
         setVerificationSeconds(5);
     }
 
-    useEffect(() => {
-        if (!expandedTicketId) return;
-
-        const selected = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
-        if (["EXPIRED", "CANCELLED"].includes(selected?.status)) {
-            setExpandedTicketId(null);
-            setVerificationPhase("idle");
-        }
-    }, [tickets, expandedTicketId]);
     const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? dateKey(ticket.startTime) : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
     const filteredTickets = (selectedDate === "ALL" ? tickets : tickets.filter((ticket) => ticket.startTime && dateKey(ticket.startTime) === selectedDate))
         .toSorted((a, b) => (Date.parse(b.startTime) || 0) - (Date.parse(a.startTime) || 0));
@@ -198,7 +191,7 @@ export default function TicketsPage() {
             <h1>내 티켓</h1>
             <div className={styles.panel}>
                 <div className={styles.ticketFilterHeader}>
-                    <h2>발급된 티켓 <span className={styles.count}>{filteredTickets.length}</span></h2>
+                    <h2>발급된 티켓 <span className={styles.count}>{filteredTickets.length}개</span></h2>
                     <select className={styles.ticketDateFilter} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); selectTicket(null); }} aria-label="티켓 날짜 필터">
                         <option value="ALL">전체 날짜</option>
                         {ticketDates.map((date) => <option key={date} value={date}>{date.replaceAll('-', '.')}</option>)}

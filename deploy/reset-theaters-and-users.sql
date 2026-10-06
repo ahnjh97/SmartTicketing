@@ -15,7 +15,9 @@ DELETE FROM payments;
 DELETE FROM reservation_seats;
 DELETE FROM showtime_seats;
 DELETE FROM reservations;
+DELETE FROM waiting_queue_seats;
 DELETE FROM waiting_queues;
+DELETE FROM waiting_zone_sequences;
 DELETE FROM queue_counters;
 DELETE FROM booking_group_seat_preferences;
 DELETE FROM booking_group_theater_preferences;
@@ -29,6 +31,7 @@ DELETE FROM theaters;
 DELETE FROM theater_collection_progress;
 DELETE FROM user_preferred_seats;
 DELETE FROM user_social_accounts;
+DELETE FROM booking_user_limits;
 DELETE FROM users;
 
 INSERT INTO reset_guard SELECT IF(

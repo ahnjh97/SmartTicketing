@@ -20,6 +20,10 @@ public class BookingRecoveryController {
     public java.util.List<BookingActivityService.Item> active(@AuthenticationPrincipal Jwt jwt) {
         return activity.active(current.id(jwt));
     }
+    @GetMapping("/history")
+    public BookingActivityService.HistoryPage history(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) Long before) {
+        return activity.history(current.id(jwt), before);
+    }
     @GetMapping
     public BookingRecoveryService.Page list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) Long before) {
         return recovery.list(current.id(jwt), before);

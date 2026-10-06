@@ -1,11 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { cinemaTime, halfHour } from './state.js';
+import { timeLabel, minuteOf, timeOptions } from './timeRange.js';
 import GlassButton from '../components/GlassButton.jsx';
 import styles from './TimeRangeMenu.module.css';
 
-const timeLabel = minute => String(Math.floor(minute / 60) % 24).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
-const minuteOf = time => halfHour(time) ? Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) + (time < '04:00' ? 1440 : 0) : null;
 
 function TimeParts({ field, label, value, options, disabled, onChange }) {
     const selected = options.find(slot => slot.time === value);
@@ -40,13 +38,7 @@ export default function TimeRangeMenu({ date, now, from, until, runningTime, upd
     const panel = useRef(null);
     const [open, setOpen] = useState(null);
     const [draft, setDraft] = useState({ from: '', until: '' });
-    // ShowtimeScheduleSeedService: first start 08:00, finish by next-day 03:00,
-    // including 10 minutes of advertisements. Round the upper range boundary up
-    // so a generated start between half-hours can still be included.
-    const latestStart = 27 * 60 - Math.max(0, Number(runningTime) || 0) - 10;
-    const upperBound = (Math.floor(latestStart / 30) + 1) * 30;
-    const slots = Array.from({ length: Math.max(0, (upperBound - 480) / 30 + 1) }, (_, i) => ({ minute: 480 + i * 30, time: timeLabel(480 + i * 30) }));
-    const starts = slots.filter(slot => slot.minute < upperBound && slot.minute <= latestStart && cinemaTime(date, slot.time) > now);
+    const { upperBound, slots, starts } = timeOptions(date, now, runningTime);
     const start = minuteOf(draft.from);
 
     const startValid = starts.some(slot => slot.time === draft.from);

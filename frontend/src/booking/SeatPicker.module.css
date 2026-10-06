@@ -17,6 +17,7 @@
 .legend i { width: 13px; height: 13px; border-radius: 3px; background: var(--booking-muted-surface); border: 1px solid var(--booking-border-strong); }
 .legend .selected { background: var(--booking-accent); border-color: var(--booking-accent); }
 .legend .unavailable { background: var(--booking-surface); opacity: .5; }
+.picker .seat[data-waitable="true"]:not([aria-pressed="true"]), .legend .waitable { border-style: dashed; color: var(--booking-muted); }
 .note { text-align: center; font-size: 12px; }
 @media (max-width: 599px) { .row { gap: 5px; } .picker .seat { width: 44px; min-width: 44px; height: 44px; } .picker .aisle { margin-left: 14px; } .screen { margin-bottom: 28px; } }
 @media (prefers-reduced-motion: reduce) { .picker .seat { transition: none; transform: none; } .picker .seat:hover:not(:disabled), .picker .seat[aria-pressed="true"] { transform: none; } }

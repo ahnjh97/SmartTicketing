@@ -10,6 +10,22 @@ import java.util.*;
 final class BookingQueueLifecycle {
     private BookingQueueLifecycle() {}
 
+    static boolean competing(WaitingQueue queue, List<Long> seatIds, Set<SeatPosition> zones) {
+        return competing(queue.getSeatZone(), queue.getRequestedSeatIds(), seatIds, zones);
+    }
+
+    static boolean competing(SeatPosition zone, List<Long> requested, List<Long> seatIds, Set<SeatPosition> zones) {
+        if (!requested.isEmpty()) return requested.stream().anyMatch(seatIds::contains);
+        return zone == null || zones.contains(zone);
+    }
+
+    // The show mutex is held by callers. Use a current read for the element collection
+    // as well as the queue row: lazy collection reads otherwise use an older RR snapshot.
+    static List<Long> currentSeatIds(EntityManager em, Long queueId) {
+        return em.createNativeQuery("select seat_id from waiting_queue_seats where waiting_queue_id=:id order by seat_order for update", Long.class)
+                .setParameter("id", queueId).getResultList();
+    }
+
     static SortedSet<Long> showIds(EntityManager em, Long group) {
         return new TreeSet<>(em.createQuery("select q.showtime.id from WaitingQueue q where q.requestGroup.id=:g", Long.class)
                 .setParameter("g", group).getResultList());

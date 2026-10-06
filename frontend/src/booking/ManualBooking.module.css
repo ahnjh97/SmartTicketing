@@ -84,3 +84,5 @@
 .manual :is(h2, h3, strong), .reservation :is(h2, h3, strong), .manual .pay, .paymentCheckout .ticketLink { font-weight: 600; letter-spacing: normal; }
 
 
+
+.summary > p { color: var(--booking-muted); font-size: 13px; line-height: 1.6; }

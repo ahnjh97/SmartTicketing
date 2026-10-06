@@ -122,6 +122,8 @@ class AdminDataTests {
                     """, id, id, id);
             sql.update("insert into booking_group_seat_preferences(group_id,seat_position,preference_order) values(?,'MIDDLE_MIDDLE',0)", id);
             sql.update("insert into waiting_queues(id,user_id,showtime_id,request_group_id,queue_number,status,created_at,updated_at) values(?,1,?,?,1,'COMPLETED',now(),now())", id, id, id);
+            sql.update("insert into waiting_queue_seats(waiting_queue_id,seat_order,seat_id) values(?,0,?)", id, id);
+            sql.update("insert into waiting_zone_sequences(id,last_number) values(?,1)", id + "_MIDDLE_MIDDLE");
             sql.update("""
                     insert into reservations(id,user_id,showtime_id,waiting_queue_id,request_group_id,reservation_type,status,total_amount,created_at,updated_at)
                     values(?,1,?,?,?,'NORMAL','CONFIRMED',10000,now(),now())
@@ -226,7 +228,7 @@ class AdminDataTests {
             assertThat(targets).containsExactly(1L, 2L);
             for (long show : targets) f.tx.execute(status -> service.purgeShow(show));
             f.tx.execute(status -> service.purgeRemainingGroups());
-            for (String table : List.of("reservations", "payments", "tickets", "waiting_queues", "queue_counters", "booking_request_groups", "reservation_seats", "notifications"))
+            for (String table : List.of("reservations", "payments", "tickets", "waiting_queues", "waiting_queue_seats", "waiting_zone_sequences", "queue_counters", "booking_request_groups", "reservation_seats", "notifications"))
                 assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isZero();
             for (String table : List.of("movies", "theaters", "showtimes", "seats", "showtime_seats"))
                 assertThat(f.sql.queryForObject("select count(*) from " + table, Long.class)).as(table).isEqualTo(2);

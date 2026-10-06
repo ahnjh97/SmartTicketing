@@ -11,7 +11,7 @@ final class SeatPartyRules {
             case 1, 2, 3 -> List.of(List.of(party));
             case 4 -> List.of(List.of(4), List.of(2, 2));
             case 5 -> List.of(List.of(5), List.of(2, 3));
-            case 6 -> List.of(List.of(6), List.of(2, 2, 2), List.of(3, 3), List.of(2, 4));
+            case 6 -> List.of(List.of(6), List.of(3, 3), List.of(2, 4), List.of(2, 2, 2));
             default -> List.of();
         };
     }

@@ -29,6 +29,35 @@ public class BookingHoldService {
         this.em = em; this.operations = operations; this.clock = clock.withZone(SEOUL);
     }
 
+    // New requests serialize before their first snapshot. Dispatch converts an existing slot.
+    void lockCapacityUser(Long userId) {
+        em.createNativeQuery("insert into booking_user_limits (user_id) values (:user) on duplicate key update user_id=user_id", Object.class)
+                .setParameter("user", userId).executeUpdate();
+    }
+
+    void requireCapacity(Long userId, int additions, Long replacingGroup) {
+        if (additions > remainingCapacity(userId, replacingGroup))
+            throw new BookingRejection(409, "ACTIVE_BOOKING_LIMIT", "대기와 선점은 합쳐 최대 3개입니다. 기존 후보를 결제하거나 취소한 뒤 다시 신청해주세요.");
+    }
+
+    int remainingCapacity(Long userId, Long replacingGroup) {
+        var time = now();
+        long queued = em.createQuery("""
+                select count(q) from WaitingQueue q where q.user.id=:user
+                and q.status in :states and q.showtime.startTime>:now and q.showtime.status=:scheduled
+                and (:replacement is null or q.requestGroup.id<>:replacement)
+                """, Long.class).setParameter("user", userId)
+                .setParameter("states", List.of(QueueStatus.WAITING, QueueStatus.PAUSED))
+                .setParameter("now", time).setParameter("scheduled", ShowtimeStatus.SCHEDULED)
+                .setParameter("replacement", replacingGroup).getSingleResult();
+        long held = em.createQuery("""
+                select count(r) from Reservation r where r.user.id=:user and r.status=:pending
+                and r.expiresAt>:now and r.showtime.startTime>:now and r.showtime.status=:scheduled
+                """, Long.class).setParameter("user", userId).setParameter("pending", ReservationStatus.PENDING)
+                .setParameter("now", time).setParameter("scheduled", ShowtimeStatus.SCHEDULED).getSingleResult();
+        return (int) Math.max(0, 3 - queued - held);
+    }
+
     public enum Source { MANUAL, SMART, WAITING }
     public record Candidate(Long showtimeId, List<Long> seatIds) {}
     private record HoldIntent(Long groupId, Source source, Long showtimeId, List<Long> seatIds) {}
@@ -40,6 +69,7 @@ public class BookingHoldService {
     // The waiting dispatcher calls acquire after locking all competing groups and shows.
     public BookingResult hold(Long userId, Long groupId, String key, Source source, Candidate candidate) {
         BookingIdempotency.key(key);
+        lockCapacityUser(userId);
         requireUser(userId);
         if (groupId == null || groupId < 1 || source == null || candidate == null)
             throw new IllegalArgumentException("그룹과 선점 후보가 필요합니다.");
@@ -62,6 +92,7 @@ public class BookingHoldService {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
+        if (source != Source.WAITING) requireCapacity(userId, 1, groupId);
         // ACTIVE 그룹에는 새 슬롯을 INSERT만 한다. 없는 슬롯에 FOR UPDATE를 걸면
         // MySQL RR gap lock으로 서로 다른 그룹의 INSERT가 교착될 수 있다.
         // 불일치 슬롯이 실제로 남아 있으면 PK 제약 실패로 전체 롤백하며 덮어쓰지 않는다.
@@ -69,6 +100,8 @@ public class BookingHoldService {
             reject(400, "일반예매 그룹만 좌석 직접 선점이 가능합니다.");
         if (source == Source.SMART && group.getEntryPoint() == BookingEntryPoint.THEATER_NORMAL)
             reject(400, "스마트예매 그룹이 필요합니다.");
+        if (source == Source.SMART && group.getCandidateKind() != null)
+            reject(409, "스마트예매 후보는 구역 대기 순서에 따라 자동 배정됩니다.");
         if (ids.size() != group.getPartySize()) reject(400, "요청 좌석 수는 전체 관람 인원과 같아야 합니다.");
         Long target = showtimeId;
         if (source == Source.MANUAL) {
@@ -92,19 +125,42 @@ public class BookingHoldService {
         if (selected.size() != ids.size()) reject(400, "회차에 속하지 않는 좌석입니다.");
         for (var row : selected) {
             var seat = row.getSeat();
+            if (group.getCandidateZone() != null && seat.getSeatPosition() != group.getCandidateZone())
+                reject(409, "후보에 지정된 구역의 좌석만 확보할 수 있습니다.");
             if (!seat.isActive() || !seat.getScreen().getId().equals(show.getScreen().getId()))
                 reject(409, "이용할 수 없는 좌석입니다.");
             if (row.getStatus() != SeatStatus.AVAILABLE || row.getReservation() != null || row.getHoldExpiredAt() != null)
                 throw new BookingRejection(409, "SEAT_CONFLICT", "요청 좌석을 모두 확보할 수 없습니다.");
         }
         // 수동 선택에는 연속석 조건을 강제하지 않는다. 자동 후보는 알려진 연결정보만 검증한다.
-        if (source != Source.MANUAL) validateAutomaticLayout(selected, inventory);
+        var ownQueue = BookingQueueLifecycle.rows(em, group.getId()).stream()
+                .filter(q -> q.getShowtime().getId().equals(show.getId())).findFirst();
+        var requested = ownQueue.map(q -> BookingQueueLifecycle.currentSeatIds(em, q.getId())).orElse(List.of());
+        var exact = ownQueue.filter(q -> !requested.isEmpty());
+        if (source == Source.WAITING && exact.isPresent() && !requested.equals(ids.stream().sorted().toList()))
+            reject(409, "직접 대기한 좌석만 확보할 수 있습니다.");
+        if (source == Source.MANUAL) {
+            var zones = new HashSet<SeatPosition>(); selected.forEach(i -> zones.add(i.getSeat().getSeatPosition()));
+            Integer before = exact.filter(q -> q.getStatus() == QueueStatus.WAITING && requested.equals(ids.stream().sorted().toList()))
+                    .map(WaitingQueue::getQueueNumber).orElse(null);
+            var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (:before is null or q.queueNumber<:before) order by q.queueNumber", WaitingQueue.class)
+                    .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)
+                    .setParameter("before", before).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+            for (var q : earlier) {
+                var waitingSeats = BookingQueueLifecycle.currentSeatIds(em, q.getId());
+                if (BookingQueueLifecycle.competing(q.getSeatZone(), waitingSeats, ids, zones)
+                        && canAllocateWaiting(q, show, inventory, waitingSeats))
+                    throw new BookingRejection(409, "WAITING_PRIORITY", "선택한 좌석에 배정 가능한 앞선 대기가 있습니다. 좌석 대기로 신청해주세요.");
+            }
+        }
+        if (source != Source.MANUAL && !(source == Source.WAITING && group.getEntryPoint() == BookingEntryPoint.THEATER_NORMAL && exact.isPresent()))
+            validateAutomaticLayout(selected, inventory);
 
         // 모든 검증이 끝난 뒤에만 도메인 쓰기를 시작한다.
         var expires = now.plusMinutes(5);
         var reservation = new Reservation();
         reservation.setUser(group.getUser()); reservation.setRequestGroup(group); reservation.setShowtime(show);
-        reservation.setReservationType(source == Source.MANUAL ? ReservationType.NORMAL : ReservationType.SMART);
+        reservation.setReservationType(group.getEntryPoint() == BookingEntryPoint.THEATER_NORMAL ? ReservationType.NORMAL : ReservationType.SMART);
         reservation.setStatus(ReservationStatus.PENDING);
         reservation.setTotalAmount(10000 * group.getAdultCount() + 8000 * group.getYouthCount());
         reservation.setExpiresAt(expires); reservation.setCreatedAt(now); reservation.setUpdatedAt(now);
@@ -124,6 +180,24 @@ public class BookingHoldService {
         updateAvailable(show, inventory, now);
         NotificationService.acquired(em, reservation, source == Source.WAITING);
         return response(reservation, now);
+    }
+
+    private boolean canAllocateWaiting(WaitingQueue queue, Showtime show, List<ShowtimeSeat> inventory, List<Long> requested) {
+        var group = queue.getRequestGroup();
+        if (group.getStatus() != BookingGroupStatus.ACTIVE || group.getUser().getStatus() != UserStatus.ACTIVE) return false;
+        try {
+            validateGroupShow(group, show);
+            BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
+        } catch (BookingRejection mismatch) { return false; }
+        if (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART && group.getTheaterPreferences().stream()
+                .noneMatch(t -> t.getId().equals(show.getScreen().getTheater().getId()))) return false;
+        if (!requested.isEmpty()) {
+            var seats = inventory.stream().filter(row -> requested.contains(row.getSeat().getId())).toList();
+            return seats.size() == group.getPartySize() && seats.stream().allMatch(row -> row.getSeat().isActive()
+                    && row.getSeat().getScreen().getId().equals(show.getScreen().getId()) && row.getStatus() == SeatStatus.AVAILABLE
+                    && row.getReservation() == null && row.getHoldExpiredAt() == null);
+        }
+        return !SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences(), queue.getSeatZone()).blocks().isEmpty();
     }
 
     public ReservationResponse reservation(Long userId, Long reservationId) {
@@ -272,7 +346,7 @@ public class BookingHoldService {
         if (!SeatPartyRules.allows(sizes)) reject(409, "전체 연석 또는 인원별 허용된 분할 연석 조합이 필요합니다.");
     }
 
-    private static List<Long> normalizeSeats(List<Long> seats) {
+    static List<Long> normalizeSeats(List<Long> seats) {
         if (seats == null || seats.isEmpty() || seats.size() > 6
                 || seats.stream().anyMatch(id -> id == null || id < 1)
                 || new HashSet<>(seats).size() != seats.size())

@@ -45,6 +45,7 @@ public class BookingRecoveryService {
         if (g.getSelectedShowtime() != null) path += "&showtime=" + g.getSelectedShowtime().getId() + "&theater=" + g.getSelectedShowtime().getScreen().getTheater().getId();
         if (movie) path += "&from=" + g.getStartTimeFrom() + "&until=" + g.getStartTimeTo();
         if (!reservations.isEmpty()) path += "&reservation=" + reservations.getFirst();
+        if (g.getEntryPoint()!=BookingEntryPoint.THEATER_NORMAL) path += "&smart=1&candidate=" + g.getId();
         return new Item(g.getId(), g.getMovie().getTitle(), g.getViewingDate(), g.getPartySize(), g.getStatus(), path);
     }
 }

@@ -34,7 +34,7 @@ class ShowtimeQueryControllerTests {
         var date = LocalDate.of(2026, 10, 1);
         var start = OffsetDateTime.parse("2026-10-01T22:00:00+09:00");
         when(query.availability(1L, date, List.of(2L, 3L)))
-                .thenReturn(new ScheduleAvailability(true, start, start.minusHours(3)));
+                .thenReturn(new ScheduleAvailability(true, start, start, start.minusHours(3)));
         mvc.perform(get("/api/showtimes/availability").param("movieId", "1").param("date", date.toString()).param("theaterIds", "2,3"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(true))
                 .andExpect(jsonPath("$.latestStartTime").value("2026-10-01T22:00:00+09:00"));

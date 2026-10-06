@@ -23,7 +23,9 @@ export default function useManualHold({ smart = false } = {}) {
     const [params, setParams] = useSearchParams();
     const groupId = positive(params.get('group')) ? params.get('group') : null;
     const reservationId = positive(params.get('reservation')) ? params.get('reservation') : null;
-    const identity = `${user?.id}:${params.toString()}`;
+    const context = new URLSearchParams(params);
+    context.delete('seats');
+    const identity = `${user?.id}:${context.toString()}`;
     const [result, setResult] = useState(null);
     const [failure, setFailure] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -46,6 +48,7 @@ export default function useManualHold({ smart = false } = {}) {
                 const id = group?.activeReservationId || reservationId;
                 const payment = id ? await bookingApi.payment(id, controller.signal) : null;
                 const reservation = payment?.reservation;
+                const waiting = !smart && group && !reservation ? await bookingApi.waiting(group.id, controller.signal) : null;
                 if (active && sequence === requestSequence && !gate.current && generation.current === readGeneration) {
                     // Normalize the recovery URL before exposing payment controls.
                     if (reservation && String(reservation.id) !== reservationId) {
@@ -55,22 +58,22 @@ export default function useManualHold({ smart = false } = {}) {
                         }, { replace: true });
                         return;
                     }
-                    setResult({ identity, group, reservation, payment, receivedAt: performance.now() });
+                    setResult({ identity, group, waiting, reservation, payment, receivedAt: performance.now() });
                     if (reservation) setFailure(null);
                 }
             } catch (error) { if (active && sequence === requestSequence) setFailure({ identity, error }); }
         }
         restore();
-        const timer = setInterval(restore, 10000);
+        const timer = setInterval(restore, smart ? 10000 : 3000);
         const refresh = () => { if (document.visibilityState !== 'hidden') restore(); };
         window.addEventListener('focus', refresh);
         document.addEventListener('visibilitychange', refresh);
         return () => { active = false; clearInterval(timer); controller.abort(); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
-    }, [identity, user, groupId, reservationId, revision, setParams]);
+    }, [identity, user, groupId, reservationId, revision, setParams, smart]);
 
     const current = result?.identity === identity ? result : null;
     const error = failure?.identity === identity ? failure.error : null;
-    async function hold(body, seatIds) {
+    async function hold(body, seatIds, seatZone, waitForSeats = false) {
         if (gate.current || !user) return;
         gate.current = true; generation.current++; setBusy(true); setFailure(null);
         let request;
@@ -83,31 +86,39 @@ export default function useManualHold({ smart = false } = {}) {
             if (live.current !== identity) return;
             // Keep the creation key until the hold is resolved, including interrupted responses.
             const groupRequest = request;
-            request = requestKey(user.id, smart ? 'smart-hold' : 'hold', smart ? { groupId: group.id }
+            request = requestKey(user.id, seatZone || waitForSeats ? 'manual-waiting' : smart ? 'smart-hold' : 'hold', seatZone ? { groupId: group.id, seatZone } : smart ? { groupId: group.id }
                 : { groupId: group.id, seatIds: [...seatIds].sort((a, b) => a - b) });
-            const reservation = smart ? await bookingApi.smartHold(group.id, request.key)
+            const reservation = seatZone || waitForSeats ? null : smart ? await bookingApi.smartHold(group.id, request.key)
                 : await bookingApi.hold(group.id, seatIds, request.key);
+            if (seatZone || waitForSeats) await bookingApi.registerWaiting(group.id, [body.selectedShowtimeId], request.key, seatZone, waitForSeats ? seatIds : undefined);
             if (live.current !== identity) return;
             forget(groupRequest); forget(request);
-            setParams(previous => { const next = new URLSearchParams(previous); next.set('group', group.id); next.set('reservation', reservation.id); return next; }, { replace: true });
+            setParams(previous => { const next = new URLSearchParams(previous); next.set('group', group.id); if (reservation) next.set('reservation', reservation.id); return next; }, { replace: true });
+            setRevision(value => value + 1);
         } catch (error) {
             // A network/5xx response may have committed: retain the key for safe retransmission.
             if (request && error.status >= 400 && error.status < 500 && error.status !== 401) forget(request);
             if (live.current === identity) {
                 if (attemptedGroup && !groupId) {
                     const next = new URLSearchParams(params); next.set('group', attemptedGroup.id);
-                    setFailure({ identity: `${user.id}:${next}`, error, group: attemptedGroup });
+                    const failureContext = new URLSearchParams(next); failureContext.delete('seats');
+                    setFailure({ identity: `${user.id}:${failureContext}`, error, group: attemptedGroup });
                     setParams(next, { replace: true });
                 } else setFailure({ identity, error, group: attemptedGroup });
             }
         } finally { gate.current = false; if (live.current !== null) setBusy(false); }
     }
     async function mutate(operation, fail = false) {
-        const id = current?.reservation?.id;
+        const id = operation === 'cancel-waiting' ? current?.group?.id : current?.reservation?.id;
         if (!id || gate.current || !user) return;
         gate.current = true; generation.current++; setBusy(true); setFailure(null);
         const request = requestKey(user.id, operation, { id, fail });
         try {
+            if (operation === 'cancel-waiting') {
+                await bookingApi.cancelGroup(id, request.key);
+                forget(request);
+                return;
+            }
             if (operation === 'pay') await bookingApi.pay(id, request.key, fail); else await bookingApi.cancel(id, request.key);
             forget(request);
             // A replay contains its original serverTime/state. Verify current state before success feedback.
@@ -129,7 +140,7 @@ export default function useManualHold({ smart = false } = {}) {
         setFailure(null);
     }
     return { user, groupId, reservationId, group: current?.group || (failure?.identity === identity ? failure.group : null), reservation: current?.reservation,
-        payment: current?.payment, pay: fail => mutate('pay', fail), cancel: () => mutate('cancel'),
+        cancelWaiting: () => mutate('cancel-waiting'), waiting: current?.waiting, payment: current?.payment, pay: fail => mutate('pay', fail), cancel: () => mutate('cancel'),
         receivedAt: current?.receivedAt, loading: Boolean(user && (groupId || reservationId) && !current && !error),
         busy, error, hold, resetIntent, refresh: () => { setFailure(null); setRevision(value => value + 1); } };
 }

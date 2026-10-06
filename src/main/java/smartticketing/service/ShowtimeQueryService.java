@@ -32,19 +32,21 @@ public class ShowtimeQueryService {
                 || theaterIds.stream().anyMatch(id -> id == null || id <= 0)))
             throw new IllegalArgumentException("극장은 1~10개의 유효한 ID로 입력해주세요.");
         var now = LocalDateTime.now(clock);
-        // Only one timestamp is needed. Do not materialize showtimes or load seat inventory.
+        // Fetch both range boundaries without materializing shows or seat inventory.
         var request = em.createQuery("""
-                select s.startTime from Showtime s join s.movie m join s.screen c join c.theater t
+                select min(s.startTime), max(s.startTime) from Showtime s join s.movie m join s.screen c join c.theater t
                 where m.id=:movie and m.active=true and c.active=true and t.active=true
                 and s.status=:status and s.startTime>=:from and s.startTime<:until and s.startTime>:now
                 """ + (theaterIds == null ? "" : " and t.id in :theaters")
-                + " order by s.startTime desc", LocalDateTime.class)
+                , Object[].class)
                 .setParameter("movie", movieId).setParameter("status", ShowtimeStatus.SCHEDULED)
                 .setParameter("from", CinemaDay.start(date)).setParameter("until", CinemaDay.start(date.plusDays(1)))
                 .setParameter("now", now).setMaxResults(1);
         if (theaterIds != null) request.setParameter("theaters", theaterIds);
-        var times = request.getResultList();
-        return new ScheduleAvailability(!times.isEmpty(), times.isEmpty() ? null : offset(times.getFirst()), offset(now));
+        var times = request.getSingleResult();
+        var earliest = (LocalDateTime) times[0];
+        var latest = (LocalDateTime) times[1];
+        return new ScheduleAvailability(earliest != null, earliest == null ? null : offset(earliest), latest == null ? null : offset(latest), offset(now));
     }
 
     public Items<MovieItem> theaterMovies(Long theaterId, LocalDate date) {
