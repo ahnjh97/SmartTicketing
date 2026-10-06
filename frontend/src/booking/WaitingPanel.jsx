@@ -29,14 +29,21 @@ export default function WaitingPanel({ flow }) {
         {queue.error && <div className={styles.error} role="alert"><h4 ref={heading} tabIndex={-1}>대기 상태를 확인해주세요</h4><p>{queue.error.message}</p><GlassButton onClick={queue.retry} disabled={busy}>다시 확인</GlassButton></div>}
         {data && <>
             <div className={styles.rules}><span><b>01</b> 연석 우선, 허용 조합으로 분할</span><span><b>02</b> 선점 후 5분 결제</span><span><b>03</b> 만료 시 다른 회차 재개</span></div>
-            {data.items.length > 0 && <ul className={styles.queues} aria-label="신청한 회차">{data.items.map(item => <li key={item.id} className={styles.card} data-state={item.status}>
-                <div className={styles.number}><span>발급 번호</span><strong>{String(item.queueNumber).padStart(2,'0')}</strong></div>
-                <div className={styles.details}><h4><InlineDetails items={[item.theaterName, item.screenName]} /></h4><p>{time(item.startTime)}</p><strong className={styles.status}>{labels[item.status] || item.status}</strong>
-                    {['WAITING','PAUSED'].includes(item.status) && <p>앞에서 배정 대기 중 <b>{item.aheadCount}명</b>. 조건 충족 시 순서대로 배정</p>}
-                    {item.status === 'PAUSED' && <p>발급 번호는 유지됩니다. 다른 사용자의 배정은 계속됩니다.</p>}
-                    {item.status === 'HOLDING' && <p>현재 예매의 결제 패널에서 남은 시간을 확인하세요.</p>}
-                    {item.status === 'EXPIRED' && <p>이 그룹에서는 재신청되지 않습니다.</p>}</div>
-            </li>)}</ul>}
+            {data.items.length > 0 && <ul className={styles.queues} aria-label="신청한 회차">{data.items.map(item => {
+                const aheadCount = Math.max(0, Number(item.aheadCount) || 0);
+                const waitingOrder = aheadCount + 1;
+                return <li key={item.id} className={styles.card} data-state={item.status}>
+                    <div className={styles.number}><span>대기번호</span><strong>{String(item.queueNumber).padStart(2,'0')}</strong></div>
+                    <div className={styles.details}><h4><InlineDetails items={[item.theaterName, item.screenName]} /></h4><p>{time(item.startTime)}</p><strong className={styles.status}>{labels[item.status] || item.status}</strong>
+                        {['WAITING','PAUSED'].includes(item.status) && <div className={styles.queuePosition} aria-label={`대기 순서 ${waitingOrder}번째, 내 앞 ${aheadCount}명`}>
+                            <span><b>{waitingOrder}번째</b> 대기 순서</span>
+                            <span>내 앞 <b>{aheadCount}명</b></span>
+                        </div>}
+                        {item.status === 'PAUSED' && <p>발급 번호는 유지됩니다. 다른 사용자의 배정은 계속됩니다.</p>}
+                        {item.status === 'HOLDING' && <p>현재 예매의 결제 패널에서 남은 시간을 확인하세요.</p>}
+                        {item.status === 'EXPIRED' && <p>이 그룹에서는 재신청되지 않습니다.</p>}</div>
+                </li>;
+            })}</ul>}
             {data.groupStatus === 'ACTIVE' && <>
                 <fieldset className={styles.choices} disabled={busy}><legend>대기할 회차 선택</legend>
                     {data.choices.length ? data.choices.map(choice => <label key={choice.showtimeId} className={styles.choice} data-selected={selectedIds.includes(choice.showtimeId)}>
