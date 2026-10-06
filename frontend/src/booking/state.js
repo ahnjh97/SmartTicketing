@@ -44,3 +44,9 @@ export function bookingReturn() {
         return /^\/(movies|theaters|bookings|booking\/restore)(\?|$)/.test(url ?? '') ? url : null;
     } catch { return null; }
 }
+
+export function clearBookingSession() {
+    try {
+        sessionStorage.removeItem('booking.return');
+    } catch { /* Session storage may be unavailable. */ }
+}

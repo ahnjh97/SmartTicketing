@@ -390,6 +390,26 @@
     color: #fff;
 }
 
+.preference-container .save-preference-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px 16px;
+    margin-top: 36px;
+}
+
+.preference-container .save-preference-row .save-preference-button {
+    margin: 0;
+}
+
+.preference-container .save-preference-warning {
+    margin: 0;
+    color: var(--color-accent);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
 @media (max-width: 480px) {
     .preference-container .location-action-buttons > button {
         padding-inline: 14px;
