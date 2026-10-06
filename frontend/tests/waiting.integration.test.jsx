@@ -39,7 +39,8 @@ test('uncertain registration retries with the same idempotency key without optim
     render(<WaitingPanel flow={flow}/>); fireEvent.click(await screen.findByRole('checkbox',{name:/극장 1/}));
     fireEvent.click(screen.getByRole('button',{name:'선택한 1개 회차에 대기 신청'}));
     await screen.findByText('응답 유실'); expect(screen.queryByRole('list',{name:'신청한 회차'})).toBeNull();
-    expect(document.activeElement.textContent).toBe('대기 상태를 확인해주세요');
+    const heading = screen.getByRole('heading',{name:'대기 상태를 확인해주세요'});
+    await waitFor(()=>expect(document.activeElement).toBe(heading));
     fireEvent.click(screen.getByRole('button',{name:'선택한 1개 회차에 대기 신청'})); await screen.findByRole('list',{name:'신청한 회차'});
     expect(bookingApi.registerWaiting.mock.calls[0][2]).toBe(bookingApi.registerWaiting.mock.calls[1][2]);
 });
