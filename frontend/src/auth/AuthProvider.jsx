@@ -4,6 +4,7 @@ import { authApi } from "../api/auth.js";
 import { userApi } from "../api/users.js";
 import { ApiError } from "../api/client.js";
 import { AuthContext } from "./AuthContext.js";
+import { clearBookingSession } from "../booking/state.js";
 import { restoreSession } from "./bootstrap.js";
 import {
     getAccessToken,
@@ -27,6 +28,7 @@ export default function AuthProvider({ children }) {
 
         const unsubscribe =
             subscribeToSessionExpiration(() => {
+                clearBookingSession();
                 setUser(null);
                 setSessionError(
                     "로그인이 만료되었습니다. 다시 로그인해주세요."
@@ -125,23 +127,27 @@ export default function AuthProvider({ children }) {
             try {
                 await authApi.logout();
             } finally {
+                clearBookingSession();
                 clearAccessToken();
                 setUser(null);
                 setSessionError("");
+                navigate("/login", { replace: true });
             }
         },
-        []
+        [navigate]
     );
 
     const withdraw = useCallback(
         async () => {
             await userApi.withdraw();
 
+            clearBookingSession();
             clearAccessToken();
             setUser(null);
             setSessionError("");
+            navigate("/login", { replace: true });
         },
-        []
+        [navigate]
     );
 
     const updateUser = useCallback(
