@@ -35,6 +35,11 @@ public record UserUpdateRequest(
 
         List<Long> preferredTheaterIds,
 
+        @Size(
+                min = 6,
+                max = 6,
+                message = "선호 좌석 6개를 모두 선택해주세요."
+        )
         List<SeatPosition> preferredSeatPositions
 ) {
 }
