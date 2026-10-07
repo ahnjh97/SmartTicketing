@@ -19,7 +19,6 @@ public class BookingWaitingService {
     private final BookingHoldService holds;
     private final BookingPaymentService payments;
     private final BookingIdempotency operations;
-    private static final List<QueueStatus> ACTIVE = List.of(QueueStatus.WAITING, QueueStatus.PAUSED, QueueStatus.HOLDING);
     private record Intent(Long groupId, List<Long> showtimeIds, SeatPosition seatZone, List<Long> seatIds) {}
 
     public BookingWaitingService(EntityManager em, BookingHoldService holds, BookingPaymentService payments, BookingIdempotency operations) {
@@ -73,12 +72,6 @@ public class BookingWaitingService {
                 if (existing.stream().anyMatch(q -> q.getShowtime().getId().equals(showId))) continue;
                 var show = em.find(Showtime.class, showId);
                 validate(group, show);
-                var duplicates = em.createQuery("""
-                        select q from WaitingQueue q where q.user.id=:user and q.showtime.id=:show
-                        and q.status in :statuses order by q.id
-                        """, WaitingQueue.class).setParameter("user", user).setParameter("show", showId)
-                        .setParameter("statuses", ACTIVE).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-                if (!duplicates.isEmpty()) BookingQueueLifecycle.rejectDuplicateShow();
                 // The show mutex serializes number issuance, including parallel groups of the same user.
                 var numbers = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.queueNumber desc", WaitingQueue.class)
                         .setParameter("s", showId).setMaxResults(1).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
@@ -115,10 +108,6 @@ public class BookingWaitingService {
         if (row != null && row.getRequestedSeatIds().equals(ids)) return response(group);
         var rows = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.id", WaitingQueue.class)
                 .setParameter("s", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-        if (rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
-                && !Objects.equals(q.getRequestGroup() == null ? null : q.getRequestGroup().getId(), group.getId())
-                && ACTIVE.contains(q.getStatus())))
-            BookingQueueLifecycle.rejectDuplicateShow();
         int last = rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
         if (last == Integer.MAX_VALUE) reject(409, "대기 번호를 더 발급할 수 없습니다.");
         SeatPosition zone = zones.iterator().next();
@@ -147,10 +136,6 @@ public class BookingWaitingService {
             reject(409, "이 구역에는 요청 인원에 맞는 좌석 조합이 없습니다.");
         var rows=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.id", WaitingQueue.class)
                 .setParameter("s",showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-        if(rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
-                && !Objects.equals(q.getRequestGroup()==null?null:q.getRequestGroup().getId(),group.getId())
-                && ACTIVE.contains(q.getStatus())))
-            BookingQueueLifecycle.rejectDuplicateShow();
         int global=rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
         int local=rows.stream().filter(q->q.getSeatZone()==zone).mapToInt(WaitingQueue::getZoneQueueNumber).max().orElse(0);
         if(global==Integer.MAX_VALUE || local==Integer.MAX_VALUE) reject(409,"대기 번호를 더 발급할 수 없습니다.");

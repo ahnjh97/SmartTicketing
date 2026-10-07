@@ -29,7 +29,7 @@ public class BookingHoldService {
         this.em = em; this.operations = operations; this.clock = clock.withZone(SEOUL);
     }
 
-    // Serialize a user's new requests before taking snapshots for duplicate detection.
+    // Serialize a user's new requests before taking inventory and queue snapshots.
     void lockBookingUser(Long userId) {
         em.createNativeQuery("insert into booking_user_limits (user_id) values (:user) on duplicate key update user_id=user_id", Object.class)
                 .setParameter("user", userId).executeUpdate();

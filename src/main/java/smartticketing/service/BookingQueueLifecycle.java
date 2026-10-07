@@ -10,11 +10,6 @@ import java.util.*;
 final class BookingQueueLifecycle {
     private BookingQueueLifecycle() {}
 
-    static void rejectDuplicateShow() {
-        throw new BookingRejection(409, "WAITING_SHOWTIME_CONFLICT",
-                "이미 이 회차에 대기 중이거나 선점한 좌석이 있습니다. 같은 회차에는 한 구역만 대기할 수 있습니다. 내 대기 및 선점에서 기존 신청을 확인하고, 구역을 변경하거나 취소한 뒤 다시 신청해주세요.");
-    }
-
     static boolean competing(WaitingQueue queue, List<Long> seatIds, Set<SeatPosition> zones) {
         return competing(queue.getSeatZone(), queue.getRequestedSeatIds(), seatIds, zones);
     }

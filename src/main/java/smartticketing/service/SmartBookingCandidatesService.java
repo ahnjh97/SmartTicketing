@@ -42,7 +42,7 @@ public class SmartBookingCandidatesService {
         return operations.execute(userId, BookingOperationType.CREATE_SMART_CANDIDATES, key, request, holds.now(), () -> {
             var template = groups.build(userId, request);
             var options = options(template);
-            if (options.isEmpty()) throw new BookingRejection(409, "NO_CANDIDATES", "조건에 맞는 새 후보가 없습니다. 기존 대기를 확인하거나 시간·극장·인원을 변경해주세요.");
+            if (options.isEmpty()) throw new BookingRejection(409, "NO_CANDIDATES", "조건에 맞는 후보가 없습니다. 시간·극장·인원을 변경해주세요.");
 
             var tie = Comparator.comparingInt(Option::theater).thenComparing(o -> o.show().getStartTime())
                     .thenComparing(o -> o.show().getId()).thenComparing(Option::zone);
@@ -94,7 +94,7 @@ public class SmartBookingCandidatesService {
     private static void choose(List<Selected> selected, List<Option> remaining, String kind, Comparator<Option> order) {
         if (remaining.isEmpty()) return;
         var option=remaining.stream().min(order).orElseThrow(); selected.add(new Selected(kind,option));
-        remaining.removeIf(other -> other.show().getId().equals(option.show().getId()));
+        remaining.remove(option);
     }
 
     private List<Option> options(BookingRequestGroup template) {
@@ -121,7 +121,6 @@ public class SmartBookingCandidatesService {
         for(var zone:List.of(SeatPosition.MIDDLE_MIDDLE,SeatPosition.MIDDLE_REAR,SeatPosition.MIDDLE_FRONT,
                 SeatPosition.SIDE_MIDDLE,SeatPosition.SIDE_REAR,SeatPosition.SIDE_FRONT)) if(!preferences.contains(zone)) preferences.add(zone);
         var result=new ArrayList<Option>();
-        boolean duplicateShow = false;
         for(var show:shows) {
             try { BookingHoldService.validateShow(show,holds.now()); BookingAudiencePolicy.revalidate(template,show.getStartTime().toLocalDate()); }
             catch(BookingRejection excluded) { continue; }
@@ -133,10 +132,7 @@ public class SmartBookingCandidatesService {
             var queues=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.status in :states order by q.id",WaitingQueue.class)
                     .setParameter("s",show.getId()).setParameter("states",List.of(QueueStatus.WAITING,QueueStatus.PAUSED,QueueStatus.HOLDING))
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-            if (queues.stream().anyMatch(q -> q.getUser().getId().equals(template.getUser().getId()))) {
-                duplicateShow = true;
-                continue;
-            }
+
             for(var zone:preferences) {
                 if(SmartSeatCandidates.analyze(capacity,show.getScreen().getId(),template.getPartySize(),preferences,zone).blocks().isEmpty()) continue;
                 long ahead=queues.stream().filter(q->q.getStatus()==QueueStatus.WAITING && (q.getSeatZone()==null || q.getSeatZone()==zone)).count();
@@ -150,7 +146,6 @@ public class SmartBookingCandidatesService {
                         best.map(SmartSeatCandidates.Block::seatIds).orElse(List.of())));
             }
         }
-        if (result.isEmpty() && duplicateShow) BookingQueueLifecycle.rejectDuplicateShow();
         return result;
     }
 
