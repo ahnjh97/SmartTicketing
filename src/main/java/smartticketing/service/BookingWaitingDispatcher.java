@@ -16,13 +16,11 @@ public class BookingWaitingDispatcher {
     private final EntityManager em;
     private final BookingHoldService holds;
     private final BookingWaitingService waiting;
-    private final NotificationService notifications;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
 
-    public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting,
-            NotificationService notifications, PlatformTransactionManager manager) {
-        this.em = em; this.holds = holds; this.waiting = waiting; this.notifications = notifications;
+    public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting, PlatformTransactionManager manager) {
+        this.em = em; this.holds = holds; this.waiting = waiting;
         read = new TransactionTemplate(manager); read.setReadOnly(true);
         write = new TransactionTemplate(manager);
     }
