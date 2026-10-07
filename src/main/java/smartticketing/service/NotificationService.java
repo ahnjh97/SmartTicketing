@@ -96,6 +96,10 @@ public class NotificationService {
         var notification = new Notification();
         notification.setUser(reservation.getUser());
         if (!waiting) return;
+        // 대기 후보가 승급되는 순간에도 같은 스마트예매 배치의 다른 후보가
+        // 이미 즉시 선점 중이면 알림을 만들지 않는다. Dispatcher가 정상적으로는
+        // 이 상황의 승급 자체를 막지만, 알림 계층에서도 동일한 정책을 방어한다.
+        if (hasActiveSmartHoldSibling(em, reservation.getRequestGroup())) return;
         notification.setType(NotificationType.QUEUE_TURN);
         notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(reservation.getCreatedAt());
@@ -108,6 +112,28 @@ public class NotificationService {
 
     public Notification paymentFailed(Long id) {
         return create(id, NotificationType.PAYMENT_FAILED, "결제에 실패했습니다. 예매 상태를 확인해주세요.");
+    }
+
+    private static boolean hasActiveSmartHoldSibling(jakarta.persistence.EntityManager em, BookingRequestGroup group) {
+        if (group == null || group.getEntryPoint() != BookingEntryPoint.THEATER_SMART) return false;
+        return em.createQuery("""
+                select count(g) from BookingRequestGroup g
+                where g.user.id=:user
+                  and g.movie.id=:movie
+                  and g.viewingDate=:date
+                  and g.entryPoint=:entry
+                  and g.status=:status
+                  and g.id<>:group
+                  and g.createdAt=:createdAt
+                """, Long.class)
+                .setParameter("user", group.getUser().getId())
+                .setParameter("movie", group.getMovie().getId())
+                .setParameter("date", group.getViewingDate())
+                .setParameter("entry", BookingEntryPoint.THEATER_SMART)
+                .setParameter("status", BookingGroupStatus.HOLDING)
+                .setParameter("group", group.getId())
+                .setParameter("createdAt", group.getCreatedAt())
+                .getSingleResult() > 0;
     }
 
     private Notification owned(Long userId, Long id) {
