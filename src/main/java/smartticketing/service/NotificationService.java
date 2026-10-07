@@ -2,6 +2,8 @@ package smartticketing.service;
 
 import smartticketing.dto.notification.NotificationResponse;
 import smartticketing.entity.*;
+import smartticketing.entity.enums.BookingEntryPoint;
+import smartticketing.entity.enums.BookingGroupStatus;
 import smartticketing.entity.enums.NotificationType;
 import smartticketing.repository.*;
 import org.springframework.stereotype.Service;
