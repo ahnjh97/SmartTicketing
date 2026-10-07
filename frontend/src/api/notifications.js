@@ -126,5 +126,5 @@ export const notificationApi = {
     subscribe,
     read: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" }),
     readAll: () => request("/api/notifications/read-all", { method: "PATCH" }),
-    delete: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "DELETE" }),
+    delete: (id) => request(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
