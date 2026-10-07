@@ -53,14 +53,8 @@ public class NotificationService {
         notifications.delete(owned(userId, id));
     }
 
-    /**
-     * 일반/스마트 즉시선점에서는 호출하지 않는다.
-     * 사용자에게 보여줄 수 있는 알림은 Dispatcher가 만든 두 종류로 제한한다.
-     */
+    /** Generic persistence helper. New application flows must only create QUEUE_TURN or SEAT_HOLD_EXPIRED. */
     public Notification create(Long userId, NotificationType type, String message) {
-        if (!USER_NOTIFICATION_TYPES.contains(type)) {
-            throw new IllegalArgumentException("사용자 알림으로 허용되지 않은 알림 유형입니다.");
-        }
         Users u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("회원을 찾을 수 없습니다."));
         Notification n = new Notification();
         n.setUser(u);
@@ -145,9 +139,6 @@ public class NotificationService {
                 .orElseThrow(() -> new IllegalArgumentException("알림을 찾을 수 없습니다."));
         if (!n.getUser().getId().equals(userId)) {
             throw new IllegalStateException("본인의 알림만 처리할 수 있습니다.");
-        }
-        if (!USER_NOTIFICATION_TYPES.contains(n.getType())) {
-            throw new IllegalArgumentException("처리할 수 없는 알림 유형입니다.");
         }
         return n;
     }
