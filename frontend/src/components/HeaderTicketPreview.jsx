@@ -31,7 +31,7 @@ function formatTicketStatus(status) {
     }
 }
 
-export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave }) {
+export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave, onClose }) {
     if (!ticket) return null;
 
     return (
@@ -42,6 +42,15 @@ export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave
                 onMouseEnter={onMouseEnter}
                 onMouseLeave={onMouseLeave}
             >
+                <button
+                    type="button"
+                    className={styles.ticketModalClose}
+                    aria-label="티켓 상세 닫기"
+                    onClick={onClose}
+                >
+                    <span aria-hidden="true">×</span>
+                </button>
+
                 <div className={styles.ticketCard}>
                     <div className={styles.ticketCardHeader}>
                         <span className={styles.ticketLabel}>CINEMA PASS</span>
