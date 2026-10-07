@@ -8,6 +8,8 @@ import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import smartticketing.dto.booking.*;
 import smartticketing.entity.*;
@@ -24,13 +26,14 @@ public class BookingPaymentService {
     private final BookingIdempotency operations;
     private final TicketService tickets;
     private final NotificationService notifications;
+    private final BookingWaitingDispatcher waitingDispatcher;
     private final boolean allowFailure;
 
     public BookingPaymentService(EntityManager em, BookingHoldService holds, BookingIdempotency operations,
-            TicketService tickets, NotificationService notifications, Environment environment,
-            @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
+            TicketService tickets, NotificationService notifications, BookingWaitingDispatcher waitingDispatcher,
+            Environment environment, @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
         this.em = em; this.holds = holds; this.operations = operations; this.tickets = tickets;
-        this.notifications = notifications;
+        this.notifications = notifications; this.waitingDispatcher = waitingDispatcher;
         this.allowFailure = allowFailure && environment.acceptsProfiles(Profiles.of("dev", "test"));
     }
 
@@ -171,7 +174,32 @@ public class BookingPaymentService {
         else BookingQueueLifecycle.cancelled(em, locked.group().getId(), now);
         if (locked.slot() != null) em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
+
+        // 취소 트랜잭션이 실제로 COMMIT된 직후 대기열 승급을 실행한다.
+        // 기존 3초 주기 Worker는 누락/실패 복구용으로 유지하고,
+        // 정상적인 취소 -> 좌석 반환 -> 대기자 선점 -> 알림 흐름은 여기서 즉시 시작한다.
+        scheduleWaitingDispatchAfterCommit(locked.show().getId());
         return holds.response(r, now);
+    }
+
+    private void scheduleWaitingDispatchAfterCommit(Long showId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 방어 코드: 현재 호출 경로는 트랜잭션이지만, 다른 호출 경로에서도
+            // 대기열 승급 자체는 수행할 수 있도록 한다.
+            waitingDispatcher.dispatch(showId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    waitingDispatcher.dispatch(showId);
+                } catch (RuntimeException failure) {
+                    // COMMIT 이후의 승급 실패는 예약 취소를 되돌릴 수 없으므로
+                    // 기존 주기 Worker가 다음 sweep에서 다시 시도할 수 있게 한다.
+                }
+            }
+        });
     }
 
     private PaymentResponse paymentResponse(Reservation reservation, Payment payment, boolean issue) {
