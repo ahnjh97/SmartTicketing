@@ -32,7 +32,8 @@ public class BookingWaitingService {
         var result = register(user, group, UUID.randomUUID().toString(), new WaitingRequest(List.of(show)));
         if (result.status() >= 400) throw new IllegalStateException("후보 등록이 변경되었습니다. 같은 요청으로 다시 시도해주세요.");
         try {
-            holds.acquire(user, group, BookingHoldService.Source.WAITING, show, seats);
+            // 스마트예매에서 즉시 확보된 후보는 대기번호를 발급하지 않는다.
+            holds.acquire(user, group, BookingHoldService.Source.SMART, show, seats);
         } catch (BookingRejection changed) {
             throw new IllegalStateException("좌석 확보 조건이 변경되었습니다. 같은 요청으로 다시 시도해주세요.", changed);
         }
