@@ -39,7 +39,7 @@ export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave
             >
                 <button
                     type="button"
-                    className={styles.ticketModalClose}
+                    className={styles.closeButton}
                     aria-label="티켓 상세 닫기"
                     onClick={onClose}
                 >
