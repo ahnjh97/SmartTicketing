@@ -37,7 +37,7 @@ public class BookingHoldService {
 
     void requireCapacity(Long userId, int additions, Long replacingGroup) {
         if (additions > remainingCapacity(userId, replacingGroup))
-            throw new BookingRejection(409, "ACTIVE_BOOKING_LIMIT", "대기와 선점은 합쳐 최대 3개입니다. 기존 후보를 결제하거나 취소한 뒤 다시 신청해주세요.");
+            throw new BookingRejection(409, "ACTIVE_BOOKING_LIMIT", "대기는 최대 3개입니다. 기존 대기를 취소한 뒤 다시 신청해주세요. 바로 예매 가능한 좌석은 이 제한에 포함되지 않습니다.");
     }
 
     int remainingCapacity(Long userId, Long replacingGroup) {
@@ -50,12 +50,7 @@ public class BookingHoldService {
                 .setParameter("states", List.of(QueueStatus.WAITING, QueueStatus.PAUSED))
                 .setParameter("now", time).setParameter("scheduled", ShowtimeStatus.SCHEDULED)
                 .setParameter("replacement", replacingGroup).getSingleResult();
-        long held = em.createQuery("""
-                select count(r) from Reservation r where r.user.id=:user and r.status=:pending
-                and r.expiresAt>:now and r.showtime.startTime>:now and r.showtime.status=:scheduled
-                """, Long.class).setParameter("user", userId).setParameter("pending", ReservationStatus.PENDING)
-                .setParameter("now", time).setParameter("scheduled", ShowtimeStatus.SCHEDULED).getSingleResult();
-        return (int) Math.max(0, 3 - queued - held);
+        return (int) Math.max(0, 3 - queued);
     }
 
     public enum Source { MANUAL, SMART, WAITING }
@@ -92,7 +87,6 @@ public class BookingHoldService {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
-        if (source != Source.WAITING) requireCapacity(userId, 1, groupId);
         // ACTIVE 그룹에는 새 슬롯을 INSERT만 한다. 없는 슬롯에 FOR UPDATE를 걸면
         // MySQL RR gap lock으로 서로 다른 그룹의 INSERT가 교착될 수 있다.
         // 불일치 슬롯이 실제로 남아 있으면 PK 제약 실패로 전체 롤백하며 덮어쓰지 않는다.
@@ -142,8 +136,8 @@ public class BookingHoldService {
         if (source == Source.MANUAL) {
             var zones = new HashSet<SeatPosition>(); selected.forEach(i -> zones.add(i.getSeat().getSeatPosition()));
             Integer before = exact.filter(q -> q.getStatus() == QueueStatus.WAITING && requested.equals(ids.stream().sorted().toList()))
-                    .map(WaitingQueue::getQueueNumber).orElse(null);
-            var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (:before is null or q.queueNumber<:before) order by q.queueNumber", WaitingQueue.class)
+                    .map(WaitingQueue::displayNumber).orElse(null);
+            var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
                     .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)
                     .setParameter("before", before).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
             for (var q : earlier) {

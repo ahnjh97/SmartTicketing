@@ -109,7 +109,8 @@ public class BookingActivityService {
             var counts = em.createQuery("""
                     select q.id, count(a.id) from WaitingQueue q
                     left join WaitingQueue a on a.showtime.id=q.showtime.id
-                    and a.requestGroup is not null and a.status=:waiting and a.queueNumber<q.queueNumber
+                    and a.requestGroup is not null and a.status=:waiting
+                    and coalesce(a.zoneQueueNumber,a.queueNumber)<coalesce(q.zoneQueueNumber,q.queueNumber)
                     and (a.seatZone=q.seatZone or (a.seatZone is null and q.seatZone is null))
                     where q.id in :ids group by q.id
                     """, Object[].class).setParameter("waiting", QueueStatus.WAITING)
@@ -122,17 +123,6 @@ public class BookingActivityService {
         var requestedSeats = requestedIds.isEmpty() ? Map.<Long, Seat>of() : em.createQuery(
                 "select s from Seat s where s.id in :ids", Seat.class).setParameter("ids", requestedIds).getResultList()
                 .stream().collect(Collectors.toMap(Seat::getId, s -> s));
-        if (!requestedIds.isEmpty()) {
-            var others = em.createQuery("select q from WaitingQueue q where q.showtime.id in :shows and q.requestGroup is not null and q.status=:waiting", WaitingQueue.class)
-                    .setParameter("shows", exactQueues.stream().map(q -> q.getShowtime().getId()).distinct().toList())
-                    .setParameter("waiting", QueueStatus.WAITING).getResultList();
-            for (var q : exactQueues) {
-                var zones = q.getRequestedSeatIds().stream().map(requestedSeats::get).filter(Objects::nonNull)
-                        .map(Seat::getSeatPosition).collect(Collectors.toSet());
-                ahead.put(q.getId(), others.stream().filter(a -> a.getShowtime().getId().equals(q.getShowtime().getId())
-                        && a.getQueueNumber() < q.getQueueNumber() && BookingQueueLifecycle.competing(a, q.getRequestedSeatIds(), zones)).count());
-            }
-        }
         var result = new LinkedHashMap<Long, Item>();
         for (var slot : slots) {
             var group = slot.getRequestGroup();

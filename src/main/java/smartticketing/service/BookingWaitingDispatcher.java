@@ -51,7 +51,7 @@ public class BookingWaitingDispatcher {
             var show = em.find(Showtime.class, showId);
             var queues = em.createQuery("""
                     select q from WaitingQueue q where q.showtime.id=:show and q.requestGroup is not null
-                    and q.status=:status order by q.queueNumber,q.id
+                    and q.status=:status order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.id
                     """, WaitingQueue.class).setParameter("show", showId).setParameter("status", QueueStatus.WAITING)
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
             // A registration committed after the discovery snapshot. Retry on the next sweep rather
