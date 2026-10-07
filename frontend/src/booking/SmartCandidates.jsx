@@ -2,6 +2,7 @@ import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import GlassButton from '../components/GlassButton.jsx';
+import InlineDetails from '../components/InlineDetails.jsx';
 import SeatZoneMap from '../components/SeatZoneMap.jsx';
 import ReservationPanel from './ReservationPanel.jsx';
 import useSmartCandidates from './useSmartCandidates.js';
@@ -16,7 +17,7 @@ const status = candidate => {
     const reservation = candidate.payment?.reservation;
     if (reservation) return { PENDING: '좌석 확보 · 결제 가능', CONFIRMED: '결제 완료', CANCELLED: '예매 취소', EXPIRED: '선점 만료' }[reservation.status];
     const queue = candidate.waiting?.items?.[0];
-    return { WAITING: '구역 대기 중', HOLDING: '좌석 확인 중', CANCELLED: '대기 취소', EXPIRED: '대기 종료' }[queue?.status] || '후보 확인 중';
+    return { WAITING: '대기 중', HOLDING: '좌석 확인 중', CANCELLED: '대기 취소', EXPIRED: '대기 종료' }[queue?.status] || '후보 확인 중';
 };
 const time = value => `${value.slice(5,10).replace('-', '/')} ${value.slice(11,16)}`;
 
@@ -88,25 +89,28 @@ function CandidateWaiting({ candidate, flow }) {
     return <section className={reservationStyles.reservation} aria-label="후보 구역 대기">
         <div className={reservationStyles.resultIcon} aria-hidden="true">{waiting ? '◷' : '—'}</div>
         <h2>{status(candidate)}</h2>
-        {waiting ? <><div className={reservationStyles.clock}><span>{getSeatLabel(candidate.zone)} 발급번호</span><strong>{queue.queueNumber}<small>번</small></strong></div>
+        {waiting ? <><div className={reservationStyles.clock}><span>대기번호</span><strong>{queue.queueNumber}<small>번</small></strong></div>
             <div className={reservationStyles.ticket}>
                 <div className={reservationStyles.ticketMain}><div><h3>{candidate.movieTitle}</h3>
-                    <p>{candidate.theaterName} · {candidate.screenName}</p><p>{time(candidate.startTime)} · {candidate.partySize}명</p>
-                    <div className={reservationStyles.ticketSeats}><span>{titles[candidate.kind]}</span><strong>{getSeatLabel(candidate.zone) || '좌석 자동 배정'}</strong></div>
+                    <p><InlineDetails items={[candidate.theaterName, candidate.screenName]} /></p>
+                    <p><InlineDetails items={[candidate.startTime.slice(0,10), <>{candidate.startTime.slice(11,16)} → {candidate.endTime.slice(11,16)}</>]} /></p>
+                    <div className={reservationStyles.ticketSeats}><span>{titles[candidate.kind]} · {candidate.partySize}명</span><strong>{getSeatLabel(candidate.zone) || '좌석 자동 배정'}</strong></div>
                 </div></div>
             </div>
-            <p>같은 구역에서 앞선 대기 신청은 <b>{queue.aheadCount}건</b>입니다. 인원에 맞는 좌석이 나오면 자동으로 확보하고 알려드려요.</p>
             <details className={styles.waitingHelp}><summary>대기 배정 안내</summary>
-                <p>좌석우선 → 균형추천 → 빠른예매 순으로 확인합니다. 앞선 후보는 대기하고, 처음 예매 가능한 후보만 선점하며 이후 후보는 신청하지 않습니다. 모두 매진이면 모두 대기합니다.</p>
-                <p>회차마다 한 구역에만 대기하며, 일반예매와 같은 구역 대기 순서를 적용합니다.</p>
-                <p>각 묶음은 연석으로 배정됩니다. 6명은 전체 연석 → 3+3 → 2+4 → 2+2+2 순서로 찾습니다.</p>
-                <p>앞 신청의 인원에 맞지 않는 좌석은 뒤 신청에 먼저 배정될 수 있습니다. 확보 후 결제 시간은 5분입니다.</p>
+                <p>인원에 맞는 좌석이 나오면 자동 배정됩니다. 좌석 상황에 따라 배정 순서가 달라질 수 있습니다.</p>
+                <p>선점 후 5분 안에 결제해주세요.</p>
             </details>
-            <div className={styles.actions}>{confirmCancel ? <><span>이 후보의 대기만 취소할까요?</span>
-                <GlassButton disabled={flow.busy} onClick={() => flow.mutate(candidate, 'cancel-waiting')}>이 후보 대기 취소 확정</GlassButton>
-                <GlassButton disabled={flow.busy} onClick={() => setConfirmCancel(false)}>계속 기다리기</GlassButton></>
-                : <GlassButton disabled={flow.busy} onClick={() => setConfirmCancel(true)}>이 후보 대기 취소</GlassButton>}</div></>
+            {confirmCancel && <p>이 대기를 취소할까요?</p>}</>
             : <p>다른 후보의 대기와 예매는 계속 유지됩니다.</p>}
-        <GlassButton disabled={flow.busy} onClick={flow.refresh}>현재 상태 확인</GlassButton>
+        <div className={reservationStyles.paymentRow}>
+            {waiting && (confirmCancel ? <>
+                <GlassButton className={reservationStyles.cancelButton} disabled={flow.busy} onClick={() => flow.mutate(candidate, 'cancel-waiting')}>이 대기 취소 확정</GlassButton>
+                <GlassButton disabled={flow.busy} onClick={() => setConfirmCancel(false)}>계속 기다리기</GlassButton></>
+                : <GlassButton className={reservationStyles.cancelButton} disabled={flow.busy} onClick={() => setConfirmCancel(true)}>이 대기 취소</GlassButton>)}
+            <button type="button" className={reservationStyles.refreshButton} aria-label="대기 상태 새로고침" title="새로고침" disabled={flow.busy} onClick={flow.refresh}>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.1 8a8 8 0 1 0 .5 7"/></svg>
+            </button>
+        </div>
     </section>;
 }
