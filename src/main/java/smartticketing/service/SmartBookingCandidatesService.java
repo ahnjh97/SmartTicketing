@@ -76,7 +76,6 @@ public class SmartBookingCandidatesService {
                         null, null, option.show().getId(), request.audience()));
                 draft.setCandidateKind(selection.kind()); draft.setCandidateZone(option.zone());
                 // 같은 스마트예매 요청에서 생성된 후보들은 동일한 createdAt을 공유한다.
-                // 대기 후보의 승급 시 다른 후보가 이미 즉시 선점 중인지 식별하는 배치 기준으로 사용한다.
                 draft.setCreatedAt(template.getCreatedAt()); draft.setUpdatedAt(template.getUpdatedAt());
                 drafts.add(draft);
             }
@@ -85,7 +84,7 @@ public class SmartBookingCandidatesService {
                 var draft = drafts.get(index);
                 var candidate = selected.get(index);
                 if (candidate.equals(immediate)) {
-                    // 즉시선점은 대기열을 거치지 않는다. 따라서 이 배치에는 대기 순서 알림도 남기지 않는다.
+                    // 앞선 후보의 대기는 유지하고, 이 즉시선점 후보에는 대기번호·알림을 만들지 않는다.
                     waiting.registerAndHold(userId, draft.getId(), candidate.option().show().getId(), candidate.option().seatIds());
                     continue;
                 }

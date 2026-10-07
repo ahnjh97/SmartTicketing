@@ -64,9 +64,9 @@ class SmartBookingCandidatesTests {
             var candidates=plan(f,createdId(result)).candidates(); assertThat(candidates).hasSize(2);
             var held=candidates.stream().filter(c->c.kind().equals("BALANCED")).findFirst().orElseThrow();
             assertThat(held.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
-            // BALANCED is immediately held, so the smart candidate must not receive a waiting number.
+            // Only PREFERRED adds a wait; the immediate BALANCED hold has no queue number.
             tx(em->{ assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user and q.status=:status",Long.class)
-                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(used); return null; });
+                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(used + 1); return null; });
         }
     }
 
@@ -81,6 +81,7 @@ class SmartBookingCandidatesTests {
                 .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(4); return null; });
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void priorityChainStopsAtFirstAvailableCandidateOrWaitsForAllThree() {
         // 0: preferred free; 1: balanced free; 2: fast free; 3: all sold out.
         for(int firstAvailable=0;firstAvailable<=3;firstAvailable++) {
@@ -131,7 +132,7 @@ class SmartBookingCandidatesTests {
             for(var show:shows) assertThat(dispatcher(CLOCK).dispatch(show)).isZero();
             tx(em->{
                 assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user",Long.class)
-                        .setParameter("user",f.user()).getSingleResult()).isEqualTo(expected);
+                        .setParameter("user",f.user()).getSingleResult()).isEqualTo(availableFrom == 3 ? expected : expected - 1);
                 assertThat(em.createQuery("select count(r) from Reservation r where r.user.id=:user",Long.class)
                         .setParameter("user",f.user()).getSingleResult()).isEqualTo(availableFrom==3?0:1);
                 for(int i=expected;i<3;i++) assertThat(inventory(em,shows.get(i))).allMatch(seat->seat.getReservation()==null);
@@ -218,7 +219,7 @@ class SmartBookingCandidatesTests {
         for(var show:f.shows()) assertThat(dispatcher(CLOCK).dispatch(show)).isZero();
         tx(em->{
             assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user",Long.class)
-                    .setParameter("user",f.user()).getSingleResult()).isEqualTo(1);
+                    .setParameter("user",f.user()).getSingleResult()).isZero();
             assertThat(em.createQuery("select count(r) from Reservation r where r.user.id=:user",Long.class)
                     .setParameter("user",f.user()).getSingleResult()).isEqualTo(1);
             assertThat(inventory(em,f.shows().getLast())).allMatch(i->i.getReservation()==null);
@@ -332,6 +333,7 @@ class SmartBookingCandidatesTests {
                 .filter(c->c.groupId().equals(candidate)).findFirst().orElseThrow()).toList());
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void sameShowKeepsPreferredWaitAndImmediatelyHoldsAnotherZone() throws Exception {
         var f=zoned(); long id=createWaitingCandidate(f);
         var initial=plan(f,id).candidates();
@@ -342,6 +344,15 @@ class SmartBookingCandidatesTests {
         assertThat(dispatcher(CLOCK).dispatch(f.shows().getFirst())).isEqualTo(1);
         var held=plan(f,id).candidates().getFirst();
         assertThat(held.payment().reservation().seatIds()).hasSize(2);
+        assertThat(plan(f,id).candidates().getLast().payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows().getFirst())).isZero();
+        tx(em -> {
+            var alerts = BookingPaymentTests.notifications(em).list(f.user(), false);
+            assertThat(alerts).hasSize(1);
+            assertThat(alerts.getFirst().type()).isEqualTo(NotificationType.QUEUE_TURN);
+            assertThat(alerts.getFirst().groupId()).isEqualTo(held.groupId());
+            return null;
+        });
         assertThat(tx(em->BookingPaymentTests.service(em,CLOCK,true).pay(f.user(),held.payment().reservation().id(),key(),new MockPaymentRequest(PaymentMethod.MOCK,false))).status()).isEqualTo(201);
         assertThat(tx(em->BookingPaymentTests.service(em,CLOCK,true).cancel(f.user(),held.payment().reservation().id(),key())).status()).isEqualTo(200);
     }
@@ -481,8 +492,13 @@ class SmartBookingCandidatesTests {
         assertThat(register(earlier,List.of(f.shows().getFirst()),key()).status()).isEqualTo(201);
         long id=create(f);
         assertThat(plan(f,id).candidates()).allSatisfy(c->{
-            assertThat(c.waiting().items().getFirst().queueNumber()).isEqualTo(c.zone()==SeatPosition.MIDDLE_MIDDLE?2:1);
-            assertThat(c.waiting().items().getFirst().aheadCount()).isEqualTo(c.zone()==SeatPosition.MIDDLE_MIDDLE?1:0);
+            if (c.zone() == SeatPosition.MIDDLE_MIDDLE) {
+                assertThat(c.waiting().items().getFirst().queueNumber()).isEqualTo(2);
+                assertThat(c.waiting().items().getFirst().aheadCount()).isEqualTo(1);
+            } else {
+                assertThat(c.waiting().items()).isEmpty();
+                assertThat(c.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
+            }
         });
         dispatcher(CLOCK).dispatch(f.shows().getFirst());
         assertThat(state(earlier).activeReservationId()).isNotNull();

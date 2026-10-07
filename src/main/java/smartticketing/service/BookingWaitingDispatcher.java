@@ -67,10 +67,7 @@ public class BookingWaitingDispatcher {
                 try { waiting.validate(group, show); }
                 catch (BookingRejection mismatch) { continue; }
 
-                // 같은 스마트예매 요청에서 다른 후보가 이미 5분 선점 중이면
-                // 이 대기 후보를 지금 승급시키지 않는다. 즉시 선점이 유지되는 동안
-                // 대기 순서 알림을 만들지 않고, 즉시 선점이 만료된 뒤에만 승급한다.
-                if (hasActiveSmartHoldSibling(group)) continue;
+                // Higher-priority waits remain eligible while another candidate is held.
                 var inventory = holds.lockInventory(showId);
                 var requested = BookingQueueLifecycle.currentSeatIds(em, q.getId());
                 if (!requested.isEmpty()) {
@@ -96,24 +93,4 @@ public class BookingWaitingDispatcher {
         });
     }
 
-    private boolean hasActiveSmartHoldSibling(BookingRequestGroup group) {
-        return em.createQuery("""
-                select count(g) from BookingRequestGroup g
-                where g.user.id=:user
-                  and g.movie.id=:movie
-                  and g.viewingDate=:date
-                  and g.entryPoint=:entry
-                  and g.status=:status
-                  and g.id<>:group
-                  and g.createdAt=:createdAt
-                """, Long.class)
-                .setParameter("user", group.getUser().getId())
-                .setParameter("movie", group.getMovie().getId())
-                .setParameter("date", group.getViewingDate())
-                .setParameter("entry", BookingEntryPoint.THEATER_SMART)
-                .setParameter("status", BookingGroupStatus.HOLDING)
-                .setParameter("group", group.getId())
-                .setParameter("createdAt", group.getCreatedAt())
-                .getSingleResult() > 0;
-    }
 }
