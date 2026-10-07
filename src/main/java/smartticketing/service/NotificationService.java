@@ -7,6 +7,8 @@ import smartticketing.repository.NotificationRepository;
 import smartticketing.repository.UsersRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -62,7 +64,7 @@ public class NotificationService {
         n.setMessage(message);
         n.setCreatedAt(LocalDateTime.now());
         Notification saved = notifications.save(n);
-        NotificationSseHub.publish(userId);
+        publishAfterCommit(userId);
         return saved;
     }
 
@@ -88,7 +90,7 @@ public class NotificationService {
         notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(LocalDateTime.now());
         em.persist(link(notification, reservation));
-        NotificationSseHub.publish(reservation.getUser().getId());
+        publishAfterCommit(reservation.getUser().getId());
     }
 
     /**
@@ -118,7 +120,27 @@ public class NotificationService {
         expired.setCreatedAt(LocalDateTime.now());
         expired.setBookingGroupId(groupId);
         em.persist(expired);
-        NotificationSseHub.publish(user.getId());
+        publishAfterCommit(user.getId());
+    }
+
+    /**
+     * 알림 DB 반영이 실제 COMMIT된 뒤에만 SSE를 발행한다.
+     * 그래야 브라우저가 이벤트를 받고 즉시 목록을 조회해도 새 알림을 반드시 읽을 수 있다.
+     */
+    private static void publishAfterCommit(Long userId) {
+        if (userId == null) return;
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            NotificationSseHub.publish(userId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                NotificationSseHub.publish(userId);
+            }
+        });
     }
 
     /** 즉시선점 경로에서 혹시 남은 QUEUE_TURN이 있으면 제거한다. */
