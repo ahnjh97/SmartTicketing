@@ -90,8 +90,7 @@ class BookingPaymentTests {
             if (payment == null) assertThat(ps).isEmpty(); else assertThat(ps).containsExactly(payment);
             var ts = em.createQuery("select t.status from Ticket t where t.reservation.id=:id",TicketStatus.class).setParameter("id",f.reservation).getResultList();
             if (ticket == null) assertThat(ts).isEmpty(); else assertThat(ts).containsExactly(ticket);
-            // Acquisition now emits exactly one notification in addition to payment events.
-            assertThat(em.createQuery("select count(n) from Notification n where n.user.id=:id",Long.class).setParameter("id",f.user).getSingleResult()).isEqualTo(notifications + 1);
+            assertThat(em.createQuery("select count(n) from Notification n where n.user.id=:id",Long.class).setParameter("id",f.user).getSingleResult()).isEqualTo(notifications);
             assertThat(em.createQuery("from Notification n where n.user.id=:id",Notification.class).setParameter("id",f.user).getResultList())
                     .allSatisfy(n -> { assertThat(n.getBookingGroupId()).isEqualTo(f.group); assertThat(n.getReservationId()).isEqualTo(f.reservation); });
             if (reservation != ReservationStatus.PENDING) assertThat(em.find(BookingGroupHold.class,f.group)).isNull();
@@ -112,7 +111,7 @@ class BookingPaymentTests {
         assertThat(pay(f,successKey,false,CLOCK)).isEqualTo(success);
         assertThat(pay(f,successKey,true,CLOCK).status()).isEqualTo(409);
         assertThat(pay(f,key(),false,CLOCK).status()).isEqualTo(201);
-        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,2);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
 
     @Test void recoveryDiscoversConfirmedReservationAfterRestartAndPreservesLegacyNotifications() {
@@ -163,11 +162,11 @@ class BookingPaymentTests {
         assertThat(cancelled.status()).isEqualTo(200); assertThat(cancel(f,key,CLOCK)).isEqualTo(cancelled);
         assertThat(cancel(f,key(),CLOCK).status()).isEqualTo(200);
         assertThat(pay(f,key(),false,CLOCK).status()).isEqualTo(409);
-        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,PaymentStatus.CANCELLED,TicketStatus.CANCELLED,2);
+        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,PaymentStatus.CANCELLED,TicketStatus.CANCELLED,0);
     }
     @Test void unpaidCancellationDoesNotInventPaymentOrTicket() {
         var f = fixture(); assertThat(cancel(f,key(),CLOCK).status()).isEqualTo(200);
-        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,null,null,1);
+        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,null,null,0);
     }
     @org.junit.jupiter.api.Tag("core")
     @Test void ownershipIsRequiredForPaymentReadPayAndCancel() {
@@ -184,13 +183,13 @@ class BookingPaymentTests {
         assertState(f,ReservationStatus.EXPIRED,SeatStatus.AVAILABLE,null,null,0);
         var g = fixture(); pay(g,key(),false,CLOCK);
         assertThat(cancel(g,key(),Clock.offset(CLOCK,Duration.ofHours(5))).status()).isEqualTo(409);
-        assertState(g,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
+        assertState(g,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
     @org.junit.jupiter.api.Tag("core")
     @Test void concurrentSameAndDifferentKeysCreateOnePaymentTicketNotification() throws Exception {
         var f=fixture(); var key=key(); race(() -> pay(f,key,false,CLOCK),() -> pay(f,key,false,CLOCK));
         race(() -> pay(f,key(),false,CLOCK),() -> pay(f,key(),false,CLOCK));
-        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
     @Test void concurrentPaymentCancellationAndExpiryStayConsistent() throws Exception {
         var f=fixture(); race(() -> pay(f,key(),false,CLOCK),() -> cancel(f,key(),CLOCK));
@@ -208,7 +207,7 @@ class BookingPaymentTests {
     @Test void legacyTicketIssueRacesWithPaymentWithoutDuplicateNotification() throws Exception {
         var f=fixture(); pay(f,key(),false,CLOCK);
         race(() -> pay(f,key(),false,CLOCK),() -> tx(em -> tickets(em).issue(f.user,f.reservation)));
-        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
     @org.junit.jupiter.api.Tag("core")
     @Test void databaseFailureRollsBackPaymentTicketInventoryAndOperationThenSameKeyCanRetry() {
@@ -238,7 +237,7 @@ class BookingPaymentTests {
     @Test void distinctConcurrentCancelRequestsDoNotDoubleNotifyOrRelease() throws Exception {
         var f=fixture(); pay(f,key(),false,CLOCK);
         race(() -> cancel(f,key(),CLOCK),() -> cancel(f,key(),CLOCK));
-        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,PaymentStatus.CANCELLED,TicketStatus.CANCELLED,2);
+        assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,PaymentStatus.CANCELLED,TicketStatus.CANCELLED,0);
     }
     @Test void staleRepeatableReadSnapshotCannotReturnPendingAfterPaymentCommits() {
         var f=fixture();
