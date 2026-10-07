@@ -349,7 +349,7 @@ class SmartBookingCandidatesTests {
         assertThat(candidate.kind()).isEqualTo("PREFERRED");
         assertThat(candidate.zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
         assertThat(candidate.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
-        assertThat(candidate.waiting().items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(candidate.waiting().items()).isEmpty();
         var replay = tx(em -> plans(em).create(f.user(), key, request));
         assertThat(replay).isEqualTo(result);
         tx(em -> {
