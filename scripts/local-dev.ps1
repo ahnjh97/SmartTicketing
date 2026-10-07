@@ -51,11 +51,13 @@ function Assert-Ubuntu {
     }
 }
 
-function Invoke-Redis([string]$Command) {
+function Invoke-Redis([ValidateSet('setup', 'start')][string]$Command) {
     Assert-Ubuntu
     # Pass only the checked-in script to WSL; no .env or credentials enter Linux.
     $scriptText = [IO.File]::ReadAllText($redisScript).Replace("`r`n", "`n")
-    $scriptText | & wsl.exe -d Ubuntu -u root --exec bash -s -- $Command
+    # Windows PowerShell adds CRLF when piping to native processes, even after
+    # Replace above. Normalize inside WSL before Bash reads the script.
+    $scriptText | & wsl.exe -d Ubuntu -u root --exec bash -c "tr -d '\r' | bash -s -- $Command"
     if ($LASTEXITCODE -ne 0) { throw "Redis $Command failed. Check the WSL output above." }
     if (-not (Get-RedisPing)) { throw 'Redis started in WSL, but Windows localhost:6379 did not return PONG.' }
     Write-Host 'Redis: 127.0.0.1:6379 -> PONG' -ForegroundColor Green
