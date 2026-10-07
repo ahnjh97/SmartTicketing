@@ -336,6 +336,7 @@ class SmartBookingCandidatesTests {
         assertThat(tx(em->BookingPaymentTests.service(em,CLOCK,true).cancel(f.user(),held.payment().reservation().id(),key())).status()).isEqualTo(200);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void availableTopPreferenceCreatesOnlyOneImmediateHoldAndLeavesOtherZonesFree() {
         var f = zoned(); var request = request(f); var key = key();
         var result = tx(em -> plans(em).create(f.user(), key, request));
@@ -385,6 +386,7 @@ class SmartBookingCandidatesTests {
         assertThat(candidates.getFirst().payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void concurrentUsersCannotBothImmediatelyHoldTheLastPreferredPair() throws Exception {
         var first = zoned(); var second = another(first, 2, false);
         var firstRequest = request(first); var secondRequest = request(second);
@@ -486,6 +488,7 @@ class SmartBookingCandidatesTests {
         assertThat(tx(em->plans(em).create(other.user(),key(),request)).status()).isEqualTo(409);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void moviePlanUsesSavedTheatersAndRequestedTimeWindow() {
         var f=zoned();
         var request=tx(em->{

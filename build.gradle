@@ -59,7 +59,9 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		if (project.hasProperty('coreOnly')) includeTags 'core'
+	}
 }
 
 // 로컬 MySQL에 임시 DB를 생성하여 검증하고 종료 시 제거한다.

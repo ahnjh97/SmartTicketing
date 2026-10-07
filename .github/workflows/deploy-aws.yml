@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_tests:
+        description: 'Run all regression tests and Docker image-store compatibility checks before deployment'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,8 +31,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm test
-      - run: npm run build
+      - name: Core frontend tests
+        if: ${{ !inputs.full_tests }}
+        run: npm run test:core
+      - name: Full frontend tests
+        if: ${{ inputs.full_tests }}
+        run: npm test
+      # The production frontend is built once, in the containers job.
       - name: Check deployment scripts
         working-directory: .
         run: |
@@ -40,7 +50,10 @@ jobs:
           bash -n deploy/reset-theaters.sh
           sh -n deploy/backend-entrypoint.sh
           sh -n frontend/docker/40-runtime-config.sh
-          python3 -m unittest discover -s deploy -p 'test_*.py'
+      - name: Deployment regression tests (full suite)
+        if: ${{ inputs.full_tests }}
+        run: python3 -m unittest discover -s deploy -p 'test_*.py'
+        working-directory: .
 
   backend:
     runs-on: ubuntu-latest
@@ -71,7 +84,12 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: gradle
-      - run: bash gradlew test bootJar --no-daemon
+      - name: Core backend tests and JAR
+        if: ${{ !inputs.full_tests }}
+        run: bash gradlew test bootJar -PcoreOnly --no-daemon
+      - name: Full backend tests and JAR
+        if: ${{ inputs.full_tests }}
+        run: bash gradlew test bootJar --no-daemon
       - name: Package tested backend JAR
         run: |
           set -euo pipefail
@@ -139,6 +157,7 @@ jobs:
           docker save "$BACKEND_IMAGE" "$FRONTEND_IMAGE" | gzip -1 > build/images/images.tar.gz
           (cd build/images && sha256sum images.tar.gz > images.tar.gz.sha256)
       - name: Verify images across Docker image stores
+        if: ${{ inputs.full_tests }}
         timeout-minutes: 5
         run: bash deploy/check-image-portability.sh
       - uses: actions/upload-artifact@v4

@@ -79,6 +79,7 @@ class BookingHoldTests {
         } finally { pool.shutdownNow(); assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue(); }
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void lastSeatCompetitionHasExactlyOneWinner() throws Exception {
         var f = fixture(1, 1);
         var results = race(() -> manual(f, f.user, f.group, key(), f.seats),
@@ -87,6 +88,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 0);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void conflictingSeatRollsBackEntireMultiSeatIntentAndStoresFailure() {
         var f = fixture(2, 3);
         tx(em -> { var row = inventory(em, f).getLast(); row.setStatus(SeatStatus.BLOCKED); return null; });
@@ -107,6 +109,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 1);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void identicalConcurrentRequestReplaysExactlyAndChangedBodyConflicts() throws Exception {
         var f = fixture(1, 2); String key = key();
         var results = race(() -> manual(f, f.user, f.group, key, List.of(f.seats.getFirst())),
@@ -116,6 +119,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 1);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void otherUserCannotHoldOrReadGroupAndReservation() {
         var f = fixture(1, 1);
         assertThat(manual(f, f.otherUser, f.group, key(), f.seats).status()).isEqualTo(404);
@@ -125,6 +129,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 0);
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void freshServiceRecoversPersistedExpiryAndStaleRecoveryCannotRemoveNewSlot() {
         var f = fixture(1, 1); String key = key();
         var held = manual(f, f.user, f.group, key, f.seats);

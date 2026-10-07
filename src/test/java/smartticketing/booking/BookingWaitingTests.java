@@ -96,12 +96,14 @@ class BookingWaitingTests {
         assertThat(state(next).items()).allSatisfy(q -> { assertThat(q.queueNumber()).isEqualTo(2); assertThat(q.aheadCount()).isZero(); });
         assertThat(register(f,f.shows,key()).status()).isEqualTo(409);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void simultaneousShowsAllocateOnlyOneHoldAndPauseOtherQueues() throws Exception {
         var f=fixture(2,2); register(f);
         BookingPaymentTests.race(() -> dispatcher(CLOCK).dispatch(f.shows.getFirst()), () -> dispatcher(CLOCK).dispatch(f.shows.getLast()));
         assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactlyInAnyOrder(QueueStatus.HOLDING,QueueStatus.PAUSED);
         tx(em -> { assertThat(em.createQuery("select count(r) from Reservation r where r.requestGroup.id=:g",Long.class).setParameter("g",f.group).getSingleResult()).isEqualTo(1); return null; });
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void pausedDoesNotBlockOthersAndExpiredRestoresOriginalNumberWithoutRetroactiveGuarantee() {
         var f=fixture(2,2); var other=another(f,2,false); register(f); register(other);
         dispatcher(CLOCK).dispatch(f.shows.getFirst()); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
@@ -121,6 +123,7 @@ class BookingWaitingTests {
         assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
         statuses(f,QueueStatus.WAITING,QueueStatus.WAITING); statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void paymentCompletesOwnOpportunityAndCancelsPausedAtomically() {
         var f=fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); long r=state(f).activeReservationId();
         var pay=tx(em -> BookingPaymentTests.service(em,CLOCK,true).pay(f.user,r,key(),new MockPaymentRequest(PaymentMethod.MOCK,false)));

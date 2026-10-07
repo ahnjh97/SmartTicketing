@@ -99,6 +99,7 @@ class BookingPaymentTests {
             return null;
         });
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void failureRetryUsesServerPriceAndOriginalDeadlineAndReplayDoesNotNotifyAgain() {
         var f = fixture(); var failedKey = key(); var successKey = key();
         var failed = pay(f,failedKey,true,CLOCK);
@@ -155,6 +156,7 @@ class BookingPaymentTests {
             return null;
         });
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void wholeCancellationRefundsAndReplaysWithoutDuplicateReleaseOrNotification() {
         var f = fixture(); pay(f,key(),false,CLOCK); var key = key();
         var cancelled = cancel(f,key,CLOCK);
@@ -167,6 +169,7 @@ class BookingPaymentTests {
         var f = fixture(); assertThat(cancel(f,key(),CLOCK).status()).isEqualTo(200);
         assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,null,null,1);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void ownershipIsRequiredForPaymentReadPayAndCancel() {
         var f = fixture();
         assertThat(tx(em -> service(em,CLOCK,true).pay(f.other,f.reservation,key(),new MockPaymentRequest(PaymentMethod.MOCK,false))).status()).isEqualTo(404);
@@ -174,6 +177,7 @@ class BookingPaymentTests {
         assertThatThrownBy(() -> tx(em -> service(em,CLOCK,true).get(f.other,f.reservation))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         assertState(f,ReservationStatus.PENDING,SeatStatus.HOLDING,null,null,0);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void exactExpiryAndShowStartAreServerBoundaries() {
         var f = fixture();
         assertThat(pay(f,key(),false,Clock.offset(CLOCK,Duration.ofMinutes(5))).status()).isEqualTo(409);
@@ -182,6 +186,7 @@ class BookingPaymentTests {
         assertThat(cancel(g,key(),Clock.offset(CLOCK,Duration.ofHours(5))).status()).isEqualTo(409);
         assertState(g,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void concurrentSameAndDifferentKeysCreateOnePaymentTicketNotification() throws Exception {
         var f=fixture(); var key=key(); race(() -> pay(f,key,false,CLOCK),() -> pay(f,key,false,CLOCK));
         race(() -> pay(f,key(),false,CLOCK),() -> pay(f,key(),false,CLOCK));
@@ -205,6 +210,7 @@ class BookingPaymentTests {
         race(() -> pay(f,key(),false,CLOCK),() -> tx(em -> tickets(em).issue(f.user,f.reservation)));
         assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
     }
+    @org.junit.jupiter.api.Tag("core")
     @Test void databaseFailureRollsBackPaymentTicketInventoryAndOperationThenSameKeyCanRetry() {
         var f=fixture(); var key=key();
         assertThatThrownBy(() -> tx(em -> { service(em,CLOCK,true).pay(f.user,f.reservation,key,new MockPaymentRequest(PaymentMethod.MOCK,false));

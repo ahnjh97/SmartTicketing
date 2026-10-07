@@ -75,6 +75,7 @@ class BookingHoldHttpTests {
                 .withBean(PlatformTransactionManager.class, () -> new JpaTransactionManager(db.factory()));
     }
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void authenticatedHttpFlowAndApplicationRestartRecoverFromDatabase() throws Exception {
         var statements = new ArrayList<String>();
         try (var db = new TemporaryMysqlDatabase(statements::add); var validation = Validation.buildDefaultValidatorFactory()) {

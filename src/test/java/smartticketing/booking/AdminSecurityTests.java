@@ -27,6 +27,7 @@ class AdminSecurityTests {
     @EnableWebMvc
     static class WebConfig {}
 
+    @org.junit.jupiter.api.Tag("core")
     @Test void onlyActiveAdminCanAccessAllManagementEndpointsInProduction() {
         var users = mock(UsersRepository.class);
         var admin = new Users(); admin.setId(1L); admin.setLoginId("admin");
