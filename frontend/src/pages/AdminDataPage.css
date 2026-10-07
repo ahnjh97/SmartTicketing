@@ -339,16 +339,11 @@
     font-size:13px
 }
 .admin-feedback{
-    padding:16px 20px;
-    background:#17302a;
-    border:1px solid #366354;
-    border-radius:8px;
+    padding:16px 0;
     overflow-wrap:anywhere
 }
 .admin-data .admin-error{
-    background:#332320;
     color:#ffb2a7;
-    border-color:#744239
 }
 .admin-delete-preview{
     border-color:#a55649;

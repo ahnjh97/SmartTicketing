@@ -650,6 +650,8 @@ class SmartBookingCandidatesTests {
         assertThat(all.candidates()).hasSize(2).extracting(SmartBookingCandidatesService.Candidate::kind)
                 .containsExactlyInAnyOrder("PREFERRED", "BALANCED");
         assertThat(all.candidates()).noneMatch(c->c.groupId().equals(manual));
+        assertThat(all.batches()).hasSize(1);
+        assertThat(all.batches().getFirst()).containsExactlyElementsOf(all.candidates().stream().map(SmartBookingCandidatesService.Candidate::groupId).toList());
         assertThatThrownBy(()->tx(em->plans(em).get(f.user(),manual))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         tx(em->{
             assertThat(((Number)em.createNativeQuery("select count(*) from information_schema.tables where table_schema=database() and table_name='smart_booking_plans'",Object.class).getSingleResult()).intValue()).isZero();

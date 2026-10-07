@@ -41,7 +41,7 @@ async function api(url, options = {}) {
     }
     if(url.startsWith('/api/smart-booking-candidates')) {
         const selected = new URL(url, 'http://local').searchParams.get('selected');
-        return response({ candidates: plan.candidates.filter(c=>String(c.groupId)===selected || ['ACTIVE','HOLDING'].includes(c.status)) });
+        return response({ candidates: plan.candidates.filter(c=>String(c.groupId)===selected || ['ACTIVE','HOLDING'].includes(c.status)), batches: plan.batches });
     }
     if(url==='/api/booking-groups/active') return response([]);
     if(url.startsWith('/api/reservations/')) {
@@ -61,7 +61,7 @@ const nativeShow=HTMLDialogElement.prototype.showModal,nativeClose=HTMLDialogEle
 beforeEach(()=>{localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test');plan=initial();created=0;lost=false;pending=null;vi.stubGlobal('fetch',vi.fn(api));
     HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();HTMLDialogElement.prototype.showModal=nativeShow;HTMLDialogElement.prototype.close=nativeClose;});
-const candidates=()=>within(screen.getByRole('complementary',{name:'좌석 선정 후보'}));
+const candidates=()=>within(screen.getByRole('region',{name:'대기 및 선점 목록'}));
 async function loaded(){await screen.findByRole('complementary',{name:'좌석 선정 후보'});}
 const choose=label=>fireEvent.click(candidates().getByRole('button',{name:new RegExp(label)}));
 
@@ -85,14 +85,14 @@ test('sold-out theater smart creates candidates for its selected show without re
     expect(body).toMatchObject({entryPoint:'THEATER_SMART',selectedShowtimeId:91,partySize:2});expect(body.startTimeFrom).toBeUndefined();
     expect(candidates().getAllByRole('button')).toHaveLength(3);
     expect(candidates().queryByText('직접 고른 회차')).toBeNull();
-    expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('순번1번');
+    expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('대기순서1번');
     expect(within(screen.getByRole('region',{name:'후보 구역 대기'})).getByText(day.replaceAll('-', '.'))).toBeTruthy();
 });
 
 test('paying the side retains the center queue, then center can be paid and only the side cancelled',async()=>{
     allocate(0);mount();await loaded();
     fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
-    choose('선호 좌석');expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('순번');
+    choose('선호 좌석');expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('대기순서');
     expect(candidates().queryByRole('button',{name:/빠른 예매/})).toBeNull();
     allocate(2);fireEvent(window,new Event('focus'));
     fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
@@ -110,9 +110,14 @@ test('all three candidates can be paid independently',async()=>{
 });
 
 test('cancelling one zone queue leaves both other queues waiting',async()=>{
-    mount();await loaded();fireEvent.click(screen.getByRole('button',{name:'이 대기 취소'}));
+    mount();await loaded();fireEvent.click(screen.getByRole('button',{name:'대기 취소'}));
+    const dialog = screen.getByRole('dialog', { name: '대기를 취소할까요?' });
     expect(fetch.mock.calls.some(([url])=>url.endsWith('/cancel'))).toBe(false);
-    fireEvent.click(screen.getByRole('button',{name:'이 대기 취소 확정'}));await screen.findByRole('heading',{name:'대기 취소'});
+    fireEvent.click(within(dialog).getByRole('button', { name: '유지하기' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetch.mock.calls.some(([url])=>url.endsWith('/cancel'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: '대기 취소' }));
+    fireEvent.click(screen.getByRole('button',{name:'대기 취소 확정'}));await screen.findByRole('heading',{name:'대기 취소'});
     expect(plan.candidates.map(c=>c.waiting.items[0].status)).toEqual(['CANCELLED','WAITING','WAITING']);
 });
 
@@ -127,6 +132,104 @@ test('navigation during creation does not replace the new selection with a stale
     let resolve;pending=new Promise(r=>{resolve=r;});mount();await waitFor(()=>expect(created).toBe(1));
     fireEvent.click(screen.getByRole('button',{name:'조건 화면으로 이동'}));await act(async()=>resolve(response(plan,201)));
     expect(screen.getByTestId('url').textContent).not.toContain('smart=1');
+});
+
+test('theater smart lists and manages existing holds across shows while creating only for the selected show', async () => {
+    allocate(0);
+    plan.candidates[0].showtimeId = 999;
+    plan.candidates[0].theaterName = '다른 극장';
+    plan.candidates[0].payment.reservation.theaterName = '다른 극장';
+    allocate(1);
+    plan.candidates[1].showtimeId = 92;
+    fetch.mockImplementation((url, options = {}) => {
+        if (url === '/api/smart-booking-candidates' && options.method === 'POST') {
+            created++;
+            return Promise.resolve(response({ groupIds: [403] }, 201));
+        }
+        return api(url, options);
+    });
+    mount(theaterPath);
+    await loaded();
+    expect(candidates().getAllByRole('button')).toHaveLength(3);
+    expect(within(candidates().getByRole('group', { name: '신청 묶음 2' })).getAllByRole('button')).toHaveLength(2);
+    expect(candidates().getByRole('button', { name: /선호 좌석/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '모의결제' })).toBeNull();
+    const request = fetch.mock.calls.find(([url, options]) => url === '/api/smart-booking-candidates' && options?.method === 'POST');
+    expect(JSON.parse(request[1].body)).toMatchObject({ entryPoint: 'THEATER_SMART', selectedShowtimeId: 91 });
+    const path = screen.getByTestId('url').textContent;
+    cleanup(); mount(path); await loaded();
+    expect(candidates().getAllByRole('button')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: '모의결제' })).toBeNull();
+    choose('다른 극장');
+    fireEvent.click(await screen.findByRole('button', { name: '모의결제' }));
+    await screen.findByRole('heading', { name: '예매가 완료되었습니다' });
+    expect(plan.candidates[0].payment.reservation.status).toBe('CONFIRMED');
+    expect(plan.candidates[1].payment.reservation.status).toBe('PENDING');
+    expect(plan.candidates[2].waiting.items[0].status).toBe('WAITING');
+    expect(created).toBe(1);
+});
+
+test.each([moviePath, theaterPath])('new smart request separates older recommendations and keeps them manageable after reload: %s', async path => {
+    const createdIds = plan.candidates.map(candidate => candidate.groupId);
+    plan.candidates.push(...plan.candidates.slice(1).map((candidate, index) => ({
+        ...candidate, groupId: 900 + index,
+        waiting: { ...candidate.waiting, items: candidate.waiting.items.map(queue => ({ ...queue, id: 990 + index })) },
+    })));
+    fetch.mockImplementation((url, options = {}) => {
+        if (url === '/api/smart-booking-candidates' && options.method === 'POST') {
+            created++;
+            return Promise.resolve(response({ groupIds: createdIds }, 201));
+        }
+        return api(url, options);
+    });
+    mount(path); await loaded();
+    const currentGroup = () => within(candidates().getByRole('group', { name: '신청 묶음 1' }));
+    const previousGroup = () => within(candidates().getByRole('group', { name: '신청 묶음 2' }));
+    expect(currentGroup().getAllByRole('button')).toHaveLength(3);
+    expect(previousGroup().getAllByRole('button')).toHaveLength(2);
+    expect(currentGroup().getAllByRole('button', { name: /선호 좌석/ })).toHaveLength(1);
+    expect(currentGroup().getAllByRole('button', { name: /균형 추천/ })).toHaveLength(1);
+    const restoredPath = screen.getByTestId('url').textContent;
+    cleanup(); mount(restoredPath); await loaded();
+    expect(currentGroup().getAllByRole('button')).toHaveLength(3);
+    expect(previousGroup().getAllByRole('button')).toHaveLength(2);
+    fireEvent.click(currentGroup().getByRole('button', { name: /선호 좌석/ }));
+    fireEvent.click(screen.getByRole('button', { name: '대기 취소' }));
+    fireEvent.click(screen.getByRole('button', { name: '대기 취소 확정' }));
+    await screen.findByRole('heading', { name: '대기 취소' });
+    expect(currentGroup().getAllByRole('button')).toHaveLength(2);
+    expect(plan.candidates.filter(candidate => candidate.groupId >= 900).every(candidate => candidate.waiting.items[0].status === 'WAITING')).toBe(true);
+    fireEvent.click(previousGroup().getByRole('button', { name: /선호 좌석/ }));
+    fireEvent.click(screen.getByRole('button', { name: '대기 취소' }));
+    fireEvent.click(screen.getByRole('button', { name: '대기 취소 확정' }));
+    await screen.findByRole('heading', { name: '대기 취소' });
+    expect(previousGroup().getAllByRole('button')).toHaveLength(1);
+    expect(currentGroup().getAllByRole('button')).toHaveLength(2);
+    expect(created).toBe(1);
+});
+
+test('separate requests stay in distinct unlabeled groups after reopening the overview', async () => {
+    plan.batches = [[403], [402], [401]];
+    mount(moviePath + '&smart=1'); await loaded();
+    const groups = candidates().getAllByRole('group');
+    expect(groups).toHaveLength(3);
+    expect(groups.map(group => within(group).getByRole('button').getAttribute('aria-label')))
+        .toEqual([expect.stringContaining('선호 좌석'), expect.stringContaining('균형 추천'), expect.stringContaining('빠른 예매')]);
+    expect(candidates().queryByText('이번 신청')).toBeNull();
+    expect(candidates().queryByText('이전 신청')).toBeNull();
+    expect(created).toBe(0);
+});
+
+test('narrow screens open the candidate list by count and close it after selecting a waiting card', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+    mount(); await loaded();
+    expect(screen.queryByRole('region', { name: '대기 및 선점 목록' })).toBeNull();
+    expect(screen.getByRole('region', { name: '후보 구역 대기' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '대기 및 선점 3개 목록 펼치기' }));
+    choose('선호 좌석');
+    expect(screen.queryByRole('region', { name: '대기 및 선점 목록' })).toBeNull();
+    expect(screen.getByRole('region', { name: '후보 구역 대기' }).textContent).toContain('대기순서3번');
+    expect(screen.queryByRole('link', { name: '내 대기 및 선점 모두 보기' })).toBeNull();
 });
 
 test('fewer than three valid candidates are shown honestly',async()=>{
@@ -162,7 +265,7 @@ test('multiple held candidates show the preferred zone first without cancelling 
     vi.stubGlobal('fetch', vi.fn(api));
     render(<MemoryRouter initialEntries={[moviePath + '&smart=1']}><App /></MemoryRouter>);
     await loaded();
-    const cards = within(screen.getByRole('complementary', { name: '좌석 선정 후보' })).getAllByRole('button');
+    const cards = candidates().getAllByRole('button');
     expect(cards[0].getAttribute('aria-label')).toContain('선호 좌석');
     expect(cards[0].getAttribute('aria-pressed')).toBe('true');
     expect(plan.candidates.every(c=>c.payment.reservation.status==='PENDING')).toBe(true);
@@ -189,8 +292,8 @@ test('a rejected new request still exposes existing smart waits for management',
     expect(candidates().getAllByRole('button')).toHaveLength(3);
     choose('선호 좌석');
     expect(screen.getByTestId('url').textContent).toContain('candidate=403');
-    fireEvent.click(await screen.findByRole('button',{name:'이 대기 취소'}));
-    fireEvent.click(screen.getByRole('button',{name:'이 대기 취소 확정'}));
+    fireEvent.click(await screen.findByRole('button',{name:'대기 취소'}));
+    fireEvent.click(screen.getByRole('button',{name:'대기 취소 확정'}));
     await screen.findByRole('heading',{name:'대기 취소'});
     expect(candidates().getAllByRole('button')).toHaveLength(2);
 });

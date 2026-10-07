@@ -18,9 +18,9 @@ public class BookingActivityService {
     public BookingActivityService(EntityManager em, BookingHoldService holds) { this.em = em; this.holds = holds; }
 
     public record ReservationView(Long id, String theaterName, String screenName, OffsetDateTime startTime,
-                                  List<String> seatLabels, OffsetDateTime expiresAt, OffsetDateTime serverTime) {}
+                                  List<String> seatLabels, OffsetDateTime expiresAt, OffsetDateTime serverTime, OffsetDateTime endTime) {}
     public record QueueView(Long id, QueueStatus status, String theaterName, String screenName,
-                            OffsetDateTime startTime, long aheadCount, SeatPosition seatZone, int queueNumber, List<String> seatLabels) {}
+                            OffsetDateTime startTime, long aheadCount, SeatPosition seatZone, int queueNumber, List<String> seatLabels, OffsetDateTime endTime) {}
     public record Item(Long id, String movieTitle, int partySize, String kind,
                        ReservationView reservation, List<QueueView> queues, BookingEntryPoint entryPoint, String candidateKind, SeatPosition zone) {}
 
@@ -131,7 +131,7 @@ public class BookingActivityService {
             result.put(group.getId(), new Item(group.getId(), group.getMovie().getTitle(), group.getPartySize(), "holding",
                     new ReservationView(r.getId(), show.getScreen().getTheater().getName(), show.getScreen().getName(),
                             offset(show.getStartTime()), seatLabels.getOrDefault(r.getId(), List.of()),
-                            offset(r.getExpiresAt()), offset(now)), List.of(), group.getEntryPoint(),
+                            offset(r.getExpiresAt()), offset(now), offset(show.getEndTime())), List.of(), group.getEntryPoint(),
                     group.getCandidateKind(), group.getCandidateZone()));
         }
         for (var queue : queues) {
@@ -144,7 +144,7 @@ public class BookingActivityService {
             item.queues().add(new QueueView(queue.getId(), queue.getStatus(), show.getScreen().getTheater().getName(),
                     show.getScreen().getName(), offset(show.getStartTime()), ahead.getOrDefault(queue.getId(), 0L), queue.getSeatZone(), queue.displayNumber(),
                     queue.getRequestedSeatIds().stream().map(requestedSeats::get).filter(Objects::nonNull)
-                            .map(s -> s.getSeatRow() + s.getSeatNumber()).toList()));
+                            .map(s -> s.getSeatRow() + s.getSeatNumber()).toList(), offset(show.getEndTime())));
         }
         return List.copyOf(result.values());
     }

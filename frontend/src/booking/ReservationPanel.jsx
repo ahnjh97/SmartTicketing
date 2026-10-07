@@ -9,7 +9,7 @@ import styles from './ManualBooking.module.css';
 import ui from './BookingComponents.module.css';
 
 const labels = { PENDING: '좌석을 선점했습니다', CONFIRMED: '예매가 완료되었습니다', EXPIRED: '선점 시간이 만료되었습니다', CANCELLED: '예매가 취소되었습니다' };
-export default function ReservationPanel({ flow, onRestart }) {
+export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
     const { reservation: r, payment, receivedAt, busy, pay, cancel, refresh } = flow;
     const { remaining, serverNow } = useReservationClock(r, receivedAt);
     const [confirmCancel, setConfirmCancel] = useState(false);
@@ -30,9 +30,9 @@ export default function ReservationPanel({ flow, onRestart }) {
         </div>}
         <div className={styles.ticket} data-confirmed={confirmed}>
             <div className={styles.ticketMain}>
-                <div><h3>{r.movieTitle}</h3><p><InlineDetails items={[r.theaterName, r.screenName]} /></p>
-                    <p><InlineDetails items={[formatShowDate(r.startTime), <>{r.startTime.slice(11,16)} → {r.endTime.slice(11,16)}</>]} /></p>
-                    <div className={styles.ticketSeats}><span>SEATS</span><strong>{r.seatLabels.join(', ')}</strong></div>
+                <div><h3>{r.movieTitle}</h3><div className={styles.movieInfo}><p><InlineDetails items={[r.theaterName, r.screenName]} /></p>
+                    <p><InlineDetails items={[formatShowDate(r.startTime), <>{r.startTime.slice(11,16)} → {r.endTime.slice(11,16)}</>]} /></p></div>
+                    <div className={styles.ticketSeats}>{candidateLabel && <p className={styles.candidateLabel}>{candidateLabel}</p>}<span className={styles.seatsLabel}>SEATS</span><strong>{r.seatLabels.join(', ')}</strong></div>
                     {ticket && <p className={styles.ticketNumber}>티켓 번호 <strong>{ticket.ticketNumber}</strong></p>}
                 </div>
                 <div className={styles.paymentCheckout}>
@@ -64,7 +64,7 @@ export default function ReservationPanel({ flow, onRestart }) {
     </section>;
 }
 
-function CancelDialog({ busy, onClose, children }) {
+export function CancelDialog({ busy, onClose, children, titleId = 'reservation-cancel-title' }) {
     const dialog = useRef(null);
     useEffect(() => {
         const previous = document.activeElement;
@@ -79,7 +79,7 @@ function CancelDialog({ busy, onClose, children }) {
         };
     }, []);
     return createPortal(<dialog ref={dialog} className={`${ui.surface} ${styles.cancelDialog}`}
-        aria-labelledby="reservation-cancel-title" aria-busy={busy}
+        aria-labelledby={titleId} aria-busy={busy}
         onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
         {children}
     </dialog>, document.body);

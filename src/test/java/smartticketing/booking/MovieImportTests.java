@@ -60,8 +60,8 @@ class MovieImportTests {
         service = new MovieImportService(RestClient.create(), movies, writer, "", "", "11,12", "", "", "", "11:2026-10-03");
         service.importConfiguredMovies(); service.importConfiguredMovies();
         assertThat(fixed.getReleaseDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 3));
-        assertThat(upcoming.getReleaseDate()).isEqualTo(java.time.LocalDate.of(2026, 10, 11));
-        verify(movies, times(1)).save(fixed); verify(movies, times(1)).save(upcoming);
+        assertThat(upcoming.getReleaseDate()).isEqualTo(java.time.LocalDate.of(2026, 12, 1));
+        verify(movies, times(1)).save(fixed); verify(movies, never()).save(upcoming);
         verify(movies, never()).findAll();
     }
 

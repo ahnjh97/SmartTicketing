@@ -38,7 +38,6 @@ export default function useBookingPage(mode) {
         }
         return next;
     }, { replace: Object.keys(values).every(key => ['date', 'from', 'until', 'adult', 'youth', 'party', 'showtime'].includes(key)) }), [setParams, theaterMode, today]);
-    const selectTheater = useCallback(id => update({ theater: id, map: null, q: null, page: null, movie: null, showtime: null }), [update]);
     useEffect(() => {
         const resize = () => setColumns(window.innerWidth < 600 ? 2 : window.innerWidth < 1000 ? 3 : 6);
         const refreshClock = () => setNow(Date.now());
@@ -54,6 +53,7 @@ export default function useBookingPage(mode) {
     const requestedBrand = params.get('brand');
     const brand = [...brands, 'FAVORITES'].includes(requestedBrand) ? requestedBrand
         : theaterId && brands.includes(theater.data?.brand) ? theater.data.brand : 'FAVORITES';
+    const selectTheater = useCallback(id => update({ brand, theater: id, map: null, q: null, page: null, movie: null, showtime: null }), [update, brand]);
     const selectBrand = value => update({ brand: value, theater: null, movie: null, showtime: null, q: null, page: null });
     const theaterList = useTheaterCatalog(theaterMode && brand !== 'FAVORITES', brand);
     const catalogList = useCatalog(!theaterMode ? 'movies' : null, { page, size: 20, landscapeOnly: true });

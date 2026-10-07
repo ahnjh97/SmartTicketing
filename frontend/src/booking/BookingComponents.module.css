@@ -53,8 +53,7 @@
 @media (max-width: 599px) { .actions button { min-width: 0; padding: 12px 20px; }
  }
 .surface { color: var(--booking-ink); }
-.feedback { padding: var(--booking-space-medium); border: 1px solid var(--booking-border); border-radius: var(--booking-radius); background: var(--booking-soft); }
-.feedback[role="alert"] { border: 0; background: transparent; }
+.feedback { padding: var(--booking-space-medium) 0; color: var(--booking-muted); }
 .feedback button { margin-left: var(--booking-space-small); }
 .surface :is(h1, h2, h3) { color: var(--booking-ink); }
 :where(.surface) button { transition: background-color 140ms ease, border-color 140ms ease; }

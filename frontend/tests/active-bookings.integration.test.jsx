@@ -20,11 +20,11 @@ test('loads holdings and queues with one request and no history or per-group cal
     bookingApi.active.mockResolvedValue([holding, waiting]);
     render(view());
     await screen.findByText('대기 영화');
-    expect(screen.getByText('순번 4번')).toBeTruthy();
+    expect(screen.getByLabelText('대기순서 4번')).toBeTruthy();
     expect(screen.getByText('C4, C5')).toBeTruthy();
     expect(screen.getByRole('timer').textContent).toBe('5:00');
     expect(screen.getByRole('link', { name: '선점 영화 C4, C5 예매 확인' }).getAttribute('href')).toBe('/booking/restore?group=10');
-    expect(screen.getByRole('link', { name: '스마트예매에서 확인' }).getAttribute('href')).toBe('/booking/restore?group=8');
+    expect(screen.getByRole('link', { name: '대기 영화 스마트예매 대기 확인' }).getAttribute('href')).toBe('/booking/restore?group=8');
     expect(bookingApi.active).toHaveBeenCalledTimes(1);
     expect(bookingApi.mine).not.toHaveBeenCalled();
     expect(bookingApi.waiting).not.toHaveBeenCalled();
@@ -33,7 +33,7 @@ test('loads holdings and queues with one request and no history or per-group cal
 test('refresh removes bookings that are no longer active', async () => {
     bookingApi.active.mockResolvedValue([waiting]);
     render(view());
-    await screen.findByText('순번 4번');
+    await screen.findByLabelText('대기순서 4번');
     bookingApi.active.mockResolvedValue([]);
     fireEvent.focus(window);
     await waitFor(() => expect(screen.queryByText('대기 영화')).toBeNull());
@@ -42,7 +42,7 @@ test('refresh removes bookings that are no longer active', async () => {
 test('refresh failure preserves the last known list with a visible error', async () => {
     bookingApi.active.mockResolvedValue([waiting]);
     render(view());
-    await screen.findByText('순번 4번');
+    await screen.findByLabelText('대기순서 4번');
     bookingApi.active.mockRejectedValue(new Error('offline'));
     fireEvent.focus(window);
     await screen.findByRole('alert');
@@ -82,7 +82,7 @@ test('focus refreshes position without duplicating an in-flight request', async 
     await act(async () => finish([waiting]));
     bookingApi.active.mockResolvedValue([{ ...waiting, queues: [{ ...queue, aheadCount: 1 }] }]);
     fireEvent.focus(window);
-    await screen.findByText('순번 2번');
+    await screen.findByLabelText('대기순서 2번');
 });
 
 
@@ -94,8 +94,8 @@ test('independent smart entries restore their candidate while manual waiting off
     ]);
     render(view());
     await screen.findByText('일반 영화');
-    expect(screen.getByRole('link', { name: '스마트예매에서 확인' }).getAttribute('href')).toBe('/booking/restore?group=8');
-    expect(screen.getByRole('link', { name: '좌석 확인 · 대기 변경' }).getAttribute('href')).toBe('/booking/restore?group=99');
+    expect(screen.getByRole('link', { name: '대기 영화 스마트예매 대기 확인' }).getAttribute('href')).toBe('/booking/restore?group=8');
+    expect(screen.getByRole('link', { name: '일반 영화 대기 확인' }).getAttribute('href')).toBe('/booking/restore?group=99');
     expect(screen.getByRole('heading', { name: '스마트 예매 2개' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '일반 예매 1건' })).toBeTruthy();
 });

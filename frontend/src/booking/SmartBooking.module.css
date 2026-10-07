@@ -3,7 +3,7 @@
 .smart :is(h2, h3, strong) { font-weight: 600; letter-spacing: normal; }
 .heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
 .heading h2 { margin: 0; font-size: clamp(24px, 3vw, 32px); }
-.notice { padding: clamp(20px, 3vw, 32px); border-radius: var(--booking-radius-large); background: var(--booking-soft); border: 1px solid var(--booking-border); min-width: 0; }
+.notice { padding: clamp(20px, 3vw, 32px) 0; min-width: 0; }
 .notice p, .failure p { font-size: 13px; line-height: 1.8; color: var(--booking-muted); }
 .failure { margin: 24px 0; min-width: 0; }
 .failure h3 { font-size: 22px; margin: 12px 0; }
@@ -14,31 +14,63 @@
 .waiting { border-top: 1px solid var(--booking-border); margin-top: 24px; padding-top: 24px; }
 
 /* Keep the original progress and reservation surfaces; only add a compact candidate switcher. */
-.candidateLayout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; align-items: start; }
+.candidateLayout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 40px; align-items: start; }
 .candidateSidebar { display: grid; gap: 10px; min-width: 0; border-right: 1px solid var(--booking-border); padding-right: 20px; }
 .sidebarHeading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sidebarHeading h3 { margin: 0; font-size: 16px; }
+.listToggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--booking-border); border-radius: 8px; background: rgb(255 255 255 / 6%); color: var(--booking-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.listToggle:hover { background: rgb(255 255 255 / 10%); }
+.listToggle:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 3px; }
+.candidateList { display: grid; gap: 10px; min-width: 0; width: 100%; }
+.candidateList[hidden] { display: none; }
+.sidebarGroup { display: grid; gap: 10px; min-width: 0; }
+.sidebarGroup + .sidebarGroup { border-top: 1px solid var(--booking-border-strong); margin-top: 8px; padding-top: 14px; }
 .sidebarHeading span, .sidebarNote { font-size: 12px; color: var(--booking-muted); line-height: 1.7; }
-.candidateCard { display: grid; gap: 10px; width: 100%; text-align: left; padding: 14px; font: inherit; font-size: 12px; color: var(--booking-muted); background: transparent; border: 1px solid var(--booking-border); border-radius: 12px; cursor: pointer; }
-.candidateCard[aria-pressed="true"] { border-color: var(--booking-accent); background: var(--booking-soft); color: var(--booking-ink); }
-.candidateCard:hover:not(:disabled) { background: var(--booking-soft); }
+.candidateCard { display: grid; gap: 2px; width: 100%; text-align: left; padding: 12px; font: inherit; font-size: 12px; color: var(--booking-muted); background: linear-gradient(135deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%)); border: 1px solid rgb(255 255 255 / 16%); border-radius: 12px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 4px 14px rgb(0 0 0 / 12%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); cursor: pointer; }
+.candidateCard[aria-pressed="true"] { border-color: var(--booking-accent); background: linear-gradient(135deg, rgb(255 255 255 / 12%), rgb(255 255 255 / 6%)); color: var(--booking-ink); }
+.candidateCard:hover:not(:disabled) { background: linear-gradient(135deg, rgb(255 255 255 / 14%), rgb(255 255 255 / 7%)); }
 .candidateCard:disabled { cursor: wait; }
 .candidateCard:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 2px; }
-.cardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cardTop strong { color: var(--booking-ink); font-size: 15px; }
-.zoneMap { display: block; width: 100%; max-width: 180px; height: auto; margin: 0 auto; }
+.cardMovie { min-width: 0; color: var(--booking-ink); font-size: 16px; line-height: 1.4; }
+.cardMeta { line-height: 1.35; overflow-wrap: anywhere; }
+.cardSchedule { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cardTheater { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.cardTheater .marquee { flex: 1; }
+.cardScreen { flex-shrink: 0; white-space: nowrap; color: var(--booking-ink); }
+.marquee { display: block; min-width: 0; overflow: hidden; }
+.marquee > span { display: block; width: max-content; white-space: nowrap; }
+.marquee[data-overflow='true'] > span { animation: cardMarquee var(--marquee-duration) linear infinite alternate; }
+@keyframes cardMarquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(var(--marquee-distance)); } }
+@media (prefers-reduced-motion: reduce) { .marquee[data-overflow='true'] { overflow-x: auto; } .marquee[data-overflow='true'] > span { animation: none; } }
+.cardTop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--booking-border); }
+.cardTop strong { color: var(--booking-ink); font-size: 13px; }
+.zoneMap { display: block; width: 100%; max-width: 280px; height: auto; margin: 16px auto 0; }
 .candidateStatus { flex-shrink: 0; color: var(--booking-accent); text-align: right; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .candidateDetail { min-width: 0; }
-.candidateSidebar > a { color: var(--booking-accent); font-size: 12px; min-height: 44px; display: flex; align-items: center; }
-.waitingNumber { display: flex; align-items: baseline; justify-content: center; gap: 12px; white-space: nowrap; }
-.waitingHelp { color: var(--booking-muted); font-size: 12px; line-height: 1.8; margin: 20px 0; text-align: left; }
-.waitingHelp summary { cursor: pointer; padding: 8px 0; }
+.candidateDetail .waitingReservation { width: var(--waiting-width, 560px); min-width: 0; max-width: 100%; }
+.candidateDetail .waitingTicketMain { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: center; gap: 16px; }
+.waitingTicketMain > .zoneMap { width: 100%; max-width: none; height: 100%; margin: 0; justify-self: stretch; align-self: stretch; object-fit: contain; }
+.candidateDetail .waitingTitle { margin: 0 0 12px; white-space: nowrap; }
+.waitingNumber { text-align: center; }
+.candidateDetail .candidateKind { margin: 0 0 8px; color: var(--booking-ink); font-size: 16px; font-weight: 600; }
+.waitingSeatInfo { margin-top: 24px; }
+.waitingSeatRow { display: flex; align-items: baseline; gap: 12px; }
+.candidateDetail .waitingSeatRow .candidateKind { margin: 0; white-space: nowrap; }
+.waitingSeatRow .partySize { border-left: 1px solid var(--booking-border-strong); padding-left: 12px; white-space: nowrap; }
+.candidateDetail .waitingMovieInfo p { margin: 2px 0; line-height: 1.5; }
+.partySize { color: var(--booking-ink); font-size: 14px; }
+.waitingNumber > strong { display: inline-block; line-height: 1.2; letter-spacing: normal; }
+.waitingNumber > strong > small { display: inline-block; width: 0; margin-left: 0; text-indent: 5px; vertical-align: baseline; white-space: nowrap; }
 .candidateDetail p { line-height: 1.8; font-size: 13px; }
 .candidateDetail .actions { justify-content: center; margin-bottom: 12px; }
 @media (max-width: 800px) {
+    .candidateDetail .waitingReservation { width: 560px; }
+    .candidateDetail .waitingTitle { white-space: normal; }
+    .waitingTitle .marquee > span { width: auto; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; animation: none; }
     .candidateLayout { grid-template-columns: 1fr; gap: 28px; }
     .candidateSidebar { display: flex; flex-wrap: wrap; gap: 8px; border-right: 0; border-bottom: 1px solid var(--booking-border); padding: 0 0 16px; }
-    .sidebarHeading, .sidebarNote, .candidateSidebar > a { width: 100%; margin: 0; }
-    .candidateCard { flex: 1 1 180px; border: 1px solid var(--booking-border); border-radius: 8px; padding: 12px; }
+    .sidebarHeading, .sidebarNote { width: 100%; margin: 0; }
+    .sidebarGroup { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+    .candidateCard { flex: 1 1 240px; min-width: 0; border-radius: 8px; padding: 12px; }
     .candidateCard[aria-pressed="true"] { border-color: var(--booking-accent); }
 }
