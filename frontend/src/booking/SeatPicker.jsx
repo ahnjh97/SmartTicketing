@@ -27,7 +27,7 @@ export default function SeatPicker({ seats, selected, limit, onChange, disabled 
             </div>)}</div>
         </div>
         <div className={styles.legend}><span><i />선택 가능</span><span><i className={styles.selected} />선택 중</span>{allowWaiting && <span><i className={styles.waitable} />대기 가능</span>}<span><i className={styles.unavailable} />선택 불가</span></div>
-        {allowWaiting && <p className={styles.note}>대기 좌석이 포함되면 선택한 좌석이 모두 비었을 때 함께 선점합니다.</p>}
+        {allowWaiting && <p className={styles.note}>대기는 회차당 한 구역에서만 신청할 수 있습니다. 선택한 좌석이 모두 비었을 때 구역 내 대기 순서에 따라 함께 선점합니다.</p>}
         <p className={styles.note}>선택만으로 좌석이 확보되지 않습니다. ‘좌석 선점’ 후 서버가 확정한 좌석을 5분 동안 보관합니다.</p>
     </section>;
 }

@@ -26,7 +26,7 @@ export default function WaitingPanel({ flow }) {
     if (flow.reservation && data && !data.items.length && !queue.error) return null;
     return <section className={styles.panel} aria-label="복수 회차 대기" aria-busy={queue.busy}>
         <header className={styles.heading}><div><p className={styles.eyebrow}>MORE POSSIBILITIES</p><h3>기다리는 동안, 기회는 넓게.</h3>
-            <p>원하는 회차를 직접 골라 신청하세요. 한 곳이 확보되면 나머지는 잠시 멈춥니다.</p></div><span className={styles.badge}>WAITLIST</span></header>
+            <p>회차마다 한 구역에 대기합니다. 구역을 지정하지 않으면 첫 번째 선호 구역으로 신청됩니다. 한 곳이 확보되면 나머지는 잠시 멈춥니다.</p></div><span className={styles.badge}>WAITLIST</span></header>
         
         {queue.error && <div className={styles.error} role="alert"><h4 ref={heading} tabIndex={-1}>대기 상태를 확인해주세요</h4><p>{queue.error.message}</p><GlassButton onClick={queue.retry} disabled={busy}>다시 확인</GlassButton></div>}
         {!data && !queue.error && <p role="status">대기 가능한 회차를 확인하고 있습니다…</p>}
