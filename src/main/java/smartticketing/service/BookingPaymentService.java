@@ -23,12 +23,14 @@ public class BookingPaymentService {
     private final BookingHoldService holds;
     private final BookingIdempotency operations;
     private final TicketService tickets;
+    private final NotificationService notifications;
     private final boolean allowFailure;
 
     public BookingPaymentService(EntityManager em, BookingHoldService holds, BookingIdempotency operations,
-            TicketService tickets, Environment environment,
+            TicketService tickets, NotificationService notifications, Environment environment,
             @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
         this.em = em; this.holds = holds; this.operations = operations; this.tickets = tickets;
+        this.notifications = notifications;
         this.allowFailure = allowFailure && environment.acceptsProfiles(Profiles.of("dev", "test"));
     }
 
@@ -57,7 +59,6 @@ public class BookingPaymentService {
         BookingHoldService.validateShow(locked.show(), holds.now());
         var inventory = holds.lockInventory(locked.show().getId());
         var owned = validateInventory(locked, inventory, SeatStatus.HOLDING);
-        // Time is rechecked after all potentially blocking inventory locks.
         if (!r.getExpiresAt().isAfter(holds.now())) {
             holds.expireLockedGroup(locked.group());
             reject(409, "좌석 선점 시간이 만료되었습니다.");
@@ -93,7 +94,6 @@ public class BookingPaymentService {
     }
 
     private Locked lock(Long userId, Long id) {
-        // Read IDs only: never hydrate a stale snapshot before the locking reads.
         var refs = em.createQuery("select r.requestGroup.id, r.showtime.id from Reservation r where r.id=:id and r.user.id=:user", Object[].class)
                 .setParameter("id", id).setParameter("user", userId).getResultList();
         if (refs.isEmpty() || refs.getFirst()[0] == null) { reject(404, "예약을 찾을 수 없습니다."); }
