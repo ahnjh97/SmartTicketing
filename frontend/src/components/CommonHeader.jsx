@@ -1,5 +1,6 @@
 import InlineDetails from './InlineDetails.jsx';
 import BrandLogo from './BrandLogo.jsx';
+import HeaderTicketPreview from './HeaderTicketPreview.jsx';
 import { useEffect, useRef, useState } from "react";
 import "../styles/CommonHeader.css";
 import { PAGE_PATHS } from "../navigation.js";
@@ -26,13 +27,10 @@ function formatDate(value) {
 }
 
 export default function CommonHeader(props) {
-    // Account data and popovers belong to one signed-in session.
     return <HeaderContent key={`${props.user?.id ?? 'guest'}:${Boolean(props.disabled)}`} {...props} />;
 }
 
-function HeaderContent({
-    user, disabled, setupRequired,
-}) {
+function HeaderContent({ user, disabled, setupRequired }) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const headerRef = useRef(null);
@@ -41,12 +39,14 @@ function HeaderContent({
     const navRef = useRef(null);
     const accountRef = useRef(null);
     const toggleRef = useRef(null);
+    const previewTimerRef = useRef(null);
     const [compact, setCompact] = useState(false);
     const [openLocation, setOpenLocation] = useState(null);
     const [openPanel, setOpenPanel] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifications, setNotifications] = useState([]);
     const [tickets, setTickets] = useState([]);
+    const [previewTicket, setPreviewTicket] = useState(null);
     const [notificationLoading, setNotificationLoading] = useState(false);
     const [ticketLoading, setTicketLoading] = useState(false);
 
@@ -55,25 +55,45 @@ function HeaderContent({
         ? "movies"
         : matchPath(`${PAGE_PATHS.theaters}/*`, pathname) ? "theaters" : null;
     const navigationDisabled = disabled || Boolean(user && setupRequired);
+    const validTickets = tickets.filter((ticket) => ticket.status === "VALID");
+
+    useEffect(() => () => {
+        if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+    }, []);
+
+    function showTicketPreview(ticket) {
+        if (!ticket || ticket.status !== "VALID") return;
+        if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+        setPreviewTicket(ticket);
+    }
+
+    function hideTicketPreview() {
+        if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+        previewTimerRef.current = window.setTimeout(() => setPreviewTicket(null), 450);
+    }
+
+    function keepTicketPreview() {
+        if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+    }
 
     function renderGuestItems() {
         return (
-                <NavLink
-                    to={PAGE_PATHS.login}
-                    className="common-header-icon-trigger"
-                    aria-label="로그인"
-                    title="로그인"
-                    aria-disabled={navigationDisabled || undefined}
-                    tabIndex={navigationDisabled ? -1 : undefined}
-                    onClick={handleNavigation}
-                >
-                    <span className="common-header-trigger-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="8" r="3.2" />
-                            <path d="M5.5 20c.8-3.3 3.1-5 6.5-5s5.7 1.7 6.5 5" />
-                        </svg>
-                    </span>
-                </NavLink>
+            <NavLink
+                to={PAGE_PATHS.login}
+                className="common-header-icon-trigger"
+                aria-label="로그인"
+                title="로그인"
+                aria-disabled={navigationDisabled || undefined}
+                tabIndex={navigationDisabled ? -1 : undefined}
+                onClick={handleNavigation}
+            >
+                <span className="common-header-trigger-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="8" r="3.2" />
+                        <path d="M5.5 20c.8-3.3 3.1-5 6.5-5s5.7 1.7 6.5 5" />
+                    </svg>
+                </span>
+            </NavLink>
         );
     }
 
@@ -104,7 +124,6 @@ function HeaderContent({
             const brand = brandRef.current;
             const nav = navRef.current;
             const account = accountRef.current;
-
             if (!inner || !brand || !nav || !account) return;
 
             const style = getComputedStyle(inner);
@@ -122,7 +141,6 @@ function HeaderContent({
             .map((ref) => ref.current)
             .filter(Boolean)
             .forEach((element) => observer.observe(element));
-
         return () => observer.disconnect();
     }, []);
 
@@ -140,6 +158,7 @@ function HeaderContent({
             if (event.key === "Escape") {
                 setOpenPanel(null);
                 setOpenLocation(null);
+                setPreviewTicket(null);
                 toggleRef.current?.focus();
             }
         }
@@ -156,6 +175,7 @@ function HeaderContent({
         if (navigationDisabled) return;
         setOpenLocation(null);
         setOpenPanel((current) => current === panel ? null : panel);
+        setPreviewTicket(null);
 
         if (panel === "notifications") {
             setNotificationLoading(true);
@@ -183,13 +203,11 @@ function HeaderContent({
             await notificationApi.read(id);
             setNotifications((items) => {
                 const target = items.find((item) => item.id === id);
-                if (target && !target.read) {
-                    setUnreadCount((count) => Math.max(0, count - 1));
-                }
+                if (target && !target.read) setUnreadCount((count) => Math.max(0, count - 1));
                 return items.map((item) => item.id === id ? { ...item, read: true } : item);
             });
         } catch {
-            // 목록 UI는 유지하고 다음 갱신에서 다시 확인한다.
+            // 목록 UI는 유지한다.
         }
     }
 
@@ -199,7 +217,7 @@ function HeaderContent({
             setNotifications((items) => items.map((item) => ({ ...item, read: true })));
             setUnreadCount(0);
         } catch {
-            // 다음 폴링에서 다시 확인한다.
+            // 다음 갱신에서 다시 확인한다.
         }
     }
 
@@ -208,9 +226,7 @@ function HeaderContent({
             await notificationApi.delete(id);
             setNotifications((items) => {
                 const target = items.find((item) => item.id === id);
-                if (target && !target.read) {
-                    setUnreadCount((count) => Math.max(0, count - 1));
-                }
+                if (target && !target.read) setUnreadCount((count) => Math.max(0, count - 1));
                 return items.filter((item) => item.id !== id);
             });
         } catch {
@@ -232,27 +248,28 @@ function HeaderContent({
         }
         setOpenLocation(null);
         setOpenPanel(null);
+        setPreviewTicket(null);
     }
 
     function renderAccountItems() {
         return (
             <>
                 {user?.admin === true && (
-                <button
-                    type="button"
-                    className="common-header-icon-trigger"
-                    aria-label="데이터 관리"
-                    title="데이터 관리"
-                    disabled={disabled}
-                    onClick={() => { if (!disabled) { setOpenPanel(null); setOpenLocation(null); navigate(PAGE_PATHS.adminData); } }}
-                >
-                    <span className="common-header-trigger-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l1.5 1.4a8 8 0 0 0 0 2.2L3 14.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2-2.5.6A8 8 0 0 0 15 5l-.5-2Z" />
-                            <circle cx="12" cy="12" r="3" />
-                        </svg>
-                    </span>
-                </button>
+                    <button
+                        type="button"
+                        className="common-header-icon-trigger"
+                        aria-label="데이터 관리"
+                        title="데이터 관리"
+                        disabled={disabled}
+                        onClick={() => { if (!disabled) { setOpenPanel(null); setOpenLocation(null); navigate(PAGE_PATHS.adminData); } }}
+                    >
+                        <span className="common-header-trigger-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l1.5 1.4a8 8 0 0 0 0 2.2L3 14.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2A8 8 0 0 0 15 5l-.5-2Z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
+                    </button>
                 )}
 
                 <button
@@ -265,7 +282,7 @@ function HeaderContent({
                 >
                     <span className="common-header-trigger-icon" aria-hidden="true">
                         <svg className="common-header-ticket-icon" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 5h16a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a3 3 0 0 0-0-6V7a2 2 0 0 1 2-2Z" />
+                            <path d="M4 5h16a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 1 2-2Z" />
                             <path d="M13 5v2m0 4v2m0 4v2" />
                         </svg>
                     </span>
@@ -285,11 +302,7 @@ function HeaderContent({
                             <path d="M10 21h4" />
                         </svg>
                     </span>
-                    {unreadCount > 0 && (
-                        <span className="common-header-notification-badge">
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                        </span>
-                    )}
+                    {unreadCount > 0 && <span className="common-header-notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
                 </button>
 
                 <NavLink
@@ -370,25 +383,38 @@ function HeaderContent({
                 {compact && <>
                     <nav className="common-header-nav common-header-compact-nav" aria-label="주 메뉴">
                         {[{ view: "movies", label: "영화" }, { view: "theaters", label: "극장" }].map(({ view, label }) => (
-                            <Link key={view} to={view === "movies" ? PAGE_PATHS.home : PAGE_PATHS[view]}
+                            <Link
+                                key={view}
+                                to={view === "movies" ? PAGE_PATHS.home : PAGE_PATHS[view]}
                                 className={`common-header-link common-header-menu-link${activeMenu === view ? " is-active" : ""}`}
                                 aria-current={activeMenu === view ? "page" : undefined}
                                 aria-disabled={navigationDisabled || undefined}
                                 tabIndex={navigationDisabled ? -1 : undefined}
-                                onClick={handleNavigation}>{label}</Link>
+                                onClick={handleNavigation}
+                            >
+                                {label}
+                            </Link>
                         ))}
                     </nav>
-                    {user ? <button ref={toggleRef} type="button" className="common-header-menu-toggle"
-                        aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"}
-                        aria-expanded={menuOpen} aria-controls="common-header-mobile-menu"
-                        onClick={() => {
-                            setOpenPanel(null);
-                            setOpenLocation(menuOpen ? null : pathname);
-                        }}>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            {menuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
-                        </svg>
-                    </button> : <nav className="common-header-account" aria-label="회원 메뉴">{renderGuestItems()}</nav>}
+                    {user ? (
+                        <button
+                            ref={toggleRef}
+                            type="button"
+                            className="common-header-menu-toggle"
+                            aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"}
+                            aria-expanded={menuOpen}
+                            aria-controls="common-header-mobile-menu"
+                            onClick={() => {
+                                setOpenPanel(null);
+                                setPreviewTicket(null);
+                                setOpenLocation(menuOpen ? null : pathname);
+                            }}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                {menuOpen ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+                            </svg>
+                        </button>
+                    ) : <nav className="common-header-account" aria-label="회원 메뉴">{renderGuestItems()}</nav>}
                 </>}
             </div>
 
@@ -403,9 +429,7 @@ function HeaderContent({
                             <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0}>모두 읽음</button>
                         </div>
                         <div className="common-header-popover-body">
-                            {notificationLoading ? (
-                                null
-                            ) : notifications.length === 0 ? (
+                            {notificationLoading ? null : notifications.length === 0 ? (
                                 <p className="common-header-popover-empty">새로운 알림이 없습니다.</p>
                             ) : (
                                 notifications.slice(0, 8).map((item) => {
@@ -440,11 +464,15 @@ function HeaderContent({
                         </div>
                     </div>
 
-                    <div className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}>
+                    <div
+                        className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}
+                        onMouseEnter={keepTicketPreview}
+                        onMouseLeave={hideTicketPreview}
+                    >
                         <div className="common-header-popover-header">
                             <div>
                                 <strong>내 티켓</strong>
-                                <span>{tickets.length}개</span>
+                                <span>{validTickets.length}개</span>
                             </div>
                             <Link
                                 to={PAGE_PATHS.tickets}
@@ -455,16 +483,22 @@ function HeaderContent({
                             </Link>
                         </div>
                         <div className="common-header-popover-body">
-                            {ticketLoading ? (
-                                null
-                            ) : tickets.length === 0 ? (
-                                <p className="common-header-popover-empty">발급된 티켓이 없습니다.</p>
+                            {ticketLoading ? null : validTickets.length === 0 ? (
+                                <p className="common-header-popover-empty">사용 가능한 티켓이 없습니다.</p>
                             ) : (
-                                tickets.slice(0, 6).map((ticket) => (
-                                    <article key={ticket.ticketId} className="common-header-ticket-item">
+                                validTickets.slice(0, 6).map((ticket) => (
+                                    <article
+                                        key={ticket.ticketId}
+                                        className="common-header-ticket-item common-header-ticket-item-valid"
+                                        onMouseEnter={() => showTicketPreview(ticket)}
+                                        onMouseLeave={hideTicketPreview}
+                                        onFocus={() => showTicketPreview(ticket)}
+                                        onBlur={hideTicketPreview}
+                                        tabIndex={0}
+                                    >
                                         <div className="common-header-ticket-title">
                                             <strong>{ticket.movieTitle}</strong>
-                                            <span>{TICKET_STATUS_LABELS[ticket.status] ?? ticket.status}</span>
+                                            <span>사용 가능</span>
                                         </div>
                                         <p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p>
                                         <p>{formatDate(ticket.startTime)}</p>
@@ -478,9 +512,19 @@ function HeaderContent({
                 </>
             )}
 
-            {menuOpen && <nav id="common-header-mobile-menu" className="common-header-mobile-menu" aria-label="전체 메뉴">
-                {renderAccountItems()}
-            </nav>}
+            {previewTicket && (
+                <HeaderTicketPreview
+                    ticket={previewTicket}
+                    onMouseEnter={keepTicketPreview}
+                    onMouseLeave={hideTicketPreview}
+                />
+            )}
+
+            {menuOpen && (
+                <nav id="common-header-mobile-menu" className="common-header-mobile-menu" aria-label="전체 메뉴">
+                    {renderAccountItems()}
+                </nav>
+            )}
         </header>
     );
 }
