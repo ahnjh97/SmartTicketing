@@ -15,11 +15,14 @@ public class WaitingQueueService {
     private static final int OPPORTUNITY_MINUTES = 5;
 
     private final WaitingQueueRepository queues;
+    private final NotificationService notifications;
     private final EntityManager em;
 
     public WaitingQueueService(WaitingQueueRepository queues,
+                               NotificationService notifications,
                                EntityManager em) {
         this.queues = queues;
+        this.notifications = notifications;
         this.em = em;
     }
 
