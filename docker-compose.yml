@@ -76,6 +76,8 @@ services:
       SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
       SPRING_DATA_REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Mode switch only; application cache behavior will be implemented separately.
+      APP_CACHE_ENABLED: ${APP_CACHE_ENABLED:-false}
     expose:
       - "8080"
     networks:

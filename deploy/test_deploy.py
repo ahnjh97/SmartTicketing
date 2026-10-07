@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -18,13 +19,18 @@ FRONTEND_FINGERPRINT = hashlib.sha256((FRONTEND_METADATA + '\n').encode()).hexdi
 
 class DeploymentTests(unittest.TestCase):
     def run_deploy(self, *, payload=ARCHIVE, latest=REVISION, docker_failure='', artifact_id='123-1',
-                   loaded_backend_metadata=BACKEND_METADATA, loaded_frontend_metadata=FRONTEND_METADATA):
+                   loaded_backend_metadata=BACKEND_METADATA, loaded_frontend_metadata=FRONTEND_METADATA,
+                   saved_mode=None):
         shell = os.environ.get('TEST_SHELL') or shutil.which('bash')
         self.assertIsNotNone(shell, 'Bash is required')
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             checkout = root / 'SmartTicketing'
             checkout.mkdir()
+            (checkout / 'deploy').mkdir()
+            shutil.copyfile(Path(__file__).with_name('cache-mode.py'), checkout / 'deploy' / 'cache-mode.py')
+            if saved_mode:
+                (checkout / '.env.deployment').write_text(f'APP_CACHE_ENABLED={saved_mode}\nBACKEND_IMAGE=previous:tag\n')
             artifacts = root / '.smartticketing-artifacts'
             artifacts.mkdir()
             upload = artifacts / '123-1.tar.gz'
@@ -38,6 +44,7 @@ class DeploymentTests(unittest.TestCase):
             binaries.mkdir()
             scripts = {
                 'flock': '#!/bin/sh\nexit 0\n',
+                'python3': '#!/bin/sh\nexec "$TEST_PYTHON" "$@"\n',
                 'git': '''#!/bin/sh
 printf 'git %s\\n' "$*" >> "$COMMAND_LOG"
 if [ "$1" = rev-parse ]; then printf '%s\\n' "$LATEST_REVISION"; fi
@@ -62,7 +69,10 @@ fi
             env = dict(os.environ, HOME=root.as_posix(),
                        COMMAND_LOG=commands.as_posix(), LATEST_REVISION=latest,
                        DOCKER_FAILURE=docker_failure, MOCK_BIN=binaries.as_posix(),
-                       LOADED_BACKEND_METADATA=loaded_backend_metadata, LOADED_FRONTEND_METADATA=loaded_frontend_metadata)
+                       LOADED_BACKEND_METADATA=loaded_backend_metadata, LOADED_FRONTEND_METADATA=loaded_frontend_metadata,
+                       TEST_PYTHON=Path(sys.executable).as_posix())
+            for key in ('APP_CACHE_ENABLED', 'BACKEND_IMAGE', 'FRONTEND_IMAGE'):
+                env.pop(key, None)
             env['PATH'] = str(binaries) + os.pathsep + env['PATH']
             script = 'export PATH="$(cd "$MOCK_BIN" && pwd):$PATH"\n'
             script += Path(__file__).with_name('image-fingerprint.sh').read_text(encoding='utf-8') + '\n'
@@ -76,6 +86,7 @@ fi
                 'upload_exists': upload.exists(),
                 'other_run': unrelated.read_bytes(),
                 'env': (checkout / '.env').read_text(),
+                'state': (checkout / '.env.deployment').read_text() if (checkout / '.env.deployment').exists() else '',
             }
 
     def test_verified_images_are_loaded_and_used_without_build_or_pull(self):
@@ -93,6 +104,14 @@ fi
         self.assertFalse(run['upload_exists'])
         self.assertEqual(run['other_run'], b'other-run')
         self.assertEqual(run['env'], 'preserve-me')
+        self.assertIn(f'BACKEND_IMAGE=smartticketing-backend:{REVISION}', run['state'])
+
+    def test_regular_deployment_preserves_mode_and_records_new_images(self):
+        run = self.run_deploy(saved_mode='true')
+        self.assertEqual(run['result'].returncode, 0, run['result'].stderr)
+        self.assertIn('compose --env-file .env --env-file .env.deployment up', run['commands'])
+        self.assertIn('APP_CACHE_ENABLED=true', run['state'])
+        self.assertIn(f'BACKEND_IMAGE=smartticketing-backend:{REVISION}', run['state'])
 
     def test_corrupt_archive_stops_before_checkout_or_load(self):
         run = self.run_deploy(payload=b'incomplete-transfer')

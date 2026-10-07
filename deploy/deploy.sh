@@ -15,16 +15,25 @@ artifact="$HOME/.smartticketing-artifacts/$artifact_id.tar.gz"
 cd "$HOME/SmartTicketing"
 
 # Also protects the server if a previous SSH session outlives its Actions job.
-exec 9> "$HOME/.smartticketing-deploy.lock"
+exec 9> .deploy-operation.lock
 flock -w 900 9
+command -v python3 >/dev/null || { echo 'Python 3 is required for deployment state.' >&2; exit 1; }
+
+# Keep the selected mode across ordinary deployments. Explicit image exports below
+# override previously recorded images while .env still supplies the secrets.
+compose_options=()
+if [[ -f .env.deployment ]]; then
+  compose_options=(--env-file .env --env-file .env.deployment)
+fi
+compose() { docker compose "${compose_options[@]}" "$@"; }
 
 diagnostics() {
   result=$?
   rm -f -- "$artifact" || true
   if (( result != 0 )); then
     echo "Deployment failed (exit $result). Container status and recent logs:"
-    docker compose ps -a || true
-    docker compose logs --no-color --tail=100 mysql redis backend frontend nginx || true
+    compose ps -a || true
+    compose logs --no-color --tail=100 mysql redis backend frontend nginx || true
   fi
   exit "$result"
 }
@@ -53,12 +62,13 @@ git checkout main
 git reset --hard "$revision"
 
 # Validate without printing resolved secrets. Never rebuild or pull application images.
-docker compose config --quiet
-docker compose up -d --no-build --pull never --wait --wait-timeout 600 mysql redis backend frontend
+compose config --quiet
+compose up -d --no-build --pull never --wait --wait-timeout 600 mysql redis backend frontend
 
 # Recreate the proxy so it resolves the new backend/frontend container addresses.
 # Certificate/config errors are caught before replacing the existing proxy.
-docker compose run --rm -T --no-deps nginx nginx -t < /dev/null
-docker compose up -d --no-deps --force-recreate nginx
-docker compose exec -T nginx nginx -t < /dev/null
-docker compose ps
+compose run --rm -T --no-deps nginx nginx -t < /dev/null
+compose up -d --no-deps --force-recreate nginx
+compose exec -T nginx nginx -t < /dev/null
+python3 deploy/cache-mode.py record-images --backend-image "$BACKEND_IMAGE" --frontend-image "$FRONTEND_IMAGE"
+compose ps

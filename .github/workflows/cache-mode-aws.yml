@@ -1,0 +1,53 @@
+name: Switch AWS cache configuration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Configuration only until application cache is implemented'
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - cache-on
+          - cache-off
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-production
+  cancel-in-progress: false
+
+jobs:
+  switch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Run the deployed mode switch script without building or deploying code
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          : "${AWS_HOST:?Set AWS_HOST}"
+          : "${AWS_USERNAME:?Set AWS_USERNAME}"
+          : "${AWS_SSH_KEY:?Set AWS_SSH_KEY}"
+          case "$MODE" in status|cache-on|cache-off) ;; *) exit 1 ;; esac
+          install -m 700 -d ~/.ssh
+          key=$(mktemp ~/.ssh/cache-mode-key.XXXXXX)
+          trap 'rm -f -- "$key"' EXIT
+          printf '%s\n' "$AWS_SSH_KEY" > "$key"
+          chmod 600 "$key"
+          # Same host trust policy as deploy-aws.yml: keys discovered on the runner.
+          ssh-keyscan -4 -T 30 -t ed25519,rsa -H "$AWS_HOST" > ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
+          ssh -4 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=30 \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -i "$key" \
+            "$AWS_USERNAME@$AWS_HOST" \
+            "cd ~/SmartTicketing && python3 deploy/cache-mode.py '$MODE'"
+          echo 'Mode configuration checked. Application cache behavior is not implemented yet.' >> "$GITHUB_STEP_SUMMARY"
