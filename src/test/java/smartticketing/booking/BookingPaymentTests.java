@@ -99,22 +99,22 @@ class BookingPaymentTests {
         });
     }
     @org.junit.jupiter.api.Tag("core")
-    @Test void failureRetryUsesServerPriceAndOriginalDeadlineAndReplayDoesNotNotifyAgain() {
+    @Test void failureRetryUsesServerPriceAndOriginalDeadlineWithoutCreatingNotifications() {
         var f = fixture(); var failedKey = key(); var successKey = key();
         var failed = pay(f,failedKey,true,CLOCK);
         assertThat(JSON.readTree(failed.body()).get("status").asText()).isEqualTo("FAILED");
         assertThat(pay(f,failedKey,true,CLOCK)).isEqualTo(failed);
-        assertState(f,ReservationStatus.PENDING,SeatStatus.HOLDING,PaymentStatus.FAILED,null,1);
+        assertState(f,ReservationStatus.PENDING,SeatStatus.HOLDING,PaymentStatus.FAILED,null,0);
         var success = pay(f,successKey,false,Clock.offset(CLOCK,Duration.ofMinutes(4)));
         assertThat(JSON.readTree(success.body()).get("amount").asInt()).isEqualTo(18000);
         assertThat(JSON.readTree(success.body()).get("reservation").get("expiresAt").asText()).isEqualTo("2026-10-01T09:05:00+09:00");
         assertThat(pay(f,successKey,false,CLOCK)).isEqualTo(success);
         assertThat(pay(f,successKey,true,CLOCK).status()).isEqualTo(409);
         assertThat(pay(f,key(),false,CLOCK).status()).isEqualTo(201);
-        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
 
-    @Test void recoveryDiscoversConfirmedReservationAfterRestartAndPreservesLegacyNotifications() {
+    @Test void recoveryDiscoversConfirmedReservationAfterRestartAndPreservesHiddenLegacyNotifications() {
         var f = fixture();
         long legacy = tx(em -> notifications(em).create(f.user, NotificationType.PAYMENT_FAILED, "기존 알림 보존").getId());
         pay(f, key(), false, CLOCK);
@@ -126,9 +126,13 @@ class BookingPaymentTests {
             assertThat(page.items().getFirst().path()).contains("group=" + f.group, "reservation=" + f.reservation, "entry=THEATER_NORMAL");
             assertThat(recovery.list(f.other, null).items()).isEmpty();
             assertThat(recovery.one(f.user, f.group).status()).isEqualTo(BookingGroupStatus.COMPLETED);
-            var old = notifications(em).list(f.user, false).stream().filter(n -> n.id().equals(legacy)).findFirst().orElseThrow();
-            assertThat(old.message()).isEqualTo("기존 알림 보존");
-            assertThat(old.groupId()).isNull(); assertThat(old.reservationId()).isNull();
+            assertThat(notifications(em).list(f.user, false)).isEmpty();
+            assertThat(notifications(em).list(f.user, true)).isEmpty();
+            var old = em.find(Notification.class, legacy);
+            assertThat(old).isNotNull();
+            assertThat(old.getMessage()).isEqualTo("기존 알림 보존");
+            assertThat(old.getType()).isEqualTo(NotificationType.PAYMENT_FAILED);
+            assertThat(old.getBookingGroupId()).isNull(); assertThat(old.getReservationId()).isNull();
             return null;
         });
     }
