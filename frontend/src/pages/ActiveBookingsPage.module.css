@@ -12,12 +12,19 @@
 .cardLink:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
 .cardTop { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .cardTop h3 { min-width: 0; margin: 0; font-size: 21px; line-height: 1.4; overflow-wrap: anywhere; }
+.bookingStatus { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; padding-top: 5px; color: var(--booking-accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.bookingStatus[data-held='true'] { color: var(--booking-success); }
 .countdown { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .timerLabel { color: var(--booking-muted); font-size: 12px; }
 .timer { color: var(--booking-accent); font-size: 32px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .timer[data-urgent='true'] { color: var(--booking-danger); }
 .party { color: var(--booking-muted); font-size: 13px; white-space: nowrap; padding-top: 5px; }
-.details { margin: 4px 0 0; color: var(--booking-muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.details { margin: 2px 0 0; color: var(--booking-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.candidateKind { margin: 0 0 8px; color: var(--booking-ink); font-size: 16px; font-weight: 600; }
+.seatInfo { min-width: 0; }
+.seatDescription { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.seatDescription .seats { flex: initial; font-size: 16px; }
+.seatDescription > span { border-left: 1px solid var(--booking-border-strong); padding-left: 12px; color: var(--booking-ink); font-size: 14px; white-space: nowrap; }
 .cardBottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 16px; margin-top: auto; padding-top: 20px; }
 .cardLink .cardBottom { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding-top: 12px; }
 .cardLink .seats { line-height: 1.2; padding-bottom: 2px; }
@@ -27,12 +34,17 @@
 .queues li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--booking-border); }
 .queues li > div { min-width: 0; }
 .queues strong { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
-.ahead { flex-shrink: 0; color: var(--booking-accent); font-size: 14px; font-weight: 600; }
+.waitingDetails { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.waitingDetails + .waitingDetails { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--booking-border); }
+.ahead { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; color: var(--booking-ink); font-size: 12px; }
+.orderValue { display: inline-flex; align-items: baseline; gap: 4px; }
+.ahead .orderNumber { color: var(--booking-accent); font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.orderValue small { font-size: 12px; }
 .feedback { margin: 0 0 20px; color: var(--booking-muted); font-size: 14px; }
 .feedback[role='alert'] { color: var(--booking-danger); }
 .historyStatus { flex-shrink: 0; color: var(--booking-muted); font-size: 13px; padding-top: 5px; }
 .historyFooter { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 24px; color: var(--booking-muted); }
-.empty { padding: 48px 20px; border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); background: var(--booking-soft); text-align: center; }
+.empty { padding: 48px 0; text-align: center; }
 .empty p { margin: 0 0 20px; color: var(--booking-muted); font-size: 14px; }
 .empty a { font-size: 13px; }
 @media (max-width: 700px) { .grid { grid-template-columns: minmax(0, 1fr); } .card { padding: 18px; } }

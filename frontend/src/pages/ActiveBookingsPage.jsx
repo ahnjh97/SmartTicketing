@@ -1,4 +1,4 @@
-import { formatShowtime as showtime } from '../utils/showtimeFormat.js';
+import { formatShowtime as showtime, formatShowTime } from '../utils/showtimeFormat.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -10,15 +10,9 @@ import useReservationClock from '../booking/useReservationClock.js';
 import GlassButton from '../components/GlassButton.jsx';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { PAGE_PATHS } from '../navigation.js';
-import button from '../components/GlassButton.module.css';
 import styles from './ActiveBookingsPage.module.css';
 
 
-
-function BookingLink({ group, children }) {
-    return <Link className={`${button.button} ${styles.action}`}
-        to={`${PAGE_PATHS.bookingRestore}?group=${group.id}`}>{children}</Link>;
-}
 
 function HoldingCard({ group }) {
     const { reservation, receivedAt } = group;
@@ -29,12 +23,15 @@ function HoldingCard({ group }) {
         aria-label={`${group.movieTitle} ${reservation.seatLabels.join(', ')} 예매 확인`}>
         <div className={styles.cardTop}>
             <h3>{group.movieTitle}</h3>
+            <BookingStatus held />
         </div>
-        <p className={styles.details}>{group.candidateKind ? ({ FAST: '빠른 예매', BALANCED: '균형 추천', PREFERRED: '선호 좌석', DIRECT: '스마트예매' }[group.candidateKind]) : '일반 예매'} · {getSeatLabel(group.zone)}</p>
         <p className={styles.details}><InlineDetails items={[reservation.theaterName, reservation.screenName]} /></p>
-        <p className={styles.details}>{showtime(reservation.startTime)}</p>
+        <p className={styles.details}>{showtime(reservation.startTime)}{reservation.endTime && <> → {formatShowTime(reservation.endTime)}</>}</p>
         <div className={styles.cardBottom}>
-            <strong className={styles.seats}>{reservation.seatLabels.join(', ')}</strong>
+            <div className={styles.seatInfo}>
+                <p className={styles.candidateKind}>{group.candidateKind ? ({ FAST: '빠른 예매', BALANCED: '균형 추천', PREFERRED: '선호 좌석', DIRECT: '스마트예매' }[group.candidateKind]) : '일반 예매'}</p>
+                <strong className={styles.seats}>{reservation.seatLabels.join(', ')}</strong>
+            </div>
             <div className={styles.countdown}>
                 <span className={styles.timerLabel}>결제까지 남은 시간</span>
                 <strong className={styles.timer} data-urgent={remaining < 60} role="timer" aria-label={`결제까지 ${time}`}>
@@ -46,17 +43,37 @@ function HoldingCard({ group }) {
 }
 
 function WaitingCard({ group }) {
-    return <article className={styles.card}>
-        <div className={styles.cardTop}><h3>{group.movieTitle}</h3><span className={styles.party}>{group.partySize}명</span></div>
-        {group.candidateKind && <p className={styles.details}>{{ FAST: '빠른 예매', BALANCED: '균형 추천', PREFERRED: '선호 좌석', DIRECT: '스마트예매' }[group.candidateKind]}</p>}
-        <ul className={styles.queues}>{group.queues.map(queue => <li key={queue.id}>
-            <div><strong>{queue.theaterName} · {queue.seatLabels?.length ? queue.seatLabels.join(', ') : getSeatLabel(queue.seatZone)}</strong>
-                <p className={styles.details}><InlineDetails items={[queue.screenName, showtime(queue.startTime)]} /></p>
+    const smart = group.entryPoint !== 'THEATER_NORMAL';
+    return <Link className={`${styles.card} ${styles.cardLink}`}
+        to={`${PAGE_PATHS.bookingRestore}?group=${group.id}`} aria-label={`${group.movieTitle} ${smart ? '스마트예매 ' : ''}대기 확인`}>
+        <div className={styles.cardTop}><h3>{group.movieTitle}</h3><BookingStatus /></div>
+        {group.queues.map(queue => <div className={styles.waitingDetails} key={queue.id}>
+            <p className={styles.details}><InlineDetails items={[queue.theaterName, queue.screenName]} /></p>
+            <p className={styles.details}>{showtime(queue.startTime)}{queue.endTime && <> → {formatShowTime(queue.endTime)}</>}</p>
+            <div className={styles.cardBottom}>
+                <div className={styles.seatInfo}>
+                    <p className={styles.candidateKind}>{group.candidateKind ? ({ FAST: '빠른 예매', BALANCED: '균형 추천', PREFERRED: '선호 좌석', DIRECT: '스마트예매' }[group.candidateKind]) : smart ? '스마트예매' : '일반 예매'}</p>
+                    <div className={styles.seatDescription}><strong className={styles.seats}>{queue.seatLabels?.length ? queue.seatLabels.join(', ') : getSeatLabel(queue.seatZone || group.zone)}</strong><span>{group.partySize}명</span></div>
+                </div>
+                <span className={styles.ahead} aria-label={queue.status === 'PAUSED' ? '일시정지' : `대기순서 ${queue.aheadCount + 1}번`}>
+                    <span>대기순서</span>
+                    {queue.status === 'PAUSED' ? '일시정지' : <span className={styles.orderValue}>
+                    <strong className={styles.orderNumber}>{queue.aheadCount + 1}</strong><small>번</small>
+                    </span>}
+                </span>
             </div>
-            <span className={styles.ahead}>{queue.status === 'PAUSED' ? '일시정지' : `순번 ${queue.aheadCount + 1}번`}</span>
-        </li>)}</ul>
-        <div className={styles.cardBottom}><BookingLink group={group}>{group.entryPoint === 'THEATER_NORMAL' ? '좌석 확인 · 대기 변경' : '스마트예매에서 확인'}</BookingLink></div>
-    </article>;
+        </div>)}
+    </Link>;
+}
+
+function BookingStatus({ held = false }) {
+    return <span className={styles.bookingStatus} data-held={held}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            {held ? <path d="m8 12 3 3 5-6" /> : <path d="M12 7v5l3 2" />}
+        </svg>
+        {held ? '선점 완료' : '대기중'}
+    </span>;
 }
 
 export default function ActiveBookingsPage() {

@@ -3,7 +3,8 @@
 .heading h2 { margin: 0; font-size: clamp(25px, 3vw, 38px); letter-spacing: -.045em; }
 .manual .eyebrow { color: var(--booking-accent); font-size: 10px; font-weight: 800; letter-spacing: .22em; margin-bottom: 14px; }
 .grid { display: grid; grid-template-columns: minmax(0,1fr) 310px; gap: 24px; align-items: start; }
-.selection, .summary, .empty, .errorBox, .skeleton { background: var(--booking-soft); border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); padding: 28px; min-width: 0; box-shadow: var(--booking-card-shadow); }
+.selection, .summary, .skeleton { background: var(--booking-soft); border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); padding: 28px; min-width: 0; box-shadow: var(--booking-card-shadow); }
+.empty, .errorBox { padding: 28px 0; min-width: 0; }
 .summary { position: sticky; top: 24px; background: radial-gradient(ellipse at top right,var(--booking-screen-glow),transparent 60%),var(--booking-soft); }
 .summary h3 { font-size: 26px; letter-spacing: -.04em; margin: 0 0 16px; }
 .summaryDetails { display: grid; gap: 10px; border-block: 1px solid var(--booking-border); padding: 16px 0; margin: 16px 0; font-size: 13px; }
@@ -60,6 +61,10 @@
 .ticketSeats { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin-top: 24px; }
 .ticketSeats span { color: var(--booking-muted); font-size: 10px; letter-spacing: .15em; }
 .ticketSeats strong { color: var(--booking-accent); font-size: 23px; }
+.ticketSeats .candidateLabel { margin: 0; color: var(--booking-ink); font-size: 16px; font-weight: 600; }
+.movieInfo { margin-top: 16px; }
+.ticket .movieInfo p { margin: 2px 0; line-height: 1.5; }
+.seatsLabel { transform: translateY(4px); }
 .total { display: flex; justify-content: center; align-items: center; flex-shrink: 0; gap: 10px; white-space: nowrap; }
 .total > span { color: var(--booking-muted); font-size: 12px; }
 .total strong { font-size: 26px; }

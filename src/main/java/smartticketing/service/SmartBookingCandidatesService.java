@@ -30,7 +30,9 @@ public class SmartBookingCandidatesService {
     public record Candidate(Long groupId, String kind, SeatPosition zone, Long showtimeId,
             String theaterName, String screenName, OffsetDateTime startTime, OffsetDateTime endTime,
             BookingGroupStatus status, WaitingResponse waiting, PaymentResponse payment, int preferenceRank, String movieTitle, int partySize) {}
-    public record Candidates(List<Candidate> candidates) {}
+    public record Candidates(List<Candidate> candidates, List<List<Long>> batches) {
+        public Candidates(List<Candidate> candidates) { this(candidates, List.of()); }
+    }
     public record Created(List<Long> groupIds) {}
     private record Option(Showtime show, SeatPosition zone, int preference, int theater, long ahead, boolean available, List<Long> seatIds) {}
     private record Selected(String kind, Option option) {}
@@ -189,7 +191,22 @@ public class SmartBookingCandidatesService {
                     show.getScreen().getName(),offset(show.getStartTime()),offset(show.getEndTime()),g.getStatus(),queues,payment,
                     preferenceRank(g),g.getMovie().getTitle(),g.getPartySize()));
         }
-        return new Candidates(items);
+        var activeIds = new HashSet<>(items.stream().map(Candidate::groupId).toList());
+        var batches = new ArrayList<List<Long>>();
+        if (!activeIds.isEmpty()) {
+            var records = em.createQuery("""
+                    select o.responseBody from BookingOperation o where o.user.id=:user
+                    and o.operationType=:type and o.status=:status order by o.id desc
+                    """, String.class).setParameter("user", userId)
+                    .setParameter("type", BookingOperationType.CREATE_SMART_CANDIDATES)
+                    .setParameter("status", BookingOperationStatus.COMPLETED).getResultList();
+            var json = tools.jackson.databind.json.JsonMapper.builder().build();
+            for (var record : records) {
+                var batch = json.readValue(record, Created.class).groupIds().stream().filter(activeIds::contains).toList();
+                if (!batch.isEmpty()) batches.add(batch);
+            }
+        }
+        return new Candidates(items, batches);
     }
     private static int preferenceRank(BookingRequestGroup group) {
         var preferences = new ArrayList<>(new LinkedHashSet<>(group.getSeatPreferences()));

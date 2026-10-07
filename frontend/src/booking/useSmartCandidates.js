@@ -7,7 +7,9 @@ export default function useSmartCandidates(user, body, ready) {
     const [params, setParams] = useSearchParams();
     const managing = params.get('smart') === '1' || Boolean(params.get('group') || params.get('candidate'));
     const selectedId = params.get('candidate') || params.get('group');
-    const identity = `${user?.id}:${managing ? 'manage' : params.toString()}`;
+    const candidateScope = params.get('candidates');
+    const candidateIds = candidateScope ? candidateScope.split(',').filter(id => /^[1-9]\d*$/.test(id)) : null;
+    const identity = `${user?.id}:${managing ? `manage:${candidateScope || 'all'}` : params.toString()}`;
     const [result, setResult] = useState(null);
     const [failure, setFailure] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -16,6 +18,7 @@ export default function useSmartCandidates(user, body, ready) {
     useEffect(() => { live.current = identity; return () => { live.current = null; }; }, [identity]);
     const save = data => setResult({ identity, data, receivedAt: performance.now() });
     const current = result?.identity === identity ? result : null;
+    const data = current?.data;
     const error = failure?.identity === identity ? failure.error : null;
 
     const failed = Boolean(error);
@@ -25,9 +28,9 @@ export default function useSmartCandidates(user, body, ready) {
         gate.current = true; setBusy(true); setFailure(null);
         const request = requestKey(user.id, 'smart-candidates', body);
         try {
-            await bookingApi.createSmartCandidates(body, request.key);
+            const created = await bookingApi.createSmartCandidates(body, request.key);
             if (live.current !== identity) return;
-            setParams(previous => { const next = new URLSearchParams(previous); next.set('smart', '1'); next.delete('candidate'); next.delete('plan'); next.delete('group'); next.delete('reservation'); return next; }, { replace: true });
+            setParams(previous => { const next = new URLSearchParams(previous); next.set('smart', '1'); next.set('candidates', created.groupIds.join(',')); next.delete('candidate'); next.delete('plan'); next.delete('group'); next.delete('reservation'); return next; }, { replace: true });
             forget(request);
         } catch (error) {
             if (error.status >= 400 && error.status < 500 && error.status !== 401) forget(request);
@@ -79,8 +82,8 @@ export default function useSmartCandidates(user, body, ready) {
             if (live.current === identity) setFailure({ identity, error });
         } finally { gate.current = false; if (live.current === identity) { setBusy(false); setRevision(n => n + 1); } }
     }
-    return { data: current?.data, receivedAt: current?.receivedAt, error, busy, create, mutate,
+    return { data, receivedAt: current?.receivedAt, error, busy, create, mutate,
         refresh: () => { setFailure(null); setRevision(n => n + 1); },
         select: id => setParams(previous => { const next = new URLSearchParams(previous); next.set('candidate', id); return next; }, { replace: true }),
-        selectedId, managing };
+        selectedId, managing, candidateIds };
 }

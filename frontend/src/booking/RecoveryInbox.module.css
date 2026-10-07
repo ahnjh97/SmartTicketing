@@ -12,7 +12,7 @@
 .action:hover { color: var(--booking-accent); }
 .paging { display: flex; gap: 10px; margin-top: 20px; }
 .hint { font-size: 13px; color: var(--booking-muted); line-height: 1.6; }
-.empty, .loading { padding: 28px; border-radius: var(--booking-space-medium); background: var(--booking-soft); }
+.empty, .loading { padding: 28px 0; }
 .notifications { margin-top: 28px; border-top: 1px solid var(--booking-border); padding-top: 20px; }
 .notifications summary { font-size: 20px; font-weight: 800; cursor: pointer; padding: 8px 0; }
 .notifications ul { list-style: none; padding: 0; margin: 12px 0; }
