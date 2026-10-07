@@ -92,6 +92,8 @@ public class BookingWaitingDispatcher {
             }
             return allocated;
         });
+    }
+
     private boolean hasActiveSmartHoldSibling(BookingRequestGroup group) {
         return em.createQuery("""
                 select count(g) from BookingRequestGroup g
