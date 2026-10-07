@@ -16,11 +16,13 @@ public class BookingWaitingDispatcher {
     private final EntityManager em;
     private final BookingHoldService holds;
     private final BookingWaitingService waiting;
+    private final NotificationService notifications;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
 
-    public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting, PlatformTransactionManager manager) {
-        this.em = em; this.holds = holds; this.waiting = waiting;
+    public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting,
+            NotificationService notifications, PlatformTransactionManager manager) {
+        this.em = em; this.holds = holds; this.waiting = waiting; this.notifications = notifications;
         read = new TransactionTemplate(manager); read.setReadOnly(true);
         write = new TransactionTemplate(manager);
     }
@@ -78,6 +80,7 @@ public class BookingWaitingDispatcher {
                     if (exact.size() != group.getPartySize() || exact.stream().anyMatch(i -> i.getStatus() != SeatStatus.AVAILABLE
                             || i.getReservation() != null || i.getHoldExpiredAt() != null || !i.getSeat().isActive())) continue;
                     holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, requested);
+                    NotificationService.waitingAcquired(em, group);
                     allocated++;
                     continue;
                 }
@@ -88,6 +91,7 @@ public class BookingWaitingDispatcher {
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // Allocate in number order among requests whose conditions currently match.
                 holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, best.get().seatIds());
+                NotificationService.waitingAcquired(em, group);
                 allocated++;
             }
             return allocated;
