@@ -6,16 +6,27 @@ const subscribers = new Set();
 let reconnectTimer = null;
 
 async function runStream() {
-    if (streamController) return;
+    if (streamController) {
+        console.log("[NOTIFICATION SSE] stream already active");
+        return;
+    }
 
     const token = getAccessToken();
-    if (!token) return;
+    if (!token) {
+        console.log("[NOTIFICATION SSE] no access token");
+        return;
+    }
 
     const controller = new AbortController();
     streamController = controller;
 
+    console.log("[NOTIFICATION SSE] connecting");
+
     try {
-        const response = await fetch(apiUrl("/api/notifications/stream"), {
+        const url = apiUrl("/api/notifications/stream");
+        console.log("[NOTIFICATION SSE] request", url);
+
+        const response = await fetch(url, {
             headers: {
                 Accept: "text/event-stream",
                 Authorization: `Bearer ${token}`,
@@ -24,7 +35,15 @@ async function runStream() {
             signal: controller.signal,
         });
 
-        if (!response.ok || !response.body) throw new Error(`notification stream failed: ${response.status}`);
+        console.log("[NOTIFICATION SSE] response", {
+            status: response.status,
+            ok: response.ok,
+            contentType: response.headers.get("content-type"),
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`notification stream failed: ${response.status}`);
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -32,22 +51,43 @@ async function runStream() {
 
         while (!controller.signal.aborted) {
             const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
 
-            const events = buffer.split("\n\n");
+            console.log("[NOTIFICATION SSE] chunk received", {
+                done,
+                bytes: value?.length ?? 0,
+            });
+
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            console.log("[NOTIFICATION SSE] buffer", buffer);
+
+            const events = buffer.split(/\r?\n\r?\n/);
             buffer = events.pop() ?? "";
+
             for (const event of events) {
+                console.log("[NOTIFICATION SSE] event", event);
+
                 if (event.includes("event: notification")) {
-                    subscribers.forEach((listener) => listener());
+                    console.log("[NOTIFICATION SSE] notification event detected");
+                    subscribers.forEach((listener) => {
+                        console.log("[NOTIFICATION SSE] notifying subscriber");
+                        listener();
+                    });
                 }
             }
         }
-    } catch {
-        // 로그인 종료/구독 해제 시에는 재연결하지 않는다.
+    } catch (error) {
+        if (!controller.signal.aborted) {
+            console.error("[NOTIFICATION SSE] stream error", error);
+        } else {
+            console.log("[NOTIFICATION SSE] stream aborted");
+        }
     } finally {
         if (streamController === controller) streamController = null;
+
         if (subscribers.size > 0 && !controller.signal.aborted) {
+            console.log("[NOTIFICATION SSE] reconnect scheduled");
             reconnectTimer = window.setTimeout(() => {
                 reconnectTimer = null;
                 runStream();
@@ -58,10 +98,18 @@ async function runStream() {
 
 function subscribe(listener) {
     subscribers.add(listener);
+    console.log("[NOTIFICATION SSE] subscriber added", {
+        subscribers: subscribers.size,
+    });
+
     runStream();
 
     return () => {
         subscribers.delete(listener);
+        console.log("[NOTIFICATION SSE] subscriber removed", {
+            subscribers: subscribers.size,
+        });
+
         if (subscribers.size === 0) {
             if (reconnectTimer) {
                 window.clearTimeout(reconnectTimer);
@@ -78,5 +126,5 @@ export const notificationApi = {
     subscribe,
     read: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" }),
     readAll: () => request("/api/notifications/read-all", { method: "PATCH" }),
-    delete: (id) => request(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    delete: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "DELETE" }),
 };
