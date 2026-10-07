@@ -97,6 +97,7 @@ public class MovieImportService {
         int updatedCount = 0;
         boolean upstreamUnavailable = false;
         List<Long> failedIds = new ArrayList<>();
+        List<Long> newIds = new ArrayList<>();
 
         for (Long tmdbId : movieIds) {
             var existing = movieRepository.findByTmdbMovieId(tmdbId);
@@ -113,7 +114,7 @@ public class MovieImportService {
 
             try {
                 importOne(tmdbId);
-                if (existing.isPresent()) updatedCount++; else savedCount++;
+                if (existing.isPresent()) updatedCount++; else { savedCount++; newIds.add(tmdbId); }
             } catch (Exception e) {
                 log.warn("TMDB 영화 가져오기 실패 - tmdbId: {}, 유형: {}", tmdbId, e.getClass().getSimpleName());
                 failedIds.add(tmdbId);
@@ -127,7 +128,7 @@ public class MovieImportService {
             }
         }
 
-        int defaultsUpdated = applyConfiguredDefaults();
+        int defaultsUpdated = applyConfiguredDefaults(newIds);
 
         log.info("[DB 데이터] movies 메타데이터 삽입 {}건, 수정 {}건 | 기본정보 보정 {}건 | 건너뜀 {}건 | 실패 {}건 | 영화 준비 {}ms",
                 savedCount, updatedCount, defaultsUpdated, skippedCount, failedIds.size(),
@@ -135,7 +136,7 @@ public class MovieImportService {
         return new MovieImportResult(savedCount, skippedCount, failedIds, updatedCount);
     }
 
-    private int applyConfiguredDefaults() {
+    private int applyConfiguredDefaults(List<Long> newIds) {
         var changedIds = new java.util.HashSet<Long>();
         var configuredIds = new java.util.HashSet<>(movieIds);
         configuredIds.addAll(releaseDateOverrides.keySet());
@@ -165,7 +166,7 @@ public class MovieImportService {
 
 
         // =========================================================================
-        // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작(10/11 ~ 10/17)으로 지정
+        // 개봉일이 가장 뒤에 있는 영화 10개만 상영예정작으로 지정 (새로 받아온 영화만 TMDB 개봉일 + 1년)
         // =========================================================================
         List<Movie> upcomingMovies = (releaseDateOverrides.isEmpty()
                 ? movieRepository.findTop10ByReleaseDateIsNotNullOrderByReleaseDateDescTmdbMovieIdAsc()
@@ -176,7 +177,8 @@ public class MovieImportService {
 
         for (int i = 0; i < upcomingMovies.size(); i++) {
             Movie upcomingMovie = upcomingMovies.get(i);
-            LocalDate adjustedDate = LocalDate.of(2026, 10, 11).plusDays(i % 7);
+            if (!newIds.contains(upcomingMovie.getTmdbMovieId())) continue;
+            LocalDate adjustedDate = upcomingMovie.getReleaseDate().plusYears(1);
             if (!adjustedDate.equals(upcomingMovie.getReleaseDate())) {
                 upcomingMovie.setReleaseDate(adjustedDate);
                 movieRepository.save(upcomingMovie);
