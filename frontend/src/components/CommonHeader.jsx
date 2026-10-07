@@ -41,6 +41,9 @@ function HeaderContent({ user, disabled, setupRequired }) {
     const [previewTicket, setPreviewTicket] = useState(null);
     const [notificationLoading, setNotificationLoading] = useState(false);
     const [ticketLoading, setTicketLoading] = useState(false);
+    const [floatingNotification, setFloatingNotification] = useState(null);
+    const seenNotificationIdsRef = useRef(null);
+    const floatingNotificationTimerRef = useRef(null);
 
     const menuOpen = Boolean(user) && compact && openLocation === pathname;
     const activeMenu = pathname === PAGE_PATHS.home || matchPath(`${PAGE_PATHS.movies}/*`, pathname)
@@ -51,7 +54,55 @@ function HeaderContent({ user, disabled, setupRequired }) {
 
     useEffect(() => () => {
         if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+        if (floatingNotificationTimerRef.current) window.clearTimeout(floatingNotificationTimerRef.current);
     }, []);
+
+    useEffect(() => {
+        if (!user || disabled) {
+            seenNotificationIdsRef.current = null;
+            setFloatingNotification(null);
+            return;
+        }
+
+        let mounted = true;
+
+        const loadFloatingNotification = () => notificationApi.list(false)
+            .then((items) => {
+                if (!mounted || !Array.isArray(items)) return;
+
+                const actionable = items.filter((item) =>
+                    item.groupId && ["QUEUE_TURN", "SEAT_HOLD_EXPIRED"].includes(item.type)
+                );
+
+                if (seenNotificationIdsRef.current === null) {
+                    seenNotificationIdsRef.current = new Set(items.map((item) => item.id));
+                    return;
+                }
+
+                const seen = seenNotificationIdsRef.current;
+                const next = actionable.find((item) => !seen.has(item.id));
+                items.forEach((item) => seen.add(item.id));
+
+                if (!next) return;
+
+                if (floatingNotificationTimerRef.current) {
+                    window.clearTimeout(floatingNotificationTimerRef.current);
+                }
+                setFloatingNotification(next);
+                floatingNotificationTimerRef.current = window.setTimeout(() => {
+                    setFloatingNotification(null);
+                }, 3000);
+            })
+            .catch(() => {});
+
+        loadFloatingNotification();
+        const timer = window.setInterval(loadFloatingNotification, 5000);
+
+        return () => {
+            mounted = false;
+            window.clearInterval(timer);
+        };
+    }, [user, disabled]);
 
     function showTicketPreview(ticket) {
         if (!ticket || ticket.status !== "VALID") return;
@@ -244,6 +295,16 @@ function HeaderContent({ user, disabled, setupRequired }) {
         }
     }
 
+    function openFloatingNotification(item) {
+        if (!item) return;
+        if (floatingNotificationTimerRef.current) {
+            window.clearTimeout(floatingNotificationTimerRef.current);
+        }
+        setFloatingNotification(null);
+        markNotificationRead(item.id);
+        openNotification(item);
+    }
+
     function handleNavigation(event) {
         if (navigationDisabled) {
             event.preventDefault();
@@ -307,6 +368,22 @@ function HeaderContent({ user, disabled, setupRequired }) {
                     <div className="common-header-popover-body">{ticketLoading ? null : validTickets.length === 0 ? <p className="common-header-popover-empty">사용 가능한 티켓이 없습니다.</p> : validTickets.slice(0, 6).map((ticket) => <article key={ticket.ticketId} className="common-header-ticket-item common-header-ticket-item-valid" onClick={() => showTicketPreview(ticket)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showTicketPreview(ticket); } }} tabIndex={0} role="button"><div className="common-header-ticket-title"><strong>{ticket.movieTitle}</strong><span>사용 가능</span></div><p><InlineDetails items={[ticket.theaterName, ticket.screenName]} /></p><p>{formatDate(ticket.startTime)}</p><p>좌석: {ticket.seats?.join(", ") || "-"}</p><small>티켓 번호 {ticket.ticketNumber}</small></article>)}</div>
                 </div>
             </>}
+
+            {floatingNotification && (
+                <button
+                    type="button"
+                    className="common-header-floating-notification"
+                    onClick={() => openFloatingNotification(floatingNotification)}
+                    aria-label="새 알림 열기"
+                >
+                    <span className="common-header-floating-notification-icon" aria-hidden="true">!</span>
+                    <span className="common-header-floating-notification-content">
+                        <strong>새 알림이 도착했습니다</strong>
+                        <span>{TYPE_LABELS[floatingNotification.type] ?? "알림"}</span>
+                    </span>
+                    <span className="common-header-floating-notification-arrow" aria-hidden="true">›</span>
+                </button>
+            )}
 
             {previewTicket && <HeaderTicketPreview ticket={previewTicket} onMouseEnter={keepTicketPreview} onMouseLeave={hideTicketPreview} onClose={closeTicketPreview} />}
 
