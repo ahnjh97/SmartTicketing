@@ -56,7 +56,7 @@ public class BookingSmartService {
         return write.execute(status -> {
             // Also discard an OSIV persistence context's old search entities before locking reads.
             em.clear();
-            holds.lockCapacityUser(userId);
+            holds.lockBookingUser(userId);
             holds.requireUser(userId);
             return operations.execute(userId, BookingOperationType.SMART_HOLD, key, new Intent(groupId), holds.now(), () -> {
                 var group = holds.lockOwnedGroup(userId, groupId);

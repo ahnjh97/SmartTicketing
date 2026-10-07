@@ -36,12 +36,11 @@ public class SmartBookingCandidatesService {
     private record Selected(String kind, Option option) {}
 
     public BookingResult create(Long userId, String key, CreateBookingGroupRequest request) {
-        BookingIdempotency.key(key); holds.lockCapacityUser(userId); holds.requireUser(userId);
+        BookingIdempotency.key(key); holds.lockBookingUser(userId); holds.requireUser(userId);
         if (request == null || request.entryPoint() == BookingEntryPoint.THEATER_NORMAL)
             throw new IllegalArgumentException("스마트예매 조건이 필요합니다.");
         return operations.execute(userId, BookingOperationType.CREATE_SMART_CANDIDATES, key, request, holds.now(), () -> {
             var template = groups.build(userId, request);
-            int capacity = holds.remainingCapacity(userId, null);
             var options = options(template);
             if (options.isEmpty()) throw new BookingRejection(409, "NO_CANDIDATES", "조건에 맞는 새 후보가 없습니다. 기존 대기를 확인하거나 시간·극장·인원을 변경해주세요.");
 
@@ -66,15 +65,6 @@ public class SmartBookingCandidatesService {
                 choose(selected, remaining, "FAST", fast);
             }
             var immediate = selected.stream().filter(s -> s.option().available()).findFirst().orElse(null);
-            int waitingSlots = capacity;
-            for (var iterator = selected.iterator(); iterator.hasNext();) {
-                var candidate = iterator.next();
-                if (!candidate.option().available()) {
-                    if (waitingSlots == 0) iterator.remove();
-                    else waitingSlots--;
-                }
-            }
-            if (selected.isEmpty()) holds.requireCapacity(userId, 1, null);
             // Validate every draft before writes: a rejected request cannot leave a partial bundle.
             var drafts = new ArrayList<BookingRequestGroup>();
             for (var selection : selected) {
@@ -89,7 +79,7 @@ public class SmartBookingCandidatesService {
                 var draft = drafts.get(index);
                 var candidate = selected.get(index);
                 if (candidate.equals(immediate)) {
-                    // Immediate holds retain queue ordering but consume no waiting slot.
+                    // Immediate holds retain the same zone queue ordering.
                     waiting.registerAndHold(userId, draft.getId(), candidate.option().show().getId(), candidate.option().seatIds());
                     continue;
                 }

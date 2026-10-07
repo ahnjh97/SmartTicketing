@@ -37,7 +37,7 @@ class SmartBookingCandidatesTests {
         return shows;
     }
 
-    @Test void threeWaitsAllowManualAndSmartHoldsAndPaymentButRejectFourthWait() {
+    @Test void threeWaitsAllowManualAndSmartHoldsPaymentAndFurtherWaiting() {
         var f=zoned(); var waitingShows=fillWaits(f,3);
         long normal=manualGroup(f,f.shows().getFirst());
         var hold=tx(em->holds(em,CLOCK).manual(f.user(),normal,key(),new ManualHoldRequest(inventory(em,f.shows().getFirst()).stream().limit(2).map(i->i.getSeat().getId()).toList())));
@@ -47,13 +47,13 @@ class SmartBookingCandidatesTests {
         assertThat(plan(f,createdId(smart)).candidates().getFirst().payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
         assertThat(tx(em->BookingPaymentTests.service(em,CLOCK,true).pay(f.user(),reservation,key(),new MockPaymentRequest(PaymentMethod.MOCK,false))).status()).isEqualTo(201);
         long fourth=extraShow(f,4), group=manualGroup(f,fourth);
-        var rejected=tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(fourth),SeatPosition.MIDDLE_MIDDLE)));
-        assertThat(rejected.status()).isEqualTo(409); assertThat(rejected.body()).contains("대기는 최대 3개");
+        var added=tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(fourth),SeatPosition.MIDDLE_MIDDLE)));
+        assertThat(added.status()).isEqualTo(201);
         assertThat(dispatcher(CLOCK).dispatch(waitingShows.getFirst())).isEqualTo(1);
         assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(fourth),SeatPosition.MIDDLE_MIDDLE))).status()).isEqualTo(201);
     }
 
-    @Test void smartStillFindsAvailableBalancedCandidateWhenWaitingSlotsAreLimited() {
+    @Test void smartRetainsPreferredWaitAndBalancedHoldRegardlessOfExistingWaitCount() {
         for(int used:List.of(2,3)) {
             var f=zoned(); fillWaits(f,used); var r=request(f);
             preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
@@ -61,21 +61,23 @@ class SmartBookingCandidatesTests {
                     .forEach(i->i.setStatus(SeatStatus.BLOCKED)); return null; });
             var request=new CreateBookingGroupRequest(r.entryPoint(),r.movieId(),r.viewingDate(),r.partySize(),java.time.LocalTime.of(11,0),java.time.LocalTime.of(14,0),null,r.audience());
             var result=tx(em->plans(em).create(f.user(),key(),request)); assertThat(result.status()).isEqualTo(201);
-            var candidates=plan(f,createdId(result)).candidates(); assertThat(candidates).hasSize(used==2?2:1);
+            var candidates=plan(f,createdId(result)).candidates(); assertThat(candidates).hasSize(2);
             var held=candidates.stream().filter(c->c.kind().equals("BALANCED")).findFirst().orElseThrow();
             assertThat(held.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
             tx(em->{ assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user and q.status=:status",Long.class)
-                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(3); return null; });
+                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(used+1); return null; });
         }
     }
 
-    @Test void concurrentWaitingRequestsCannotExceedThreeEvenWhenReservationsAreUnlimited() throws Exception {
+    @Test void concurrentWaitingRequestsForDifferentShowsCanExceedThree() throws Exception {
         var f=zoned(); fillWaits(f,2);
         long a=extraShow(f,3), b=extraShow(f,4), ga=manualGroup(f,a), gb=manualGroup(f,b);
         var results=BookingPaymentTests.race(
                 ()->tx(em->service(em,CLOCK).register(f.user(),ga,key(),new WaitingRequest(List.of(a),SeatPosition.MIDDLE_MIDDLE))),
                 ()->tx(em->service(em,CLOCK).register(f.user(),gb,key(),new WaitingRequest(List.of(b),SeatPosition.MIDDLE_MIDDLE))));
-        assertThat(results.stream().map(value->((BookingResult)value).status())).containsExactlyInAnyOrder(201,409);
+        assertThat(results.stream().map(value->((BookingResult)value).status())).containsExactly(201,201);
+        tx(em->{ assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user and q.status=:status",Long.class)
+                .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(4); return null; });
     }
 
     @Test void priorityChainStopsAtFirstAvailableCandidateOrWaitsForAllThree() {
@@ -556,12 +558,12 @@ class SmartBookingCandidatesTests {
         assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(1);
     }
 
-    @Test void smartRequestOverLimitIsRejectedWithoutPartialRegistration() throws Exception {
-        var f=zoned(); fillWaits(f,3);
+    @Test void smartCanAddSixthWaitWithoutDroppingExistingWaits() {
+        var f=zoned(); fillWaits(f,5);
         preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
-        var r=request(f); var rejected=tx(em->plans(em).create(f.user(),key(),r));
-        assertThat(rejected.status()).isEqualTo(409); assertThat(rejected.body()).contains("ACTIVE_BOOKING_LIMIT");
-        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(3);
+        var r=request(f); var added=tx(em->plans(em).create(f.user(),key(),r));
+        assertThat(added.status()).isEqualTo(201);
+        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(6);
     }
 
     @Test void smartRequestsUseOneZoneEvenWithMultipleCapacitySlots() throws Exception {
@@ -605,7 +607,7 @@ class SmartBookingCandidatesTests {
         tx(em->BookingPaymentTests.service(em,CLOCK,true).pay(f.user(),reservations.getFirst(),key(),new MockPaymentRequest(PaymentMethod.MOCK,false)));
         fillWaits(f,3);
         long fourth=extraShow(f,4), group=manualGroup(f,fourth);
-        assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(fourth),SeatPosition.MIDDLE_MIDDLE))).status()).isEqualTo(409);
+        assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(fourth),SeatPosition.MIDDLE_MIDDLE))).status()).isEqualTo(201);
     }
 
     static BookingResult direct(Fixture f,long show,int party) {

@@ -26,14 +26,10 @@ public class BookingWaitingService {
         this.em = em; this.holds = holds; this.payments = payments; this.operations = operations;
     }
 
-    public BookingResult register(Long user, Long id, String key, WaitingRequest request) {
-        return register(user, id, key, request, false);
-    }
-
     // Internal smart orchestration only: caller holds inventory/queue locks and has
-    // verified immediate availability. Never commit a capacity-exempt WAITING row.
+    // verified immediate availability. Register and acquire in the same transaction.
     void registerAndHold(Long user, Long group, Long show, List<Long> seats) {
-        var result = register(user, group, UUID.randomUUID().toString(), new WaitingRequest(List.of(show)), true);
+        var result = register(user, group, UUID.randomUUID().toString(), new WaitingRequest(List.of(show)));
         if (result.status() >= 400) throw new IllegalStateException("후보 등록이 변경되었습니다. 같은 요청으로 다시 시도해주세요.");
         try {
             holds.acquire(user, group, BookingHoldService.Source.WAITING, show, seats);
@@ -42,8 +38,8 @@ public class BookingWaitingService {
         }
     }
 
-    private BookingResult register(Long user, Long id, String key, WaitingRequest request, boolean immediateHold) {
-        BookingIdempotency.key(key); holds.lockCapacityUser(user); holds.requireUser(user);
+    public BookingResult register(Long user, Long id, String key, WaitingRequest request) {
+        BookingIdempotency.key(key); holds.lockBookingUser(user); holds.requireUser(user);
         if (request == null || request.showtimeIds() == null || request.showtimeIds().isEmpty()
                 || request.showtimeIds().stream().anyMatch(s -> s == null || s < 1))
             throw new IllegalArgumentException("대기할 회차를 선택해주세요.");
@@ -98,7 +94,6 @@ public class BookingWaitingService {
                 q.setSeatZone(zone); q.setZoneQueueNumber(nextZoneNumber(showId, zone, last));
                 q.setCreatedAt(holds.now()); q.setUpdatedAt(holds.now()); additions.add(q);
             }
-            if (!immediateHold) holds.requireCapacity(user, additions.size(), null);
             additions.forEach(em::persist);
             return response(group);
         });
@@ -117,7 +112,6 @@ public class BookingWaitingService {
         var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
         if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
         if (row != null && row.getRequestedSeatIds().equals(ids)) return response(group);
-        if (row == null) holds.requireCapacity(group.getUser().getId(), 1, null);
         var rows = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.id", WaitingQueue.class)
                 .setParameter("s", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
         if (rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
@@ -144,7 +138,6 @@ public class BookingWaitingService {
         var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
         if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
         if (row != null && row.getSeatZone() == zone && row.getRequestedSeatIds().isEmpty()) return response(group);
-        if (row == null) holds.requireCapacity(group.getUser().getId(), 1, null);
         var inventory = holds.lockInventory(showId);
         var capacity = inventory.stream().filter(i -> i.getStatus()!=SeatStatus.BLOCKED).map(i -> {
             var free=new ShowtimeSeat(); free.setSeat(i.getSeat()); free.setStatus(SeatStatus.AVAILABLE); return free;

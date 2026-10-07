@@ -29,28 +29,10 @@ public class BookingHoldService {
         this.em = em; this.operations = operations; this.clock = clock.withZone(SEOUL);
     }
 
-    // New requests serialize before their first snapshot. Dispatch converts an existing slot.
-    void lockCapacityUser(Long userId) {
+    // Serialize a user's new requests before taking snapshots for duplicate detection.
+    void lockBookingUser(Long userId) {
         em.createNativeQuery("insert into booking_user_limits (user_id) values (:user) on duplicate key update user_id=user_id", Object.class)
                 .setParameter("user", userId).executeUpdate();
-    }
-
-    void requireCapacity(Long userId, int additions, Long replacingGroup) {
-        if (additions > remainingCapacity(userId, replacingGroup))
-            throw new BookingRejection(409, "ACTIVE_BOOKING_LIMIT", "대기는 최대 3개입니다. 기존 대기를 취소한 뒤 다시 신청해주세요. 바로 예매 가능한 좌석은 이 제한에 포함되지 않습니다.");
-    }
-
-    int remainingCapacity(Long userId, Long replacingGroup) {
-        var time = now();
-        long queued = em.createQuery("""
-                select count(q) from WaitingQueue q where q.user.id=:user
-                and q.status in :states and q.showtime.startTime>:now and q.showtime.status=:scheduled
-                and (:replacement is null or q.requestGroup.id<>:replacement)
-                """, Long.class).setParameter("user", userId)
-                .setParameter("states", List.of(QueueStatus.WAITING, QueueStatus.PAUSED))
-                .setParameter("now", time).setParameter("scheduled", ShowtimeStatus.SCHEDULED)
-                .setParameter("replacement", replacingGroup).getSingleResult();
-        return (int) Math.max(0, 3 - queued);
     }
 
     public enum Source { MANUAL, SMART, WAITING }
@@ -64,7 +46,7 @@ public class BookingHoldService {
     // The waiting dispatcher calls acquire after locking all competing groups and shows.
     public BookingResult hold(Long userId, Long groupId, String key, Source source, Candidate candidate) {
         BookingIdempotency.key(key);
-        lockCapacityUser(userId);
+        lockBookingUser(userId);
         requireUser(userId);
         if (groupId == null || groupId < 1 || source == null || candidate == null)
             throw new IllegalArgumentException("그룹과 선점 후보가 필요합니다.");
