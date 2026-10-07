@@ -5,6 +5,23 @@ let streamController = null;
 const subscribers = new Set();
 let reconnectTimer = null;
 
+function describeEvent(event) {
+    const normalized = event.replace(/\r/g, "");
+    const eventName = normalized.match(/^event:\\s*(.*)$/m)?.[1]?.trim() ?? null;
+    const dataLines = normalized
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart());
+
+    return {
+        raw: event,
+        normalized,
+        eventName,
+        data: dataLines.join("\n"),
+        isNotification: eventName === "notification",
+    };
+}
+
 async function runStream() {
     if (streamController) {
         console.log("[NOTIFICATION SSE] stream already active");
@@ -12,8 +29,13 @@ async function runStream() {
     }
 
     const token = getAccessToken();
+    console.log("[NOTIFICATION SSE] token check", {
+        hasToken: Boolean(token),
+        tokenLength: token?.length ?? 0,
+    });
+
     if (!token) {
-        console.log("[NOTIFICATION SSE] no access token");
+        console.warn("[NOTIFICATION SSE] no access token - stream not started");
         return;
     }
 
@@ -49,6 +71,8 @@ async function runStream() {
         const decoder = new TextDecoder();
         let buffer = "";
 
+        console.log("[NOTIFICATION SSE] stream reader ready");
+
         while (!controller.signal.aborted) {
             const { value, done } = await reader.read();
 
@@ -59,20 +83,50 @@ async function runStream() {
 
             if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            console.log("[NOTIFICATION SSE] buffer", buffer);
+            const decoded = decoder.decode(value, { stream: true });
+            buffer += decoded;
+
+            console.log("[NOTIFICATION SSE] decoded chunk", JSON.stringify(decoded));
+            console.log("[NOTIFICATION SSE] buffer before parse", JSON.stringify(buffer));
 
             const events = buffer.split(/\r?\n\r?\n/);
             buffer = events.pop() ?? "";
 
-            for (const event of events) {
-                console.log("[NOTIFICATION SSE] event", event);
+            console.log("[NOTIFICATION SSE] parsed event count", events.length);
+            console.log("[NOTIFICATION SSE] remaining buffer", JSON.stringify(buffer));
 
-                if (event.includes("event: notification")) {
-                    console.log("[NOTIFICATION SSE] notification event detected");
-                    subscribers.forEach((listener) => {
-                        console.log("[NOTIFICATION SSE] notifying subscriber");
-                        listener();
+            for (const event of events) {
+                const parsed = describeEvent(event);
+
+                console.log("[NOTIFICATION SSE] parsed event", parsed);
+
+                if (parsed.isNotification) {
+                    console.log("[NOTIFICATION SSE] >>> NOTIFICATION EVENT DETECTED <<<", {
+                        eventName: parsed.eventName,
+                        data: parsed.data,
+                        subscriberCount: subscribers.size,
+                    });
+
+                    subscribers.forEach((listener, index) => {
+                        console.log("[NOTIFICATION SSE] notifying subscriber", {
+                            index,
+                            subscriberCount: subscribers.size,
+                        });
+
+                        try {
+                            listener();
+                            console.log("[NOTIFICATION SSE] subscriber callback completed", { index });
+                        } catch (error) {
+                            console.error("[NOTIFICATION SSE] subscriber callback failed", {
+                                index,
+                                error,
+                            });
+                        }
+                    });
+                } else {
+                    console.log("[NOTIFICATION SSE] non-notification event ignored", {
+                        eventName: parsed.eventName,
+                        data: parsed.data,
                     });
                 }
             }
