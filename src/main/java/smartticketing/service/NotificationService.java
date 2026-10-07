@@ -61,7 +61,9 @@ public class NotificationService {
         n.setType(type);
         n.setMessage(message);
         n.setCreatedAt(LocalDateTime.now());
-        return notifications.save(n);
+        Notification saved = notifications.save(n);
+        NotificationSseHub.publish(userId);
+        return saved;
     }
 
     /**
@@ -86,6 +88,7 @@ public class NotificationService {
         notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(LocalDateTime.now());
         em.persist(link(notification, reservation));
+        NotificationSseHub.publish(reservation.getUser().getId());
     }
 
     /**
@@ -115,6 +118,7 @@ public class NotificationService {
         expired.setCreatedAt(LocalDateTime.now());
         expired.setBookingGroupId(groupId);
         em.persist(expired);
+        NotificationSseHub.publish(user.getId());
     }
 
     /** 즉시선점 경로에서 혹시 남은 QUEUE_TURN이 있으면 제거한다. */
