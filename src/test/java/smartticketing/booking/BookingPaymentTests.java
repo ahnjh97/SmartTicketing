@@ -45,7 +45,7 @@ class BookingPaymentTests {
     static BookingPaymentService service(EntityManager em, Clock clock, boolean allow) {
         var env = new MockEnvironment(); env.setActiveProfiles("test");
         var ops = new BookingIdempotency(em);
-        return new BookingPaymentService(em, new BookingHoldService(em, ops, clock), ops, tickets(em), notifications(em), org.mockito.Mockito.mock(BookingWaitingDispatcher.class), env, allow);
+        return new BookingPaymentService(em, new BookingHoldService(em, ops, clock), ops, tickets(em), notifications(em), org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), env, allow);
     }
     static Fixture fixture() {
         return tx(em -> {
