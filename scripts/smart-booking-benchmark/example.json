@@ -1,0 +1,19 @@
+{
+  "baseUrl": "http://localhost:8080",
+  "label": "before-cache-off",
+  "movieId": 11,
+  "viewingDate": "tomorrow",
+  "partySize": 2,
+  "ranges": [
+    { "name": "1h", "from": "10:00", "to": "11:00" },
+    { "name": "4h", "from": "10:00", "to": "14:00" },
+    { "name": "day", "from": "06:00", "to": "05:59" }
+  ],
+  "concurrency": [1],
+  "rounds": 3,
+  "iterations": 10,
+  "warmupIterations": 1,
+  "timeoutMs": 60000,
+  "pauseMs": 500,
+  "usersFile": "../../.local/smart-benchmark-users.json"
+}
