@@ -63,10 +63,8 @@ function HeaderContent({ user, disabled, setupRequired }) {
 
         if (!user || disabled) {
             console.log("[NOTIFICATION] notification effect skipped", { hasUser: Boolean(user), disabled });
-            seenNotificationIdsRef.current = null;
-            setFloatingNotification(null);
-            setNotifications([]);
-            setUnreadCount(0);
+            // User/disabled changes remount HeaderContent through its key above.
+            // The new instance already has empty notification state.
             return;
         }
 
