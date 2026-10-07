@@ -114,6 +114,4 @@ public class BookingWaitingDispatcher {
                 .setParameter("createdAt", group.getCreatedAt())
                 .getSingleResult() > 0;
     }
-
-    }
 }
