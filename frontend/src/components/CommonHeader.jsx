@@ -464,11 +464,7 @@ function HeaderContent({ user, disabled, setupRequired }) {
                         </div>
                     </div>
 
-                    <div
-                        className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}
-                        onMouseEnter={keepTicketPreview}
-                        onMouseLeave={hideTicketPreview}
-                    >
+                    <div className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}>
                         <div className="common-header-popover-header">
                             <div>
                                 <strong>내 티켓</strong>
@@ -490,11 +486,15 @@ function HeaderContent({ user, disabled, setupRequired }) {
                                     <article
                                         key={ticket.ticketId}
                                         className="common-header-ticket-item common-header-ticket-item-valid"
-                                        onMouseEnter={() => showTicketPreview(ticket)}
-                                        onMouseLeave={hideTicketPreview}
-                                        onFocus={() => showTicketPreview(ticket)}
-                                        onBlur={hideTicketPreview}
+                                        onClick={() => showTicketPreview(ticket)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                showTicketPreview(ticket);
+                                            }
+                                        }}
                                         tabIndex={0}
+                                        role="button"
                                     >
                                         <div className="common-header-ticket-title">
                                             <strong>{ticket.movieTitle}</strong>
