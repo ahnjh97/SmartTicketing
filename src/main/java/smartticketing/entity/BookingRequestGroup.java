@@ -33,7 +33,7 @@ public class BookingRequestGroup {
     private String candidateKind;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "candidate_zone", length = 30, updatable = false, columnDefinition = "varchar(30)")
+    @Column(name = "candidate_zone", length = 30, columnDefinition = "varchar(30)")
     private SeatPosition candidateZone;
 
     @NotNull

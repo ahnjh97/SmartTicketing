@@ -23,8 +23,7 @@ class ManualSeatWaitingTests {
         var f = manual(fixture(2, 5));
         var owner = manual(another(f, 2, false));
         var all = seats(f); var chosen = List.of(all.get(0), all.get(3));
-        // Cross-zone, non-adjacent manual selection must remain exact, even when other pairs are free.
-        tx(em -> { inventory(em, f.shows().getFirst()).get(3).getSeat().setSeatPosition(SeatPosition.SIDE_MIDDLE); return null; });
+        // Non-adjacent selection within one zone remains exact.
         var held = tx(em -> holds(em, CLOCK).manual(owner.user(), owner.group(), key(), new ManualHoldRequest(chosen)));
         long reservation = BookingSmartTests.value(held, "id");
         assertThat(tx(em -> BookingPaymentTests.service(em, CLOCK, true).pay(owner.user(), reservation, key(), new MockPaymentRequest(PaymentMethod.MOCK, false))).status()).isEqualTo(201);
@@ -66,17 +65,17 @@ class ManualSeatWaitingTests {
         assertThat(after.seatIds()).containsExactlyElementsOf(all.subList(2, 4));
     }
 
-    @Test void onlyOverlappingSeatsCountAheadAndManualCannotStealEarlierWaitingSeats() {
+    @Test void wholeZoneCountsAheadAndManualCannotStealEarlierWaitingSeats() {
         var first = manual(fixture(2, 6)); var other = manual(another(first, 2, false)); var last = manual(another(first, 2, false));
         var all = seats(first);
         assertThat(waitFor(first, all.subList(0, 2), key()).status()).isEqualTo(201);
         assertThat(waitFor(other, all.subList(2, 4), key()).status()).isEqualTo(201);
         assertThat(waitFor(last, all.subList(0, 2), key()).status()).isEqualTo(201);
-        assertThat(state(other).items().getFirst().aheadCount()).isZero();
-        assertThat(state(last).items().getFirst().aheadCount()).isEqualTo(1);
+        assertThat(state(other).items().getFirst().aheadCount()).isEqualTo(1);
+        assertThat(state(last).items().getFirst().aheadCount()).isEqualTo(2);
         var overview = tx(em -> new BookingActivityService(em, holds(em, CLOCK)).active(last.user()));
         assertThat(overview.getFirst().queues().getFirst().seatLabels()).containsExactly("A1", "A2");
-        assertThat(overview.getFirst().queues().getFirst().aheadCount()).isEqualTo(1);
+        assertThat(overview.getFirst().queues().getFirst().aheadCount()).isEqualTo(2);
         var stolen = tx(em -> holds(em, CLOCK).manual(last.user(), last.group(), key(), new ManualHoldRequest(all.subList(0, 2))));
         assertThat(stolen.status()).isEqualTo(409); assertThat(stolen.body()).contains("WAITING_PRIORITY");
         assertThat(tx(em -> holds(em, CLOCK).manual(first.user(), first.group(), key(), new ManualHoldRequest(all.subList(0, 2)))).status()).isEqualTo(201);
@@ -163,13 +162,22 @@ class ManualSeatWaitingTests {
         assertThat(state(newcomer).activeReservationId()).isNull();
     }
 
-    @Test void exactWaitingUsesOneOfThreeSlotsAndChangingAtLimitStillWorks() {
-        var seed = fixture(2, 8); var all = seats(seed); var groups = new ArrayList<Fixture>();
-        for (int i = 0; i < 4; i++) groups.add(manual(seed));
-        for (int i = 0; i < 3; i++) assertThat(waitFor(groups.get(i), all.subList(i * 2, i * 2 + 2), key()).status()).isEqualTo(201);
-        assertThat(waitFor(groups.get(3), all.subList(6, 8), key()).status()).isEqualTo(409);
-        assertThat(waitFor(groups.getFirst(), all.subList(6, 8), key()).status()).isEqualTo(201);
-        var active = tx(em -> new BookingActivityService(em, holds(em, CLOCK)).active(seed.user()));
-        assertThat(active).hasSize(3);
+    @Test void crossZoneSeatsAreRejectedWithoutChangingExistingQueue() {
+        var f=manual(fixture(2,4)); var all=seats(f);
+        tx(em->{ inventory(em,f.shows().getFirst()).get(3).getSeat().setSeatPosition(SeatPosition.SIDE_MIDDLE); return null; });
+        assertThat(waitFor(f,all.subList(0,2),key()).status()).isEqualTo(201);
+        var before=state(f).items().getFirst();
+        var rejected=waitFor(f,List.of(all.get(0),all.get(3)),key());
+        assertThat(rejected.status()).isEqualTo(400);
+        assertThat(rejected.body()).contains("같은 구역");
+        assertThat(state(f).items().getFirst()).isEqualTo(before);
+    }
+
+    @Test void sameUserCannotAddAnotherExactQueueForTheSameShow() {
+        var f=manual(fixture(2,6)); var duplicate=manual(f); var all=seats(f);
+        assertThat(waitFor(f,all.subList(0,2),key()).status()).isEqualTo(201);
+        assertThat(waitFor(duplicate,all.subList(2,4),key()).status()).isEqualTo(409);
+        assertThat(waitFor(f,all.subList(2,4),key()).status()).isEqualTo(201);
+        assertThat(state(f).items()).hasSize(1);
     }
 }

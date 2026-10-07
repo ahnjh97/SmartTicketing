@@ -42,7 +42,6 @@ public class SmartBookingCandidatesService {
         return operations.execute(userId, BookingOperationType.CREATE_SMART_CANDIDATES, key, request, holds.now(), () -> {
             var template = groups.build(userId, request);
             int capacity = holds.remainingCapacity(userId, null);
-            if (capacity == 0) holds.requireCapacity(userId, 1, null);
             var options = options(template);
             if (options.isEmpty()) throw new BookingRejection(409, "NO_CANDIDATES", "조건에 맞는 새 후보가 없습니다. 기존 대기를 확인하거나 시간·극장·인원을 변경해주세요.");
 
@@ -58,15 +57,24 @@ public class SmartBookingCandidatesService {
             var remaining = new ArrayList<>(options);
             var selected = new ArrayList<Selected>();
             choose(selected, remaining, "PREFERRED", preferred);
-            var best = selected.getFirst().option();
-            boolean onlyPreferred = best.preference() == 0 && best.available();
-            if (!onlyPreferred) {
-                if (capacity >= 2) choose(selected, remaining, "FAST", fast);
-                if (capacity >= 3) choose(selected, remaining, "BALANCED", balanced);
+            // Priority is PREFERRED -> BALANCED -> FAST. Stop at the first bookable
+            // option; only higher-priority unavailable options remain as waits.
+            if (!selected.getLast().option().available()) {
+                choose(selected, remaining, "BALANCED", balanced);
             }
-            selected.sort(Comparator.comparingInt(s -> List.of("FAST","BALANCED","PREFERRED").indexOf(s.kind())));
-
-            holds.requireCapacity(userId, selected.size(), null);
+            if (!selected.getLast().option().available()) {
+                choose(selected, remaining, "FAST", fast);
+            }
+            var immediate = selected.stream().filter(s -> s.option().available()).findFirst().orElse(null);
+            int waitingSlots = capacity;
+            for (var iterator = selected.iterator(); iterator.hasNext();) {
+                var candidate = iterator.next();
+                if (!candidate.option().available()) {
+                    if (waitingSlots == 0) iterator.remove();
+                    else waitingSlots--;
+                }
+            }
+            if (selected.isEmpty()) holds.requireCapacity(userId, 1, null);
             // Validate every draft before writes: a rejected request cannot leave a partial bundle.
             var drafts = new ArrayList<BookingRequestGroup>();
             for (var selection : selected) {
@@ -77,21 +85,17 @@ public class SmartBookingCandidatesService {
                 draft.setCandidateKind(selection.kind()); draft.setCandidateZone(option.zone()); drafts.add(draft);
             }
             drafts.forEach(em::persist);
-            for (var draft : drafts) {
-                // Every candidate joins its zone queue, even when seats are currently free, so it cannot jump ahead.
+            for (int index = 0; index < drafts.size(); index++) {
+                var draft = drafts.get(index);
+                var candidate = selected.get(index);
+                if (candidate.equals(immediate)) {
+                    // Immediate holds retain queue ordering but consume no waiting slot.
+                    waiting.registerAndHold(userId, draft.getId(), candidate.option().show().getId(), candidate.option().seatIds());
+                    continue;
+                }
                 var result = waiting.register(userId, draft.getId(), UUID.randomUUID().toString(),
                         new WaitingRequest(List.of(draft.getSelectedShowtime().getId())));
                 if (result.status() >= 400) throw new IllegalStateException("후보 등록이 변경되었습니다. 같은 요청으로 다시 시도해주세요.");
-            }
-            if (onlyPreferred) {
-                // Inventory and zone queues are still locked. Secure the best zone now,
-                // so a one-candidate response cannot turn into a wait before acquisition.
-                try {
-                    holds.acquire(userId, drafts.getFirst().getId(), BookingHoldService.Source.WAITING, best.show().getId(), best.seatIds());
-                } catch (BookingRejection changed) {
-                    // Domain rows already exist: roll back the whole request, not a partial candidate.
-                    throw new IllegalStateException("선호 좌석 확보 조건이 변경되었습니다. 같은 요청으로 다시 시도해주세요.", changed);
-                }
             }
             return new Created(drafts.stream().map(BookingRequestGroup::getId).toList());
         });
@@ -99,7 +103,8 @@ public class SmartBookingCandidatesService {
 
     private static void choose(List<Selected> selected, List<Option> remaining, String kind, Comparator<Option> order) {
         if (remaining.isEmpty()) return;
-        var option=remaining.stream().min(order).orElseThrow(); selected.add(new Selected(kind,option)); remaining.remove(option);
+        var option=remaining.stream().min(order).orElseThrow(); selected.add(new Selected(kind,option));
+        remaining.removeIf(other -> other.show().getId().equals(option.show().getId()));
     }
 
     private List<Option> options(BookingRequestGroup template) {
@@ -138,7 +143,7 @@ public class SmartBookingCandidatesService {
                     .setParameter("s",show.getId()).setParameter("states",List.of(QueueStatus.WAITING,QueueStatus.PAUSED,QueueStatus.HOLDING))
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
             for(var zone:preferences) {
-                if(queues.stream().anyMatch(q->q.getUser().getId().equals(template.getUser().getId()) && (q.getSeatZone()==null || q.getSeatZone()==zone))) continue;
+                if(queues.stream().anyMatch(q->q.getUser().getId().equals(template.getUser().getId()))) continue;
                 if(SmartSeatCandidates.analyze(capacity,show.getScreen().getId(),template.getPartySize(),preferences,zone).blocks().isEmpty()) continue;
                 long ahead=queues.stream().filter(q->q.getStatus()==QueueStatus.WAITING && (q.getSeatZone()==null || q.getSeatZone()==zone)).count();
                 var blocks=SmartSeatCandidates.analyze(inventory,show.getScreen().getId(),template.getPartySize(),preferences,zone).blocks();

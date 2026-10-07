@@ -24,6 +24,8 @@ export default function ManualBooking({ booking }) {
     const validSeats = selected.length === party && new Set(selected).size === selected.length
         && selected.every(id => seats.data?.seats.some(seat => seat.id === id && ['AVAILABLE', 'HOLDING', 'RESERVED'].includes(seat.status)));
     const allAvailable = validSeats && selected.every(id => seats.data.seats.some(seat => seat.id === id && seat.status === 'AVAILABLE'));
+    const waitingZone = new Set(selected.map(id => seats.data?.seats.find(seat => seat.id === id)?.position));
+    const sameZone = validSeats && waitingZone.size === 1 && !waitingZone.has(undefined) && !waitingZone.has(null);
     const sameWaiting = waiting?.seatIds?.length === selected.length && selected.every(id => waiting.seatIds.includes(id));
     const body = { entryPoint: 'THEATER_NORMAL', movieId: Number(booking.movieId), viewingDate: booking.date,
         partySize: party, selectedShowtimeId: show?.id, audience };
@@ -69,9 +71,10 @@ export default function ManualBooking({ booking }) {
                     </dl>
                     {party < 1 || party > 6 ? <p className={styles.error}>총인원을 1~6명으로 선택해주세요.</p> : null}
                     {show.pricePerPerson !== 10000 && <p className={styles.error}>회차 가격을 확인할 수 없어 예매할 수 없습니다.</p>}
-                    <button className={`${ui.primary} ${styles.pay}`} disabled={flow.busy || !validSeats || (!allAvailable && sameWaiting) || party < 1 || party > 6 || show.pricePerPerson !== 10000}
+                    {validSeats && !sameZone && <p className={styles.hint}>대기 좌석은 같은 구역 안에서 선택해주세요.</p>}
+                    <button className={`${ui.primary} ${styles.pay}`} disabled={flow.busy || !validSeats || (!allAvailable && (!sameZone || sameWaiting)) || party < 1 || party > 6 || show.pricePerPerson !== 10000}
                         onClick={() => flow.hold(body, selected, null, !allAvailable)}>{flow.busy ? '좌석을 확인하고 있습니다…' : !validSeats || allAvailable ? '선택한 좌석 5분 선점' : sameWaiting ? '선택한 좌석 대기 중' : waiting ? '선택한 좌석으로 대기 변경' : '선택한 좌석 대기 신청'}</button>
-                    {allAvailable && !sameWaiting && <GlassButton disabled={flow.busy || show.pricePerPerson !== 10000}
+                    {allAvailable && !sameWaiting && <GlassButton disabled={flow.busy || !sameZone || show.pricePerPerson !== 10000}
                         onClick={() => flow.hold(body, selected, null, true)}>{waiting ? '선택한 좌석으로 대기 변경' : '선택한 좌석 대기 신청'}</GlassButton>}
                     {waiting && !sameWaiting && validSeats && <p className={styles.hint}>대기 좌석을 변경하면 새 순번으로 등록됩니다.</p>}
                 </aside>

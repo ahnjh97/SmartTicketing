@@ -59,7 +59,7 @@ public class WaitingQueue {
     @Column(name = "queue_number", nullable = false)
     private Integer queueNumber;
 
-    // Existing rows retain their original show-wide number. New smart candidates use zone numbers.
+    // Global number is retained for compatibility; allocation and display use the zone number.
     @Enumerated(EnumType.STRING)
     @Column(name = "seat_zone", length = 30, columnDefinition = "varchar(30)")
     private SeatPosition seatZone;

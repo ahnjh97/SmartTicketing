@@ -23,8 +23,8 @@ afterEach(() => {
 });
 const seats = [
     { id: 1, position: 'MIDDLE_MIDDLE', row: 'A', number: 1, segment: 'left', status: 'AVAILABLE' },
-    { id: 2, position: 'SIDE_MIDDLE', row: 'A', number: 2, segment: 'left', status: 'AVAILABLE' },
-    { id: 3, row: 'A', number: 3, segment: 'right', status: 'HOLDING' },
+    { id: 2, position: 'MIDDLE_MIDDLE', row: 'A', number: 2, segment: 'left', status: 'AVAILABLE' },
+    { id: 3, position: 'MIDDLE_MIDDLE', row: 'A', number: 3, segment: 'right', status: 'HOLDING' },
     { id: 4, row: 'A', number: 4, segment: 'right', status: 'BLOCKED' },
 ];
 function Picker() {
@@ -187,6 +187,21 @@ test('manual exact-seat waiting survives reload, changes seats and switches to a
     const waits = fetch.mock.calls.filter(([url, options]) => url.endsWith('/waiting-queues') && options.method === 'POST');
     expect(waits).toHaveLength(2);
     expect(waits[0][1].headers['Idempotency-Key']).not.toBe(waits[1][1].headers['Idempotency-Key']);
+});
+
+test('cross-zone waiting is blocked without sending a registration', async () => {
+    vi.stubGlobal('fetch', vi.fn((url, options = {}) => {
+        if (url === '/api/showtimes/91/seats') return response({ seats: seats.map(seat => seat.id === 3 ? { ...seat, position: 'SIDE_MIDDLE' } : seat) });
+        return api(url, options);
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'A1 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A3 대기 가능' }));
+    expect(screen.getByText('대기 좌석은 같은 구역 안에서 선택해주세요.')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: '선택한 좌석 대기 신청' });
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(fetch.mock.calls.some(([url, options]) => url.endsWith('/waiting-queues') && options?.method === 'POST')).toBe(false);
 });
 
 test('fully booked show still allows selecting reserved seats to wait', async () => {
