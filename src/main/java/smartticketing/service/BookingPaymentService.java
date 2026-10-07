@@ -23,14 +23,12 @@ public class BookingPaymentService {
     private final BookingHoldService holds;
     private final BookingIdempotency operations;
     private final TicketService tickets;
-    private final NotificationService notifications;
     private final boolean allowFailure;
 
     public BookingPaymentService(EntityManager em, BookingHoldService holds, BookingIdempotency operations,
-            TicketService tickets, NotificationService notifications, Environment environment,
+            TicketService tickets, Environment environment,
             @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
         this.em = em; this.holds = holds; this.operations = operations; this.tickets = tickets;
-        this.notifications = notifications;
         this.allowFailure = allowFailure && environment.acceptsProfiles(Profiles.of("dev", "test"));
     }
 
@@ -82,7 +80,6 @@ public class BookingPaymentService {
         payment.setUpdatedAt(now);
         if (request.simulateFailure()) {
             payment.setStatus(PaymentStatus.FAILED);
-            NotificationService.link(notifications.paymentFailed(userId), r);
             return paymentResponse(r, payment, false);
         }
         payment.setStatus(PaymentStatus.SUCCESS);
