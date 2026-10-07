@@ -225,6 +225,26 @@ test('brand tabs filter branches and clear previous booking selections', async (
     expect(screen.queryByRole('button', { name: /LOTTE_CINEMA 지점/ })).toBe(null);
 });
 
+test('selecting a favorite theater keeps the favorites tab after details load and reload', async () => {
+    localStorage.setItem('accessToken', 'saved-token');
+    fetch.mockImplementation(url => {
+        if (url === '/api/theaters/1') return Promise.resolve(json({ ...theater, id: 1, brand: 'LOTTE_CINEMA' }));
+        if (url.startsWith('/api/theaters/1/movies?')) return Promise.resolve(json({ items: [] }));
+        return baseFetch(url);
+    });
+    mount('/theaters');
+    fireEvent.click(await screen.findByRole('button', { name: '선호1' }));
+    await screen.findByRole('heading', { name: '상영 영화' });
+    expect(screen.getByRole('tab', { name: '선호극장' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: '롯데시네마' }).getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByRole('button', { name: '선호1' }).getAttribute('aria-pressed')).toBe('true');
+    const path = screen.getByTestId('url').textContent;
+    expect(new URL(path, 'http://localhost').searchParams.get('brand')).toBe('FAVORITES');
+    cleanup(); mount(path);
+    await screen.findByRole('heading', { name: '상영 영화' });
+    expect(screen.getByRole('tab', { name: '선호극장' }).getAttribute('aria-selected')).toBe('true');
+});
+
 test('a directly opened theater retains its brand without a duplicate theater summary', async () => {
     fetch.mockImplementation(url => url === '/api/theaters/71'
         ? Promise.resolve(json({ ...theater, brand: 'MEGABOX' })) : baseFetch(url));
