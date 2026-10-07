@@ -77,6 +77,30 @@ test('movie smart creates three independent zone candidates once and persists th
     const path=screen.getByTestId('url').textContent;cleanup();mount(path);await loaded();expect(created).toBe(1);
 });
 
+test('embedded initial candidates render without an immediate status request',async()=>{
+    fetch.mockImplementation((url,options={})=>url==='/api/smart-booking-candidates'&&options.method==='POST'
+        ? Promise.resolve(response({groupIds:plan.candidates.map(c=>c.groupId),initial:plan},201)) : api(url,options));
+    mount();await loaded();
+    expect(candidates().getAllByRole('button')).toHaveLength(3);
+    expect(fetch.mock.calls.filter(([url,options])=>url.startsWith('/api/smart-booking-candidates')&&options?.method!=='POST')).toHaveLength(0);
+});
+
+test('focus while a status request is pending waits for it before refreshing',async()=>{
+    let resolveRead, reads=0;
+    fetch.mockImplementation((url,options={})=>{
+        if(url.startsWith('/api/smart-booking-candidates')&&options.method!=='POST') {
+            reads++;
+            if(reads===1)return new Promise(resolve=>{resolveRead=resolve;});
+        }
+        return api(url,options);
+    });
+    mount();await waitFor(()=>expect(reads).toBe(1));
+    fireEvent(window,new Event('focus'));fireEvent(window,new Event('focus'));
+    expect(reads).toBe(1);
+    await act(async()=>resolveRead(response(plan)));
+    await waitFor(()=>expect(reads).toBe(2));
+});
+
 test('sold-out theater smart creates candidates for its selected show without requiring a free seat',async()=>{
     mount(theaterPath.replace('&entry=THEATER_SMART',''));
     await waitFor(()=>expect(screen.getByRole('button',{name:'스마트예매'}).disabled).toBe(false));

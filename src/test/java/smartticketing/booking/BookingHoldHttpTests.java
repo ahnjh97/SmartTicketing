@@ -66,6 +66,7 @@ class BookingHoldHttpTests {
             .withBean(CustomOAuth2UserService.class, () -> mock(CustomOAuth2UserService.class))
                 .withBean(OAuth2SuccessHandler.class, () -> mock(OAuth2SuccessHandler.class))
                 .withBean(JwtDecoder.class, () -> mock(JwtDecoder.class))
+                .withBean(SmartBookingSummaryCache.class, () -> mock(SmartBookingSummaryCache.class))
                 .withBean(org.springframework.data.redis.core.StringRedisTemplate.class,
                         () -> mock(org.springframework.data.redis.core.StringRedisTemplate.class))
                 .withBean(TransactionTemplate.class, () -> new TransactionTemplate(new JpaTransactionManager(db.factory())))

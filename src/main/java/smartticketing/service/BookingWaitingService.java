@@ -48,6 +48,7 @@ public class BookingWaitingService {
             var group = holds.lockOwnedGroup(user, id);
             if (group.getStatus() != BookingGroupStatus.ACTIVE) reject(409, "진행 중인 선점 또는 종료된 그룹에는 대기를 추가할 수 없습니다.");
             var shows = new TreeSet<>(BookingQueueLifecycle.showIds(em, id)); shows.addAll(ids);
+            holds.invalidateSummaries(shows);
             shows.forEach(s -> em.find(Showtime.class, s, LockModeType.PESSIMISTIC_WRITE));
             var existing = BookingQueueLifecycle.rows(em, id);
             if (existing.stream().anyMatch(q -> !shows.contains(q.getShowtime().getId())))
@@ -186,6 +187,7 @@ public class BookingWaitingService {
             }
             BookingQueueLifecycle.lockShows(em, id, null);
             BookingQueueLifecycle.cancelled(em, id, holds.now());
+            holds.invalidateSummaries(BookingQueueLifecycle.showIds(em,id));
             group.setStatus(BookingGroupStatus.CANCELLED); group.setUpdatedAt(holds.now());
             return response(group);
         });
@@ -202,33 +204,39 @@ public class BookingWaitingService {
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
     }
 
-    private WaitingResponse response(BookingRequestGroup group) {
+    WaitingResponse snapshot(BookingRequestGroup group) { return response(group,true); }
+    private WaitingResponse response(BookingRequestGroup group) { return response(group,false); }
+    private WaitingResponse response(BookingRequestGroup group, boolean snapshot) {
         var now = holds.now();
-        var rows = BookingQueueLifecycle.rows(em, group.getId());
+        var rows = snapshot ? em.createQuery("select q from WaitingQueue q where q.requestGroup.id=:g order by q.id",WaitingQueue.class)
+                .setParameter("g",group.getId()).getResultList() : BookingQueueLifecycle.rows(em, group.getId());
         var items = new ArrayList<WaitingResponse.Item>();
         for (var q : rows) {
-            if ((q.getStatus() == QueueStatus.WAITING || q.getStatus() == QueueStatus.PAUSED)
+            var status=q.getStatus();
+            if ((status == QueueStatus.WAITING || status == QueueStatus.PAUSED)
                     && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
-                q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(now);
+                status=QueueStatus.EXPIRED;
+                if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); }
             }
+            if(snapshot && status==QueueStatus.HOLDING && q.getOpportunityExpiresAt()!=null && !q.getOpportunityExpiresAt().isAfter(now))status=QueueStatus.EXPIRED;
             var requestedSeats = q.getRequestedSeatIds().isEmpty() ? List.<Seat>of() : em.createQuery(
                     "select s from Seat s where s.id in :ids order by s.seatRow, s.seatNumber", Seat.class)
                     .setParameter("ids", q.getRequestedSeatIds()).getResultList();
             // Every waiting request in the same zone shares the same position count.
             long ahead = em.createQuery("""
-                    select q from WaitingQueue q where q.showtime.id=:s and q.requestGroup is not null
+                    select count(q) from WaitingQueue q where q.showtime.id=:s and q.requestGroup is not null
                     and q.status=:status and coalesce(q.zoneQueueNumber,q.queueNumber)<:number
-                    and ((:zone is null and q.seatZone is null) or q.seatZone=:zone) order by q.id
-                    """, WaitingQueue.class).setParameter("s", q.getShowtime().getId()).setParameter("status", QueueStatus.WAITING)
+                    and ((:zone is null and q.seatZone is null) or q.seatZone=:zone)
+                    """, Long.class).setParameter("s", q.getShowtime().getId()).setParameter("status", QueueStatus.WAITING)
                     .setParameter("number", q.displayNumber()).setParameter("zone", q.getSeatZone())
-                    .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList().size();
+                    .getSingleResult();
             var show = q.getShowtime();
-            items.add(new WaitingResponse.Item(q.getId(), show.getId(), q.displayNumber(), ahead, q.getStatus(),
+            items.add(new WaitingResponse.Item(q.getId(), show.getId(), q.displayNumber(), ahead, status,
                     offset(q.getOpportunityExpiresAt()), show.getScreen().getTheater().getName(), show.getScreen().getName(), offset(show.getStartTime()), q.getSeatZone(),
                     List.copyOf(q.getRequestedSeatIds()), requestedSeats.stream().map(s -> s.getSeatRow() + s.getSeatNumber()).toList()));
         }
         var choices = new ArrayList<WaitingResponse.Choice>();
-        if (group.getStatus() == BookingGroupStatus.ACTIVE) {
+        if (!snapshot && group.getCandidateKind()==null && group.getStatus() == BookingGroupStatus.ACTIVE) {
             var from = CinemaDay.start(group.getViewingDate()); var until = from.plusDays(1);
             if (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART) {
                 from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom()); until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
@@ -245,6 +253,7 @@ public class BookingWaitingService {
             }
         }
         var slot = group.getStatus() == BookingGroupStatus.HOLDING ? em.find(BookingGroupHold.class, group.getId()) : null;
+        if(snapshot && slot!=null && !slot.getExpiresAt().isAfter(now))slot=null;
         return new WaitingResponse(group.getId(), group.getStatus(), slot == null ? null : slot.getReservation().getId(), items, choices, offset(now));
     }
 

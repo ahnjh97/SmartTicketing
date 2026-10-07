@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.*;
 import static smartticketing.booking.BookingWaitingTests.*;
 
 class SmartBookingCandidatesTests {
+    private static final List<String> statements=Collections.synchronizedList(new ArrayList<>());
     static long extraShow(Fixture f, int minutes) {
         return tx(em->{
             var original=em.find(Showtime.class,f.shows().getFirst());
@@ -279,13 +280,49 @@ class SmartBookingCandidatesTests {
         assertThat(results).allSatisfy(value->assertThat(((BookingResult)value).status()).isEqualTo(201));
     }
 
-    @BeforeAll static void start() throws Exception { db=new TemporaryMysqlDatabase(); }
+    @BeforeAll static void start() throws Exception { db=new TemporaryMysqlDatabase(statements::add); }
     @AfterAll static void stop() throws Exception { if(db!=null) db.close(); }
 
     static SmartBookingCandidatesService plans(EntityManager em) {
         var hold=holds(em,CLOCK); var ops=new BookingIdempotency(em);
         var groups=new BookingGroupService(em,hold,ops,Validation.buildDefaultValidatorFactory().getValidator());
         return new SmartBookingCandidatesService(em,groups,hold,service(em,CLOCK),BookingPaymentTests.service(em,CLOCK,true),ops);
+    }
+    static SmartBookingCandidatesService retryPlans() {
+        return retryPlans(org.mockito.Mockito.mock(SmartBookingSummaryCache.class,org.mockito.Mockito.RETURNS_SMART_NULLS));
+    }
+    static SmartBookingCandidatesService retryPlans(SmartBookingSummaryCache cache) {
+        var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
+        var service=plans(em);
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"configure",new JpaTransactionManager(db.factory()),
+                cache);
+        return service;
+    }
+    @Test void staleCacheRollsBackAndRetriesWithFreshInventoryBeforeIssuingAnyCandidate() {
+        var f=zoned();var cache=org.mockito.Mockito.mock(SmartBookingSummaryCache.class);
+        var zones=Arrays.stream(SeatPosition.values()).map(z->new SmartBookingSummaryCache.Zone(z,true,1,List.<Long>of())).toList();
+        var stale=new HashMap<Long,SmartBookingSummaryCache.Snapshot>();
+        f.shows().forEach(id->stale.put(id,new SmartBookingSummaryCache.Snapshot(System.currentTimeMillis(),zones)));
+        org.mockito.Mockito.when(cache.read(org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyInt())).thenReturn(stale);
+        var result=retryPlans(cache).create(f.user(),key(),request(f));
+        assertThat(result.status()).isEqualTo(201);
+        long groupCount=tx(em->em.createQuery("select count(g) from BookingRequestGroup g where g.user.id=:u and g.candidateKind is not null",Long.class)
+                .setParameter("u",f.user()).getSingleResult());
+        assertThat(groupCount).isEqualTo(1);
+        assertThat(tx(em->plans(em).get(f.user(),null)).candidates()).hasSize(1);
+        org.mockito.Mockito.verify(cache,org.mockito.Mockito.times(1)).read(org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyInt());
+    }
+    @Test void creationIncludesInitialViewAndStatusReadsNeverLockOrWrite() {
+        var f=zoned();var result=direct(f,f.shows().getFirst(),2);
+        var json=tools.jackson.databind.json.JsonMapper.builder().build();
+        var created=json.readValue(result.body(),SmartBookingCandidatesService.Created.class);
+        assertThat(created.initial().candidates()).hasSize(1);
+        assertThat(created.initial().batches()).contains(created.groupIds());
+        statements.clear();
+        var view=tx(em->plans(em).get(f.user(),null));
+        assertThat(view.candidates()).hasSize(1);
+        assertThat(statements).noneMatch(sql->sql.toLowerCase().contains("for update")
+                || sql.toLowerCase().startsWith("update ") || sql.toLowerCase().startsWith("insert "));
     }
     static Fixture zoned() {
         var f=fixture(2,18);
@@ -422,8 +459,8 @@ class SmartBookingCandidatesTests {
             return null;
         });
         var results = BookingPaymentTests.race(
-                () -> tx(em -> plans(em).create(first.user(), key(), firstRequest)),
-                () -> tx(em -> plans(em).create(second.user(), key(), secondRequest)));
+                () -> retryPlans().create(first.user(), key(), firstRequest),
+                () -> retryPlans().create(second.user(), key(), secondRequest));
         assertThat(results).allSatisfy(result -> assertThat(((BookingResult) result).status()).isEqualTo(201));
         var a = tx(em -> plans(em).get(first.user(), null)).candidates();
         var b = tx(em -> plans(em).get(second.user(), null)).candidates();

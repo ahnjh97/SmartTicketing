@@ -24,7 +24,7 @@ function Set-CacheMode([bool]$Enabled) {
     [IO.Directory]::CreateDirectory((Split-Path $modePath)) | Out-Null
     [IO.File]::WriteAllText($modePath, "app.cache.enabled=$value`n", (New-Object Text.UTF8Encoding($false)))
     Write-Host "Saved local cache mode: $value" -ForegroundColor Cyan
-    Write-Host 'Configuration only: application cache is not implemented yet. QR Redis stays ON.'
+    Write-Host 'Smart-booking summary cache mode saved. QR Redis stays ON.'
     Write-Host 'IDE users: restart the backend with the repository root as its working directory.'
 }
 
@@ -105,7 +105,7 @@ function Invoke-Action([string]$Choice) {
         'status' {
             Write-Host "Saved local cache mode: $(Get-CacheMode) (takes effect after backend restart)"
             Write-Host "Redis localhost:6379 PONG: $(Get-RedisPing)"
-            Write-Host 'Application cache: not implemented yet.'
+            Write-Host 'Application cache: smart-booking summaries (2-second TTL).'
         }
     }
 }

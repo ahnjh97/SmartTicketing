@@ -221,4 +221,14 @@ public class BookingPaymentService {
             return paymentResponse(locked.reservation(), payment(reservationId), false);
         } catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
     }
+
+    PaymentResponse snapshot(Long userId, Reservation reservation) {
+        if(!reservation.getUser().getId().equals(userId))throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        var payment=em.createQuery("select p from Payment p where p.reservation.id=:id",Payment.class)
+                .setParameter("id",reservation.getId()).getResultStream().findFirst().orElse(null);
+        var ticket=em.createQuery("select t from Ticket t where t.reservation.id=:id",Ticket.class)
+                .setParameter("id",reservation.getId()).getResultStream().findFirst().orElse(null);
+        return new PaymentResponse(payment==null?null:payment.getId(),payment==null?null:payment.getStatus(),
+                payment==null?null:payment.getAmount(),holds.snapshot(reservation,holds.now()),ticket==null?null:tickets.one(userId,ticket.getId()));
+    }
 }

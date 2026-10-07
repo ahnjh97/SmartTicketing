@@ -23,6 +23,10 @@ public class BookingHoldService {
     private final EntityManager em;
     private final BookingIdempotency operations;
     private final Clock clock;
+    private SmartBookingSummaryCache summaries;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setSummaries(SmartBookingSummaryCache summaries) { this.summaries=summaries; }
+    void invalidateSummaries(Collection<Long> shows) { if(summaries!=null)summaries.invalidate(shows); }
 
     public BookingHoldService(EntityManager em, BookingIdempotency operations,
                               @Qualifier("bookingQueryClock") Clock clock) {
@@ -261,6 +265,7 @@ public class BookingHoldService {
     }
 
     List<ShowtimeSeat> lockInventory(Long showId) {
+        invalidateSummaries(List.of(showId));
         // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
         return em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
                 .setParameter("id", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
@@ -347,10 +352,18 @@ public class BookingHoldService {
     }
 
     ReservationResponse response(Reservation r, LocalDateTime now) {
+        return response(r,now,false);
+    }
+    ReservationResponse snapshot(Reservation r, LocalDateTime now) {
+        return response(r,now,true);
+    }
+    private ReservationResponse response(Reservation r, LocalDateTime now, boolean snapshot) {
         var show = r.getShowtime(); var screen = show.getScreen();
         var seats = em.createQuery("select s from ReservationSeat s join fetch s.seat where s.reservation.id=:id order by s.seat.id", ReservationSeat.class)
                 .setParameter("id", r.getId()).getResultList();
-        return new ReservationResponse(r.getId(), r.getRequestGroup().getId(), r.getStatus(), r.getReservationType(),
+        var status=snapshot && r.getStatus()==ReservationStatus.PENDING && (!r.getExpiresAt().isAfter(now) || !show.getStartTime().isAfter(now))
+                ? ReservationStatus.EXPIRED : r.getStatus();
+        return new ReservationResponse(r.getId(), r.getRequestGroup().getId(), status, r.getReservationType(),
                 show.getMovie().getId(), show.getMovie().getTitle(), show.getId(), screen.getTheater().getId(), screen.getTheater().getName(),
                 screen.getId(), screen.getName(), offset(show.getStartTime()), offset(show.getEndTime()),
                 seats.stream().map(s -> s.getSeat().getId()).toList(),

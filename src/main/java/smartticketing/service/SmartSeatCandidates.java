@@ -11,6 +11,7 @@ final class SmartSeatCandidates {
     record Block(List<Long> seatIds, int preferenceRank, String row, String segment, int firstPosition, boolean split, double centerDistance, int patternRank) {}
     record Analysis(boolean layoutComplete, int available, List<Block> blocks) {}
     private record Position(String row, String segment, Integer offset) {}
+    record Prepared(boolean complete, List<ShowtimeSeat> sorted, Map<Long, Double> distances) {}
 
     // 좌석 조합 우선순위는 선호 위치 및 극장 순위보다 먼저 적용한다.
     static Comparator<Block> priorityOrder() {
@@ -22,9 +23,12 @@ final class SmartSeatCandidates {
     }
 
     static Analysis analyze(List<ShowtimeSeat> inventory, Long screenId, int party, List<SeatPosition> preferences, SeatPosition requiredZone) {
+        return analyze(prepare(inventory, screenId), party, preferences, requiredZone);
+    }
+
+    static Prepared prepare(List<ShowtimeSeat> inventory, Long screenId) {
         var active = inventory.stream().filter(i -> i.getSeat().isActive()
                 && i.getSeat().getScreen().getId().equals(screenId)).toList();
-        int available = (int) active.stream().filter(i -> available(i, requiredZone)).count();
         var positions = new HashSet<Position>();
         for (var item : active) {
             var s = item.getSeat();
@@ -32,9 +36,9 @@ final class SmartSeatCandidates {
                     || s.getAdjacencySegment().isBlank() || s.getPositionInSegment() == null
                     || s.getPositionInSegment() < 1 || s.getSeatPosition() == null || s.getSeatNumber() == null
                     || !positions.add(new Position(s.getSeatRow(), s.getAdjacencySegment(), s.getPositionInSegment())))
-                return new Analysis(false, available, List.of());
+                return new Prepared(false, active, Map.of());
         }
-        if (active.isEmpty()) return new Analysis(false, 0, List.of());
+        if (active.isEmpty()) return new Prepared(false, active, Map.of());
         // Occupied seats also define the row's center; availability must not move it.
         var rowBounds = new HashMap<String, IntSummaryStatistics>();
         for (var item : active) rowBounds.computeIfAbsent(item.getSeat().getSeatRow(), ignored -> new IntSummaryStatistics())
@@ -49,6 +53,14 @@ final class SmartSeatCandidates {
                 .comparing((ShowtimeSeat i) -> i.getSeat().getSeatRow())
                 .thenComparing(i -> i.getSeat().getAdjacencySegment())
                 .thenComparing(i -> i.getSeat().getPositionInSegment())).toList();
+        return new Prepared(true, sorted, distances);
+    }
+
+    static Analysis analyze(Prepared prepared, int party, List<SeatPosition> preferences, SeatPosition requiredZone) {
+        var sorted = prepared.sorted();
+        int available = (int) sorted.stream().filter(i -> available(i, requiredZone)).count();
+        if (!prepared.complete()) return new Analysis(false, available, List.of());
+        var distances = prepared.distances();
         var blocks = new ArrayList<Block>();
         for (int start = 0; start + party <= sorted.size(); start++) {
             var first = sorted.get(start).getSeat();

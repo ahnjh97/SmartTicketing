@@ -28,7 +28,7 @@ async function fixture(t, mode = '') {
             if (mode === 'reject') return send(409, { code: 'NO_CANDIDATES' });
             if (!keys.has(key)) { keys.set(key, next); active.set(next++, user); }
             if (mode === 'lost-response' && !dropped) { dropped = true; req.socket.destroy(); return; }
-            return send(201, { groupIds: [keys.get(key)] });
+            return send(201, { groupIds: [keys.get(key)], ...(mode==='embedded'?{initial:{candidates:[{groupId:keys.get(key)}]}}:{}) });
         }
         if (req.method === 'GET' && path === '/api/smart-booking-candidates') {
             if (mode === 'read-failure') return send(500, {});
@@ -124,6 +124,14 @@ test('failed first GET still cancels successful creations', async t => {
     const row = await sample(f.config, { id: 1, token: 'token-1' }, f.config.ranges[0], {}, f.directory);
     assert.equal(row.createOk, true); assert.equal(row.readOk, false); assert.equal(row.cleanupOk, true);
     assert.equal(f.active.size, 0);
+});
+
+test('embedded candidate response skips the first GET but still cleans this attempt',async t=>{
+    const f=await fixture(t,'embedded');
+    const row=await sample(f.config,{id:1,token:'token-1'},f.config.ranges[0],{},f.directory);
+    assert.equal(row.initialInCreate,true);assert.equal(row.readMs,0);assert.equal(row.flowMs,row.createMs);
+    assert.equal(row.readOk,true);assert.equal(row.cleanupOk,true);
+    assert.equal(f.calls.filter(c=>c.path==='/api/smart-booking-candidates'&&!c.key).length,0);
 });
 
 test('cleanup failure stops further load and retains recoverable journal and report', async t => {

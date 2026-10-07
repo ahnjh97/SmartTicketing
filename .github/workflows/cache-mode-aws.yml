@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Configuration only until application cache is implemented'
+        description: 'Enable or disable smart-booking summary cache'
         required: true
         default: status
         type: choice
@@ -50,4 +50,4 @@ jobs:
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 -i "$key" \
             "$AWS_USERNAME@$AWS_HOST" \
             "cd ~/SmartTicketing && python3 deploy/cache-mode.py '$MODE'"
-          echo 'Mode configuration checked. Application cache behavior is not implemented yet.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Mode configuration checked. Smart-booking summary caching follows this setting.' >> "$GITHUB_STEP_SUMMARY"

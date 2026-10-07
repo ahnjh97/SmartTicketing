@@ -124,8 +124,12 @@ export async function sample(config, user, range, meta, journalDir) {
         candidateCount: record.groupIds.length, error: created.error ?? (record.groupIds.length ? null : `CREATE_${created.status}`) };
     try {
         if (row.createOk) {
-            // Same first GET as the UI (no selected parameter): includes the user's active candidates.
-            const read = await request(config, endpoint, user.token);
+            // Match the UI: use embedded details, otherwise fetch active candidates.
+            const embedded = created.data?.initial;
+            const read = embedded && Array.isArray(embedded.candidates)
+                ? { status: created.status, ms: 0, data: embedded }
+                : await request(config, endpoint, user.token);
+            row.initialInCreate = Boolean(embedded && Array.isArray(embedded.candidates));
             row.readStatus = read.status; row.readMs = read.ms; row.flowMs = created.ms + read.ms;
             const candidates = Array.isArray(read.data?.candidates) ? read.data.candidates : [];
             row.readOk = ok(read) && record.groupIds.every(id => candidates.some(c => c.groupId === id));
@@ -201,7 +205,7 @@ async function report(directory, config, rows, note) {
         '| 범위/동시 사용자 | 성공/전체 | 실패 | 생성 p95 | 첫 조회 p95 | 합계 p50 | 합계 p95 | 합계 p99 | 정리 실패 |',
         '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|'];
     for (const s of summary) lines.push(`| ${s.scenario} | ${s.successes}/${s.attempts} | ${s.failures} | ${ms(s.create.p95)} | ${ms(s.firstRead.p95)} | ${ms(s.flow.p50)} | ${ms(s.flow.p95)} | ${ms(s.flow.p99)} | ${s.cleanupFailures} |`);
-    lines.push('', '합계는 후보 생성+첫 상태 조회의 API 시간입니다. 브라우저 렌더링·로그인·로컬 파일 기록·정리 시간은 제외합니다.',
+    lines.push('', '합계는 후보 정보를 모두 받을 때까지 필요한 API 시간입니다. 생성 응답에 후보 상세가 있으면 추가 조회 없이 생성 시간만 사용합니다. 브라우저 렌더링·로그인·로컬 파일 기록·정리 시간은 제외합니다.',
         '표본 100개 미만의 p99는 참고값입니다. SQL/잠금 대기/서버 CPU 시간은 이 스크립트로 측정하지 않습니다.',
         '고정 동시 사용자 반복 방식이며 정리·휴식이 포함됩니다. 최대 처리량(RPS)이나 동시 클릭의 완전 동기화를 의미하지 않습니다.',
         '워밍업도 데이터를 생성·취소합니다. 취소 내역과 멱등성 기록은 DB에 남으므로 전후 비교는 같은 DB 스냅샷에서 시작하세요.');
