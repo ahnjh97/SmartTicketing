@@ -78,7 +78,7 @@ public class BookingWaitingService {
                         and q.status in :statuses order by q.id
                         """, WaitingQueue.class).setParameter("user", user).setParameter("show", showId)
                         .setParameter("statuses", ACTIVE).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
-                if (!duplicates.isEmpty()) reject(409, "같은 회차에는 한 구역만 대기할 수 있습니다. 기존 대기의 구역을 변경해주세요.");
+                if (!duplicates.isEmpty()) BookingQueueLifecycle.rejectDuplicateShow();
                 // The show mutex serializes number issuance, including parallel groups of the same user.
                 var numbers = em.createQuery("select q from WaitingQueue q where q.showtime.id=:s order by q.queueNumber desc", WaitingQueue.class)
                         .setParameter("s", showId).setMaxResults(1).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
@@ -108,7 +108,8 @@ public class BookingWaitingService {
                 || !i.getSeat().getScreen().getId().equals(show.getScreen().getId()) || i.getStatus() == SeatStatus.BLOCKED))
             reject(400, "이 회차에서 이용 가능한 좌석을 선택해주세요.");
         var zones = new HashSet<SeatPosition>(); selected.forEach(i -> zones.add(i.getSeat().getSeatPosition()));
-        if (zones.size() != 1 || zones.contains(null)) reject(400, "대기 좌석은 같은 구역 안에서 선택해주세요.");
+        if (zones.size() != 1 || zones.contains(null))
+            throw new BookingRejection(400, "WAITING_SINGLE_ZONE_REQUIRED", "대기 좌석은 같은 구역 안에서 선택해주세요. 서로 다른 구역의 좌석을 함께 대기할 수 없습니다.");
         var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
         if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
         if (row != null && row.getRequestedSeatIds().equals(ids)) return response(group);
@@ -117,7 +118,7 @@ public class BookingWaitingService {
         if (rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
                 && !Objects.equals(q.getRequestGroup() == null ? null : q.getRequestGroup().getId(), group.getId())
                 && ACTIVE.contains(q.getStatus())))
-            reject(409, "같은 회차에는 한 구역만 대기할 수 있습니다. 기존 대기의 좌석을 변경해주세요.");
+            BookingQueueLifecycle.rejectDuplicateShow();
         int last = rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
         if (last == Integer.MAX_VALUE) reject(409, "대기 번호를 더 발급할 수 없습니다.");
         SeatPosition zone = zones.iterator().next();
@@ -149,7 +150,7 @@ public class BookingWaitingService {
         if(rows.stream().anyMatch(q -> q.getUser().getId().equals(group.getUser().getId())
                 && !Objects.equals(q.getRequestGroup()==null?null:q.getRequestGroup().getId(),group.getId())
                 && ACTIVE.contains(q.getStatus())))
-            reject(409,"같은 회차에는 한 구역만 대기할 수 있습니다. 기존 대기의 구역을 변경해주세요.");
+            BookingQueueLifecycle.rejectDuplicateShow();
         int global=rows.stream().mapToInt(WaitingQueue::getQueueNumber).max().orElse(0);
         int local=rows.stream().filter(q->q.getSeatZone()==zone).mapToInt(WaitingQueue::getZoneQueueNumber).max().orElse(0);
         if(global==Integer.MAX_VALUE || local==Integer.MAX_VALUE) reject(409,"대기 번호를 더 발급할 수 없습니다.");

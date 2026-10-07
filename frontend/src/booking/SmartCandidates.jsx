@@ -1,3 +1,4 @@
+import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import GlassButton from '../components/GlassButton.jsx';
@@ -38,6 +39,7 @@ export default function SmartCandidates({ booking }) {
     const step = selected?.payment?.reservation?.status === 'CONFIRMED' ? 2 : selected?.payment?.reservation ? 1 : 0;
     const back = () => booking.update({ entry: null, smart: null, plan: null, candidate: null, group: null, reservation: null });
     return <div className={styles.smart}>
+        <WaitingRuleDialog error={flow.error} />
         <header className={styles.heading}><h2>스마트예매</h2>
             <GlassButton disabled={flow.busy} onClick={back}>선택 수정</GlassButton></header>
         <ol className={ui.steps} aria-label="스마트예매 진행 단계">{['좌석 선정', '결제', '나의 티켓'].map((label,index) =>

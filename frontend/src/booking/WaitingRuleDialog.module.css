@@ -1,0 +1,20 @@
+.dialog {
+    width: min(480px, calc(100vw - 32px));
+    box-sizing: border-box;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    border: 1px solid var(--booking-border, #e2e5e9);
+    border-radius: 20px;
+    padding: 28px;
+    color: var(--booking-ink, #202633);
+    background: var(--booking-surface, #fff);
+    box-shadow: 0 24px 80px #0003;
+}
+.dialog::backdrop { background: #17203380; }
+.dialog h2 { margin: 0 0 16px; font-size: 1.25rem; }
+.dialog p { line-height: 1.65; word-break: keep-all; }
+.help { color: var(--booking-muted, #606978); }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 24px; }
+.actions a { color: inherit; text-underline-offset: 3px; }
+.actions button { border: 0; border-radius: 10px; padding: 12px 24px; background: var(--booking-accent, #263746); color: var(--booking-on-accent, #fff); font: inherit; cursor: pointer; }
+.actions button:focus-visible, .actions a:focus-visible { outline: 3px solid #648aad; outline-offset: 3px; }

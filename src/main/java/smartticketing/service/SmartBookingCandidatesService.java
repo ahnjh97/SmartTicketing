@@ -121,6 +121,7 @@ public class SmartBookingCandidatesService {
         for(var zone:List.of(SeatPosition.MIDDLE_MIDDLE,SeatPosition.MIDDLE_REAR,SeatPosition.MIDDLE_FRONT,
                 SeatPosition.SIDE_MIDDLE,SeatPosition.SIDE_REAR,SeatPosition.SIDE_FRONT)) if(!preferences.contains(zone)) preferences.add(zone);
         var result=new ArrayList<Option>();
+        boolean duplicateShow = false;
         for(var show:shows) {
             try { BookingHoldService.validateShow(show,holds.now()); BookingAudiencePolicy.revalidate(template,show.getStartTime().toLocalDate()); }
             catch(BookingRejection excluded) { continue; }
@@ -132,8 +133,11 @@ public class SmartBookingCandidatesService {
             var queues=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.status in :states order by q.id",WaitingQueue.class)
                     .setParameter("s",show.getId()).setParameter("states",List.of(QueueStatus.WAITING,QueueStatus.PAUSED,QueueStatus.HOLDING))
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+            if (queues.stream().anyMatch(q -> q.getUser().getId().equals(template.getUser().getId()))) {
+                duplicateShow = true;
+                continue;
+            }
             for(var zone:preferences) {
-                if(queues.stream().anyMatch(q->q.getUser().getId().equals(template.getUser().getId()))) continue;
                 if(SmartSeatCandidates.analyze(capacity,show.getScreen().getId(),template.getPartySize(),preferences,zone).blocks().isEmpty()) continue;
                 long ahead=queues.stream().filter(q->q.getStatus()==QueueStatus.WAITING && (q.getSeatZone()==null || q.getSeatZone()==zone)).count();
                 var blocks=SmartSeatCandidates.analyze(inventory,show.getScreen().getId(),template.getPartySize(),preferences,zone).blocks();
@@ -146,6 +150,7 @@ public class SmartBookingCandidatesService {
                         best.map(SmartSeatCandidates.Block::seatIds).orElse(List.of())));
             }
         }
+        if (result.isEmpty() && duplicateShow) BookingQueueLifecycle.rejectDuplicateShow();
         return result;
     }
 

@@ -204,6 +204,27 @@ test('cross-zone waiting is blocked without sending a registration', async () =>
     expect(fetch.mock.calls.some(([url, options]) => url.endsWith('/waiting-queues') && options?.method === 'POST')).toBe(false);
 });
 
+test('duplicate show waiting explains the rule in a dismissible modal', async () => {
+    vi.stubGlobal('fetch', vi.fn((url, options = {}) => {
+        if (url.endsWith('/waiting-queues') && options.method === 'POST')
+            return new Response(JSON.stringify({ message: '이미 이 회차에 대기 중입니다.', code: 'WAITING_SHOWTIME_CONFLICT' }), { status: 409 });
+        return api(url, options);
+    }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'A1 좌석' }));
+    fireEvent.click(screen.getByRole('button', { name: 'A3 대기 가능' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석 대기 신청' }));
+    await screen.findByRole('dialog', { name: '이미 신청한 회차입니다' });
+    expect(screen.getByText(/같은 회차에는 한 구역만 대기할 수 있습니다/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: '내 대기 및 선점 보기' }).getAttribute('href')).toBe('/bookings');
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(screen.queryByRole('dialog', { name: '이미 신청한 회차입니다' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '선택한 좌석 대기 신청' }));
+    const reopened = await screen.findByRole('dialog', { name: '이미 신청한 회차입니다' });
+    fireEvent(reopened, new Event('cancel', { bubbles: true, cancelable: true }));
+    expect(screen.queryByRole('dialog', { name: '이미 신청한 회차입니다' })).toBeNull();
+});
+
 test('fully booked show still allows selecting reserved seats to wait', async () => {
     vi.stubGlobal('fetch', vi.fn((url, options = {}) => {
         if (url.startsWith('/api/showtimes?')) return response({ items: [{ ...show, availableSeats: 0 }] });

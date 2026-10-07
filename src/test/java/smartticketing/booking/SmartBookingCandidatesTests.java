@@ -555,7 +555,18 @@ class SmartBookingCandidatesTests {
                 ()->tx(em->service(em,CLOCK).register(f.user(),a,key(),new WaitingRequest(List.of(show),SeatPosition.MIDDLE_MIDDLE))),
                 ()->tx(em->service(em,CLOCK).register(f.user(),b,key(),new WaitingRequest(List.of(show),SeatPosition.SIDE_MIDDLE))));
         assertThat(results.stream().map(r->((BookingResult)r).status())).containsExactlyInAnyOrder(201,409);
+        assertThat(results.stream().map(r->(BookingResult)r).filter(r->r.status()==409).findFirst().orElseThrow().body())
+                .contains("WAITING_SHOWTIME_CONFLICT", "한 구역만 대기");
         assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(1);
+    }
+
+    @Test void smartDuplicateShowExplainsWaitingRuleButOtherShowsRemainBookable() {
+        var f=zoned(); var show=f.shows().getFirst(); long group=manualGroup(f,show);
+        assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(show),SeatPosition.SIDE_MIDDLE))).status()).isEqualTo(201);
+        var rejected=direct(f,show,2);
+        assertThat(rejected.status()).isEqualTo(409);
+        assertThat(rejected.body()).contains("WAITING_SHOWTIME_CONFLICT", "내 대기 및 선점");
+        assertThat(direct(f,f.shows().getLast(),2).status()).isEqualTo(201);
     }
 
     @Test void smartCanAddSixthWaitWithoutDroppingExistingWaits() {

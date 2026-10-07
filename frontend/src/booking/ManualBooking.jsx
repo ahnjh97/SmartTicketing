@@ -1,3 +1,4 @@
+import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { useState } from 'react';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import InlineDetails from '../components/InlineDetails.jsx';
@@ -38,6 +39,7 @@ export default function ManualBooking({ booking }) {
         ...(flow.reservation ? { theater: flow.reservation.theaterId, movie: flow.reservation.movieId,
             showtime: flow.reservation.showtimeId, date: flow.reservation.startTime.slice(0,10) } : {}) });
     return <div className={styles.manual}>
+        <WaitingRuleDialog error={flow.error} />
         <div className={styles.heading}><h2>일반 예매</h2>
             <GlassButton disabled={flow.busy} onClick={() => booking.update({ entry: null, group: null, reservation: null, seats: null })}>회차 선택으로</GlassButton></div>
         <ol className={ui.steps} aria-label="예매 진행 단계">{['좌석 선택', '선점 후 모의결제', '티켓'].map((label,index) => {

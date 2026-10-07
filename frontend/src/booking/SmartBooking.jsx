@@ -1,3 +1,4 @@
+import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
@@ -52,6 +53,7 @@ function LegacySmartBooking({ booking }) {
     const choices = unavailable.has(flow.error?.code);
     const step = flow.reservation?.status === 'CONFIRMED' ? 2 : flow.reservation ? 1 : 0;
     return <div className={styles.smart}>
+        <WaitingRuleDialog error={flow.error} />
         <header className={styles.heading}><h2>스마트예매</h2><GlassButton disabled={flow.busy} onClick={back}>선택 수정</GlassButton></header>
         <ol className={ui.steps} aria-label="스마트예매 진행 단계">{['좌석 선정', '결제', '나의 티켓'].map((label,index) =>
             <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}>{label}</li>)}</ol>

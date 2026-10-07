@@ -1,3 +1,4 @@
+import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
 import GlassButton from '../components/GlassButton.jsx';
@@ -25,6 +26,7 @@ export default function WaitingPanel({ flow }) {
     const busy = queue.busy || flow.busy;
     if (flow.reservation && data && !data.items.length && !queue.error) return null;
     return <section className={styles.panel} aria-label="복수 회차 대기" aria-busy={queue.busy}>
+        <WaitingRuleDialog error={queue.error} />
         <header className={styles.heading}><div><p className={styles.eyebrow}>MORE POSSIBILITIES</p><h3>기다리는 동안, 기회는 넓게.</h3>
             <p>회차마다 한 구역에 대기합니다. 구역을 지정하지 않으면 첫 번째 선호 구역으로 신청됩니다. 한 곳이 확보되면 나머지는 잠시 멈춥니다.</p></div><span className={styles.badge}>WAITLIST</span></header>
         
