@@ -174,7 +174,6 @@ public class BookingPaymentService {
         else BookingQueueLifecycle.cancelled(em, locked.group().getId(), now);
         if (locked.slot() != null) em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
-        NotificationService.link(notifications.cancelled(userId), r);
         return holds.response(r, now);
     }
 
