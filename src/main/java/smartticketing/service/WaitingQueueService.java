@@ -15,14 +15,11 @@ public class WaitingQueueService {
     private static final int OPPORTUNITY_MINUTES = 5;
 
     private final WaitingQueueRepository queues;
-    private final NotificationService notifications;
     private final EntityManager em;
 
     public WaitingQueueService(WaitingQueueRepository queues,
-                               NotificationService notifications,
                                EntityManager em) {
         this.queues = queues;
-        this.notifications = notifications;
         this.em = em;
     }
 
@@ -43,7 +40,6 @@ public class WaitingQueueService {
         queue.setOpportunityExpiresAt(now.plusMinutes(OPPORTUNITY_MINUTES));
         queue.setUpdatedAt(now);
 
-        notifications.queueTurn(queue.getUser().getId());
         return queue;
     }
 
