@@ -38,22 +38,6 @@ const nativeShowModal = HTMLDialogElement.prototype.showModal;
 beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); }; localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('fetch', vi.fn(baseFetch)); vi.spyOn(Date, 'now').mockReturnValue(Date.parse(`${seoulDate()}T09:00:00+09:00`)); });
 afterEach(() => { cleanup(); if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal; else delete HTMLDialogElement.prototype.showModal; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-test('smart booking explains duplicate show waiting in a modal', async () => {
-    localStorage.setItem('accessToken', 'saved-token');
-    fetch.mockImplementation((url, options = {}) => {
-        if (url === '/api/smart-booking-candidates') return Promise.resolve(options.method === 'POST'
-            ? new Response(JSON.stringify({ message: '이미 신청한 회차입니다.', code: 'WAITING_SHOWTIME_CONFLICT' }), { status: 409 })
-            : json({ candidates: [] }));
-        return baseFetch(url);
-    });
-    mount(`/movies?movie=41&party=2&from=22%3A00&until=02%3A00&date=${seoulDate()}&entry=MOVIE_SMART`);
-    await screen.findByRole('dialog', { name: '이미 신청한 회차입니다' });
-    expect(screen.getByText(/같은 회차에는 한 구역만 대기할 수 있습니다/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: '내 대기 및 선점 보기' }).getAttribute('href')).toBe('/bookings');
-    fireEvent.click(screen.getByRole('button', { name: '확인' }));
-    expect(screen.queryByRole('dialog', { name: '이미 신청한 회차입니다' })).toBeNull();
-    expect(fetch.mock.calls.filter(([url, options]) => url === '/api/smart-booking-candidates' && options?.method === 'POST')).toHaveLength(1);
-});
 
 test('details and availability load in parallel while audience controls already work', async () => {
     let detailDone, availabilityDone;

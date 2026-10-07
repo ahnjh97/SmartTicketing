@@ -16,6 +16,7 @@ export default function ManualBooking({ booking }) {
     const [params, setParams] = useSearchParams();
     const flow = useManualHold();
     const [confirmCancel, setConfirmCancel] = useState(false);
+    const [selectionError, setSelectionError] = useState(null);
     const { selectedShow: show, selectedMovie: movie, theater, shows } = booking;
     const seats = useCatalog(show && !flow.reservationId ? `showtimes/${show.id}/seats` : null);
     const audience = flow.group?.audience || { adultCount: booking.adultCount, youthCount: booking.youthCount };
@@ -35,11 +36,26 @@ export default function ManualBooking({ booking }) {
         for (const [key,value] of Object.entries(values)) { if (value == null || value === '') next.delete(key); else next.set(key,String(value)); }
         return next;
     }, { replace: true });
+    const rejectZone = () => setSelectionError({ code: 'WAITING_SINGLE_ZONE_REQUIRED' });
+    const selectSeats = ids => {
+        const chosen = ids.map(id => seats.data.seats.find(seat => seat.id === id)).filter(Boolean);
+        if (ids.length > selected.length && chosen.some(seat => seat.status !== 'AVAILABLE')
+            && new Set(chosen.map(seat => seat.position)).size > 1) {
+            rejectZone();
+            return;
+        }
+        setSelectionError(null);
+        change({ seats: ids.length ? ids.join(',') : 'none' });
+    };
+    const submitWaiting = () => {
+        if (!sameZone) { rejectZone(); return; }
+        flow.hold(body, selected, null, true);
+    };
     const reset = () => change({ group: null, reservation: null, seats: null, eligible: null, guardian: null,
         ...(flow.reservation ? { theater: flow.reservation.theaterId, movie: flow.reservation.movieId,
             showtime: flow.reservation.showtimeId, date: flow.reservation.startTime.slice(0,10) } : {}) });
     return <div className={styles.manual}>
-        <WaitingRuleDialog error={flow.error} />
+        <WaitingRuleDialog error={selectionError || flow.error} onClose={() => setSelectionError(null)} />
         <div className={styles.heading}><h2>일반 예매</h2>
             <GlassButton disabled={flow.busy} onClick={() => booking.update({ entry: null, group: null, reservation: null, seats: null })}>회차 선택으로</GlassButton></div>
         <ol className={ui.steps} aria-label="예매 진행 단계">{['좌석 선택', '선점 후 모의결제', '티켓'].map((label,index) => {
@@ -56,11 +72,11 @@ export default function ManualBooking({ booking }) {
                     <div className={styles.seatHeading}><span aria-live="polite">{selected.length} / {party}석 선택</span><GlassButton disabled={flow.busy || seats.loading} onClick={seats.retry}>좌석 현황 새로고침</GlassButton></div>
                     <QueryStatus query={seats} empty={seats.data?.seats.length === 0} />
                     {seats.data && <SeatPicker seats={seats.data.seats} selected={selected} limit={party >= 1 && party <= 6 ? party : 0}
-                        onChange={ids => change({ seats: ids.length ? ids.join(',') : 'none' })} disabled={flow.busy} allowWaiting />}
+                        onChange={selectSeats} disabled={flow.busy} allowWaiting />}
                 </div>
                 <aside className={styles.summary} aria-label="선택한 예매 정보">
                     <h3>{movie?.title}</h3>
-                    {waiting && <p role="status">{waiting.seatLabels?.length ? waiting.seatLabels.join(', ') : getSeatLabel(waiting.seatZone)} 대기 중 · 앞선 신청 {waiting.aheadCount}건</p>}
+                    {waiting && <p role="status">{waiting.seatLabels?.length ? waiting.seatLabels.join(', ') : getSeatLabel(waiting.seatZone)} 대기 중 · 순번 {waiting.aheadCount + 1}번</p>}
                     {waiting && (confirmCancel ? <div><p>이 대기를 취소할까요?</p><GlassButton disabled={flow.busy} onClick={flow.cancelWaiting}>대기 취소 확정</GlassButton><GlassButton onClick={() => setConfirmCancel(false)}>유지하기</GlassButton></div>
                         : <GlassButton onClick={() => setConfirmCancel(true)}>대기 취소</GlassButton>)}
                     <div className={styles.summaryDetails}><InlineDetails items={[theater.data?.name, show.screenName]} /><strong><time dateTime={booking.date}>{booking.date.replaceAll('-', '.')}</time></strong>
@@ -73,11 +89,8 @@ export default function ManualBooking({ booking }) {
                     </dl>
                     {party < 1 || party > 6 ? <p className={styles.error}>총인원을 1~6명으로 선택해주세요.</p> : null}
                     {show.pricePerPerson !== 10000 && <p className={styles.error}>회차 가격을 확인할 수 없어 예매할 수 없습니다.</p>}
-                    {validSeats && !sameZone && <p className={styles.hint}>대기 좌석은 같은 구역 안에서 선택해주세요.</p>}
-                    <button className={`${ui.primary} ${styles.pay}`} disabled={flow.busy || !validSeats || (!allAvailable && (!sameZone || sameWaiting)) || party < 1 || party > 6 || show.pricePerPerson !== 10000}
-                        onClick={() => flow.hold(body, selected, null, !allAvailable)}>{flow.busy ? '좌석을 확인하고 있습니다…' : !validSeats || allAvailable ? '선택한 좌석 5분 선점' : sameWaiting ? '선택한 좌석 대기 중' : waiting ? '선택한 좌석으로 대기 변경' : '선택한 좌석 대기 신청'}</button>
-                    {allAvailable && !sameWaiting && <GlassButton disabled={flow.busy || !sameZone || show.pricePerPerson !== 10000}
-                        onClick={() => flow.hold(body, selected, null, true)}>{waiting ? '선택한 좌석으로 대기 변경' : '선택한 좌석 대기 신청'}</GlassButton>}
+                    <button className={`${ui.primary} ${styles.pay}`} disabled={flow.busy || !validSeats || (!allAvailable && sameWaiting) || party < 1 || party > 6 || show.pricePerPerson !== 10000}
+                        onClick={() => allAvailable ? flow.hold(body, selected, null, false) : submitWaiting()}>{flow.busy ? '좌석을 확인하고 있습니다…' : !allAvailable && sameWaiting ? '대기 중' : '예매하기'}</button>
                     {waiting && !sameWaiting && validSeats && <p className={styles.hint}>대기 좌석을 변경하면 새 순번으로 등록됩니다.</p>}
                 </aside>
             </div> : <><QueryStatus query={shows} /><p role="alert">선택한 회차를 이용할 수 없습니다. 날짜와 회차를 다시 확인해주세요.</p></>}
