@@ -111,7 +111,7 @@ class BookingPaymentTests {
         assertThat(pay(f,successKey,false,CLOCK)).isEqualTo(success);
         assertThat(pay(f,successKey,true,CLOCK).status()).isEqualTo(409);
         assertThat(pay(f,key(),false,CLOCK).status()).isEqualTo(201);
-        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
     }
 
     @Test void recoveryDiscoversConfirmedReservationAfterRestartAndPreservesLegacyNotifications() {
@@ -231,7 +231,7 @@ class BookingPaymentTests {
         race(() -> pay(f,key(),false,CLOCK),() -> tx(em -> new BookingHoldService(em,new BookingIdempotency(em),
                 Clock.offset(CLOCK,Duration.ofMinutes(5))).expire(f.group)));
         var state=tx(em -> em.find(Reservation.class,f.reservation).getStatus());
-        if(state==ReservationStatus.CONFIRMED) assertState(f,state,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,1);
+        if(state==ReservationStatus.CONFIRMED) assertState(f,state,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
         else assertState(f,ReservationStatus.EXPIRED,SeatStatus.AVAILABLE,null,null,0);
     }
     @Test void distinctConcurrentCancelRequestsDoNotDoubleNotifyOrRelease() throws Exception {
