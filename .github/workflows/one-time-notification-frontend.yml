@@ -1,0 +1,50 @@
+name: one-time-notification-frontend
+
+on:
+  push:
+    branches: [feature/jusang]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.event.head_commit.message != 'chore: switch header notifications to realtime events' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/jusang
+          fetch-depth: 0
+
+      - name: Replace notification polling with SSE subscription
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('frontend/src/components/CommonHeader.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          start = text.index('    useEffect(() => {\n        if (!user || disabled) {', text.index('function HeaderContent'))
+          end = text.index('    function showTicketPreview', start)
+          replacement = '''    useEffect(() => {\n        if (!user || disabled) {\n            seenNotificationIdsRef.current = null;\n            setFloatingNotification(null);\n            setNotifications([]);\n            setUnreadCount(0);\n            return;\n        }\n\n        let mounted = true;\n\n        const refreshNotifications = () => notificationApi.list(false)\n            .then((items) => {\n                if (!mounted || !Array.isArray(items)) return;\n\n                const actionable = items.filter((item) =>\n                    item.groupId && [\"QUEUE_TURN\", \"SEAT_HOLD_EXPIRED\"].includes(item.type)\n                );\n\n                if (seenNotificationIdsRef.current === null) {\n                    seenNotificationIdsRef.current = new Set(items.map((item) => item.id));\n                } else {\n                    const seen = seenNotificationIdsRef.current;\n                    const next = actionable.find((item) => !seen.has(item.id));\n                    items.forEach((item) => seen.add(item.id));\n\n                    if (next) {\n                        if (floatingNotificationTimerRef.current) {\n                            window.clearTimeout(floatingNotificationTimerRef.current);\n                        }\n                        setFloatingNotification(next);\n                        floatingNotificationTimerRef.current = window.setTimeout(() => {\n                            setFloatingNotification(null);\n                        }, 3000);\n                    }\n                }\n\n                setNotifications(items);\n                setUnreadCount(items.filter((item) => !item.read).length);\n            })\n            .catch(() => {});\n\n        refreshNotifications();\n        const unsubscribe = notificationApi.subscribe(refreshNotifications);\n\n        return () => {\n            mounted = false;\n            unsubscribe();\n        };\n    }, [user, disabled]);\n\n'''
+          text = text[:start] + replacement + text[end:]
+
+          start = text.index('    useEffect(() => {\n        if (!user || disabled) return;', text.index('function renderGuestItems'))
+          end = text.index('    useEffect(() => {\n        if (typeof ResizeObserver', start)
+          text = text[:start] + text[end:]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/components/CommonHeader.jsx .github/workflows/one-time-notification-frontend.yml
+          git commit -m "chore: switch header notifications to realtime events"
+          git rm .github/workflows/one-time-notification-frontend.yml
+          git commit -m "chore: remove one-time notification patch workflow"
+          git push origin feature/jusang
