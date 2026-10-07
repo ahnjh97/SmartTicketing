@@ -58,6 +58,31 @@ public class NotificationService {
         return create(id, NotificationType.SEAT_HOLD_STARTED, "좌석 5분 선점이 시작되었습니다. 제한 시간 내 결제를 완료해주세요.");
     }
 
+    public static void holdExpired(jakarta.persistence.EntityManager em, Long groupId) {
+        var turns = em.createQuery(
+                "select n from Notification n where n.bookingGroupId=:group and n.type=:type",
+                Notification.class)
+                .setParameter("group", groupId)
+                .setParameter("type", NotificationType.QUEUE_TURN)
+                .getResultList();
+        if (turns.isEmpty()) return;
+
+        var user = turns.getFirst().getUser();
+        turns.forEach(em::remove);
+        em.createQuery("delete from Notification n where n.bookingGroupId=:group and n.type=:type")
+                .setParameter("group", groupId)
+                .setParameter("type", NotificationType.SEAT_HOLD_EXPIRED)
+                .executeUpdate();
+
+        var expired = new Notification();
+        expired.setUser(user);
+        expired.setType(NotificationType.SEAT_HOLD_EXPIRED);
+        expired.setMessage("해당 회차의 좌석 선점 시간이 만료되었습니다. 다시 선점해주세요.");
+        expired.setCreatedAt(LocalDateTime.now());
+        expired.setBookingGroupId(groupId);
+        em.persist(expired);
+    }
+
     public static Notification link(Notification notification, Reservation reservation) {
         if (reservation.getRequestGroup() != null) {
             notification.setBookingGroupId(reservation.getRequestGroup().getId());
