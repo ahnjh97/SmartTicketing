@@ -91,15 +91,23 @@ public class NotificationService {
         return notification;
     }
 
-    // Called inside the same transaction as acquisition, including waiting dispatch.
-    public static void acquired(jakarta.persistence.EntityManager em, Reservation reservation, boolean waiting) {
+    // 알림은 오직 "대기열 WAITING -> 실제 좌석 선점" 전환 직후에만 만든다.
+    // 일반/스마트 즉시선점 경로에서는 이 메서드를 호출하지 않는다.
+    public static void waitingAcquired(jakarta.persistence.EntityManager em, BookingRequestGroup group) {
+        var reservation = em.createQuery("""
+                select r from Reservation r
+                where r.requestGroup.id=:group
+                order by r.id desc
+                """, Reservation.class)
+                .setParameter("group", group.getId())
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
+        if (reservation == null) return;
+
         var notification = new Notification();
         notification.setUser(reservation.getUser());
-        if (!waiting) return;
-        // 대기 후보가 승급되는 순간에도 같은 스마트예매 배치의 다른 후보가
-        // 이미 즉시 선점 중이면 알림을 만들지 않는다. Dispatcher가 정상적으로는
-        // 이 상황의 승급 자체를 막지만, 알림 계층에서도 동일한 정책을 방어한다.
-        if (hasActiveSmartHoldSibling(em, reservation.getRequestGroup())) return;
         notification.setType(NotificationType.QUEUE_TURN);
         notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(reservation.getCreatedAt());
