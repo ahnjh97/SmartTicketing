@@ -61,6 +61,18 @@
     background: rgb(255 196 38 / 7%);
 }
 
+.notification-item.is-actionable {
+    cursor: pointer;
+    transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.notification-item.is-actionable:hover,
+.notification-item.is-actionable:focus-visible {
+    border-color: #f5c542;
+    background: rgb(245 197 66 / 8%);
+    outline: none;
+}
+
 .notification-item-title {
     display: flex;
     align-items: center;
