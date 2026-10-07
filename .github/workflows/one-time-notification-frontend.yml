@@ -2,14 +2,14 @@ name: one-time-notification-frontend
 
 on:
   push:
-    branches: [feature/jusang]
+    branches:
+      - feature/jusang
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: ${{ github.event.head_commit.message != 'chore: switch header notifications to realtime events' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,6 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path('frontend/src/components/CommonHeader.jsx')
           text = path.read_text(encoding='utf-8')
@@ -39,12 +38,11 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Commit and remove one-time workflow
+      - name: Commit patch and remove this workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/src/components/CommonHeader.jsx .github/workflows/one-time-notification-frontend.yml
-          git commit -m "chore: switch header notifications to realtime events"
+          git add frontend/src/components/CommonHeader.jsx
           git rm .github/workflows/one-time-notification-frontend.yml
-          git commit -m "chore: remove one-time notification patch workflow"
+          git commit -m "chore: switch header notifications to realtime events"
           git push origin feature/jusang
