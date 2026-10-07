@@ -1,13 +1,11 @@
 {
   "baseUrl": "http://localhost:8080",
-  "label": "before-cache-off",
-  "movieId": 11,
+  "label": "before",
+  "movieId": 14,
   "viewingDate": "tomorrow",
-  "partySize": 2,
+  "partySize": 6,
   "ranges": [
-    { "name": "1h", "from": "10:00", "to": "11:00" },
-    { "name": "4h", "from": "10:00", "to": "14:00" },
-    { "name": "day", "from": "06:00", "to": "05:59" }
+    { "name": "day", "from": "08:00", "to": "00:00" }
   ],
   "concurrency": [1],
   "rounds": 3,

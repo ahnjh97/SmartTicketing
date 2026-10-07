@@ -5,6 +5,7 @@ import { mkdtemp, readFile, readdir, rm, mkdir, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, dirname, basename, resolve } from 'node:path';
 import { normalize, sample, summarize, runBench, request, bodyFor } from './run.mjs';
+import { compare, validatePair } from './compare.mjs';
 
 async function fixture(t, mode = '') {
     const directory = await mkdtemp(join(tmpdir(), 'smart-bench-test-'));
@@ -20,7 +21,7 @@ async function fixture(t, mode = '') {
         const send = (status, data) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
         if (path === '/api/auth/login') return send(200, { accessToken: `token-${body.loginId}` });
         if (path === '/api/users/me') return send(200, { id: user,
-            preferredTheaters: [{ theaterId: 1, priority: 0 }], preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 0 }] });
+            preferredTheaters: mode === 'comparison' ? Array.from({length:user===1?3:5},(_,i)=>({theaterId:i+1,priority:i+1})) : [{ theaterId: 1, priority: 0 }], preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 0 }] });
         if (path === '/api/booking-groups/active') return send(200, mode === 'existing' ? [{ id: 999 }]
             : [...active].filter(([, owner]) => owner === user).map(([id]) => ({ id })));
         if (req.method === 'POST' && path === '/api/smart-booking-candidates') {
@@ -63,6 +64,26 @@ test('validates time boundaries, duplicate cases, and Korean tomorrow', () => {
     assert.throws(() => normalize({ ...raw, concurrency: [1, 1] }));
     assert.throws(() => normalize({ ...raw, ranges: [{ name: 'bad', from: '10:00', to: '10:00' }] }));
     assert.throws(() => normalize({ ...raw, viewingDate: '2027-02-30' }));
+});
+
+test('3/5 comparison runs 30 successful samples per condition and excludes warmups', async t => {
+    const f = await fixture(t, 'comparison');
+    Object.assign(f.config,{rounds:3,iterations:10,warmupIterations:1});
+    const summaries = await compare(f.config,{three:{loginId:'1',password:'secret'},five:{loginId:'2',password:'secret'}},f.directory,()=>{});
+    assert.deepEqual(summaries.map(s=>[s.theaterCount,s.attempts,s.successes]),[[3,30,30],[5,30,30]]);
+    assert.equal(f.keys.size,62);assert.equal(f.active.size,0);
+    const csv = await readFile(join(f.directory,'summary.csv'),'utf8');
+    assert.equal(csv.trim().split('\r\n').length,3);assert.ok(csv.includes('medianMs'));
+    assert.ok(!(await readFile(join(f.directory,'comparison.json'),'utf8')).includes('secret'));
+});
+
+test('comparison rejects mismatched theater prefix and seat ranking', () => {
+    const a={id:1,preferences:{theaters:[1,2,3].map(id=>({id})),seats:['CENTER']}};
+    const b={id:2,preferences:{theaters:[1,2,3,4,5].map(id=>({id})),seats:['CENTER']}};
+    validatePair(a,b);
+    assert.throws(()=>validatePair(a,{...b,id:1}));
+    assert.throws(()=>validatePair(a,{...b,preferences:{...b.preferences,seats:['SIDE']}}));
+    assert.throws(()=>validatePair(a,{...b,preferences:{...b.preferences,theaters:[2,1,3,4,5].map(id=>({id}))}}));
 });
 
 test('fast rejection does not improve successful latency percentiles; warmup excluded', () => {

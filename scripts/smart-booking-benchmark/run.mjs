@@ -55,11 +55,11 @@ export function bodyFor(config, range) {
         audience: { adultCount: config.partySize, youthCount: 0, guardianAccompanying: false, companionsEligible: false } };
 }
 
-export async function request(config, path, token, body, key) {
+export async function request(config, path, token, body, key, method) {
     const start = performance.now();
     try {
         const response = await fetch(config.baseUrl + path, {
-            method: body !== undefined || key ? 'POST' : 'GET', redirect: 'error',
+            method: method ?? (body !== undefined || key ? 'POST' : 'GET'), redirect: 'error',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(key ? { 'Idempotency-Key': key } : {}) },
             body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(config.timeoutMs),
@@ -169,7 +169,7 @@ export function summarize(rows) {
     }));
 }
 
-async function loginUsers(config, credentials) {
+export async function loginUsers(config, credentials) {
     assert(Array.isArray(credentials) && credentials.length >= Math.max(...config.concurrency), '동시 사용자 수만큼 서로 다른 테스트 계정이 필요합니다.');
     const users = [];
     for (const credential of credentials.slice(0, Math.max(...config.concurrency))) {
@@ -181,12 +181,14 @@ async function loginUsers(config, credentials) {
         assert(ok(me) && positiveId(me.data?.id) && !users.some(u => u.id === me.data.id), '서로 다른 사용자 계정을 지정하세요.');
         assert(me.data.preferredTheaters?.length && me.data.preferredSeats?.length, '테스트 계정의 선호 극장·좌석 설정이 필요합니다.');
         users.push({ id: me.data.id, token, preferences: {
-            theaters: me.data.preferredTheaters.map(p => ({ id: p.theaterId, priority: p.priority })),
-            seats: me.data.preferredSeats.map(p => ({ position: p.position, priority: p.priority })),
+            theaters: me.data.preferredTheaters.map(p => ({ id: p.theaterId, priority: p.priority })).sort((a,b) => a.priority-b.priority),
+            seats: me.data.preferredSeats.map(p => ({ position: p.position, priority: p.priority })).sort((a,b) => a.priority-b.priority),
         } });
     }
     assert(users.every(u => JSON.stringify(u.preferences) === JSON.stringify(users[0].preferences)),
         '시간 범위 효과를 비교하려면 모든 테스트 계정의 극장·좌석 선호와 순서를 동일하게 설정하세요.');
+    if (config.expectedPreferences) assert(users.every(u => JSON.stringify(u.preferences) === JSON.stringify(config.expectedPreferences)),
+        '실행 준비 이후 계정 선호 설정이 바뀌었습니다. 다시 실행하세요.');
     return users;
 }
 
