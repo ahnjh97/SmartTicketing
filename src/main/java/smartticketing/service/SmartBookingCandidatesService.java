@@ -83,13 +83,16 @@ public class SmartBookingCandidatesService {
                 var draft = drafts.get(index);
                 var candidate = selected.get(index);
                 if (candidate.equals(immediate)) {
-                    // Immediate holds retain the same zone queue ordering.
+                    // 즉시선점은 대기열을 거치지 않는다. 따라서 이 배치에는 대기 순서 알림도 남기지 않는다.
                     waiting.registerAndHold(userId, draft.getId(), candidate.option().show().getId(), candidate.option().seatIds());
                     continue;
                 }
                 var result = waiting.register(userId, draft.getId(), UUID.randomUUID().toString(),
                         new WaitingRequest(List.of(draft.getSelectedShowtime().getId())));
                 if (result.status() >= 400) throw new IllegalStateException("후보 등록이 변경되었습니다. 같은 요청으로 다시 시도해주세요.");
+            }
+            if (immediate != null) {
+                NotificationService.clearQueueTurns(em, drafts.stream().map(BookingRequestGroup::getId).toList());
             }
             return new Created(drafts.stream().map(BookingRequestGroup::getId).toList());
         });
