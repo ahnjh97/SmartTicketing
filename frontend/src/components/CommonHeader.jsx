@@ -111,6 +111,7 @@ function HeaderContent({ user, disabled, setupRequired }) {
             .catch((error) => {
                 console.error("[NOTIFICATION] refresh failed", error);
             });
+        };
 
         refreshNotifications();
         console.log("[NOTIFICATION] subscribing SSE");
