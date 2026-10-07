@@ -1,3 +1,4 @@
+import { formatShowtime as showtime } from '../utils/showtimeFormat.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -12,12 +13,7 @@ import { PAGE_PATHS } from '../navigation.js';
 import button from '../components/GlassButton.module.css';
 import styles from './ActiveBookingsPage.module.css';
 
-function showtime(value) {
-    return new Date(value).toLocaleString('ko-KR', {
-        timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    });
-}
+
 
 function BookingLink({ group, children }) {
     return <Link className={`${button.button} ${styles.action}`}
@@ -57,7 +53,7 @@ function WaitingCard({ group }) {
             <div><strong>{queue.theaterName} · {queue.seatLabels?.length ? queue.seatLabels.join(', ') : getSeatLabel(queue.seatZone)}</strong>
                 <p className={styles.details}><InlineDetails items={[queue.screenName, showtime(queue.startTime)]} /></p>
             </div>
-            <span className={styles.ahead}>{queue.status === 'PAUSED' ? '일시정지' : `앞선 신청 ${queue.aheadCount}건`}</span>
+            <span className={styles.ahead}>{queue.status === 'PAUSED' ? '일시정지' : `순번 ${queue.aheadCount + 1}번`}</span>
         </li>)}</ul>
         <div className={styles.cardBottom}><BookingLink group={group}>{group.entryPoint === 'THEATER_NORMAL' ? '좌석 확인 · 대기 변경' : '스마트예매에서 확인'}</BookingLink></div>
     </article>;

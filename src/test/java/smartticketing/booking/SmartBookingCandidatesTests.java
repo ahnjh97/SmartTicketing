@@ -254,13 +254,17 @@ class SmartBookingCandidatesTests {
         assertThat(changed.items().getFirst().queueNumber()).isEqualTo(2);
         assertThat(changed.items().getFirst().aheadCount()).isEqualTo(1);
         assertThat(dispatcher(CLOCK).dispatch(show)).isEqualTo(2);
-        tx(em->{ assertThat(inventory(em,show).stream().filter(i->i.getReservation()!=null && i.getReservation().getUser().getId().equals(f.user())))
+        tx(em->{ assertThat(inventory(em,show).stream().filter(i->i.getReservation()!=null && i.getReservation().getRequestGroup().getId().equals(smart)))
                 .allMatch(i->i.getSeat().getSeatPosition()==SeatPosition.SIDE_MIDDLE); return null; });
     }
 
     @Test void differentShowsStillCreateIndependentCandidatesAndPayments() throws Exception {
         var f=zoned(); var r=request(f);
-        for(var show:f.shows()) preferredStatus(f,show,SeatStatus.RESERVED);
+        for(var show:f.shows()) {
+            preferredStatus(f,show,SeatStatus.RESERVED);
+            tx(em->{ inventory(em,show).stream().filter(i->i.getSeat().getSeatPosition()!=SeatPosition.MIDDLE_MIDDLE)
+                    .forEach(i->i.setStatus(SeatStatus.BLOCKED)); return null; });
+        }
         var request=new CreateBookingGroupRequest(r.entryPoint(),r.movieId(),r.viewingDate(),r.partySize(),java.time.LocalTime.of(11,0),java.time.LocalTime.of(14,0),null,r.audience());
         var result=tx(em->plans(em).create(f.user(),key(),request));
         assertThat(result.status()).isEqualTo(201);
@@ -328,10 +332,11 @@ class SmartBookingCandidatesTests {
                 .filter(c->c.groupId().equals(candidate)).findFirst().orElseThrow()).toList());
     }
 
-    @Test void sameShowCreatesOnlyOneZoneCandidate() throws Exception {
+    @Test void sameShowKeepsPreferredWaitAndImmediatelyHoldsAnotherZone() throws Exception {
         var f=zoned(); long id=createWaitingCandidate(f);
         var initial=plan(f,id).candidates();
-        assertThat(initial).hasSize(1);
+        assertThat(initial).hasSize(2);
+        assertThat(initial.getLast().payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
         assertThat(initial.getFirst().zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
         assertThat(initial.getFirst().waiting().items().getFirst().queueNumber()).isEqualTo(1);
         assertThat(dispatcher(CLOCK).dispatch(f.shows().getFirst())).isEqualTo(1);
@@ -411,16 +416,16 @@ class SmartBookingCandidatesTests {
         assertThat(results).allSatisfy(result -> assertThat(((BookingResult) result).status()).isEqualTo(201));
         var a = tx(em -> plans(em).get(first.user(), null)).candidates();
         var b = tx(em -> plans(em).get(second.user(), null)).candidates();
-        assertThat(List.of(a.size(), b.size())).containsExactlyInAnyOrder(1, 1);
+        assertThat(List.of(a.size(), b.size())).containsExactlyInAnyOrder(1, 2);
         var all = new ArrayList<>(a); all.addAll(b);
-        assertThat(all.stream().filter(c -> c.payment() != null)).hasSize(1);
+        assertThat(all.stream().filter(c -> c.payment() != null)).hasSize(2);
         assertThat(all.stream().filter(c -> c.zone() == SeatPosition.MIDDLE_MIDDLE && c.payment() == null)).hasSize(1);
     }
 
     @Test void waitingInOneZoneDoesNotAllocateFreeSeatsInOtherZones() throws Exception {
         var f=zoned(); preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
         long id=create(f);
-        assertThat(plan(f,id).candidates()).hasSize(1);
+        assertThat(plan(f,id).candidates()).hasSize(2);
         assertThat(dispatcher(CLOCK).dispatch(f.shows().getFirst())).isZero();
         assertThat(plan(f,id).candidates().getFirst().payment()).isNull();
         preferredStatus(f,f.shows().getFirst(),SeatStatus.AVAILABLE);
@@ -457,7 +462,7 @@ class SmartBookingCandidatesTests {
         assertThatThrownBy(()->tx(em->plans(em).get(other.user(),id))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 
-    @Test void strictZoneCannotBeBypassedAndSameZoneCannotBeRegisteredTwice() {
+    @Test void allocatedSeatsStayWithinCandidateZoneAndNewRequestsRemainAllowed() {
         var f=zoned(); long id=createWaitingCandidate(f); var candidate=plan(f,id).candidates().getFirst();
         var result=tx(em->{
             var wrong=inventory(em,f.shows().getFirst()).stream().filter(i->i.getSeat().getSeatPosition()!=candidate.zone()).limit(2).map(i->i.getSeat().getId()).toList();
@@ -466,7 +471,7 @@ class SmartBookingCandidatesTests {
         });
         assertThat(result.status()).isEqualTo(409);
         var request=request(f);
-        assertThat(tx(em->plans(em).create(f.user(),key(),request)).status()).isEqualTo(409);
+        assertThat(tx(em->plans(em).create(f.user(),key(),request)).status()).isEqualTo(201);
     }
 
     @Test void aBusyCenterDoesNotIncreaseSideNumbersAndEarlierZoneRequestGetsFirstSeats() {
@@ -521,7 +526,7 @@ class SmartBookingCandidatesTests {
         assertThat(state(f).items().getFirst().queueNumber()).isEqualTo(1);
         assertThat(state(f).items().getFirst().seatZone()).isNull();
         var next=another(f,2,false);
-        assertThat(plan(next,create(next)).candidates()).allSatisfy(c->assertThat(c.waiting().items().getFirst().queueNumber()).isEqualTo(2));
+        assertThat(plan(next,create(next)).candidates()).allSatisfy(c->assertThat(c.waiting().items().getFirst().queueNumber()).isEqualTo(c.zone()==SeatPosition.MIDDLE_MIDDLE?2:1));
     }
 
     @Test void concurrentReplayCreatesOnlyOneZoneRequest() throws Exception {
@@ -529,7 +534,7 @@ class SmartBookingCandidatesTests {
         preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
         var results=BookingPaymentTests.race(()->tx(em->plans(em).create(f.user(),key,request)),()->tx(em->plans(em).create(f.user(),key,request)));
         assertThat(results.getFirst()).isEqualTo(results.getLast());
-        assertThat(plan(f,createdId((BookingResult)results.getFirst())).candidates()).hasSize(1);
+        assertThat(plan(f,createdId((BookingResult)results.getFirst())).candidates()).hasSize(2);
     }
     static long manualGroup(Fixture f, long show) {
         var r=request(f);
@@ -556,24 +561,21 @@ class SmartBookingCandidatesTests {
         assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(show),SeatPosition.MIDDLE_MIDDLE))).status()).isEqualTo(409);
     }
 
-    @Test void sameUserCannotRaceIntoTwoZonesOfSameShow() throws Exception {
+    @Test void sameUserCanWaitInTwoZonesOfSameShowConcurrently() throws Exception {
         var f=zoned(); var show=f.shows().getFirst();
         long a=manualGroup(f,show), b=manualGroup(f,show);
         var results=BookingPaymentTests.race(
                 ()->tx(em->service(em,CLOCK).register(f.user(),a,key(),new WaitingRequest(List.of(show),SeatPosition.MIDDLE_MIDDLE))),
                 ()->tx(em->service(em,CLOCK).register(f.user(),b,key(),new WaitingRequest(List.of(show),SeatPosition.SIDE_MIDDLE))));
-        assertThat(results.stream().map(r->((BookingResult)r).status())).containsExactlyInAnyOrder(201,409);
-        assertThat(results.stream().map(r->(BookingResult)r).filter(r->r.status()==409).findFirst().orElseThrow().body())
-                .contains("WAITING_SHOWTIME_CONFLICT", "한 구역만 대기");
-        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(1);
+        assertThat(results.stream().map(r->((BookingResult)r).status())).containsExactlyInAnyOrder(201,201);
+        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(2);
     }
 
-    @Test void smartDuplicateShowExplainsWaitingRuleButOtherShowsRemainBookable() {
+    @Test void smartCanChooseSameShowDespiteExistingWaiting() {
         var f=zoned(); var show=f.shows().getFirst(); long group=manualGroup(f,show);
         assertThat(tx(em->service(em,CLOCK).register(f.user(),group,key(),new WaitingRequest(List.of(show),SeatPosition.SIDE_MIDDLE))).status()).isEqualTo(201);
-        var rejected=direct(f,show,2);
-        assertThat(rejected.status()).isEqualTo(409);
-        assertThat(rejected.body()).contains("WAITING_SHOWTIME_CONFLICT", "내 대기 및 선점");
+        var added=direct(f,show,2);
+        assertThat(added.status()).as(added.body()).isEqualTo(201);
         assertThat(direct(f,f.shows().getLast(),2).status()).isEqualTo(201);
     }
 
@@ -582,10 +584,10 @@ class SmartBookingCandidatesTests {
         preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
         var r=request(f); var added=tx(em->plans(em).create(f.user(),key(),r));
         assertThat(added.status()).isEqualTo(201);
-        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(6);
+        assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(7);
     }
 
-    @Test void smartRequestsUseOneZoneEvenWithMultipleCapacitySlots() throws Exception {
+    @Test void smartRequestsKeepPreferredWaitAndAnotherZoneHold() throws Exception {
         for(boolean theater:List.of(false,true)) for(int used:List.of(1,2)) {
             var f=zoned(); var show=f.shows().getLast();
             for(int i=0;i<used;i++) {
@@ -595,8 +597,8 @@ class SmartBookingCandidatesTests {
             preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
             var r=request(f); var result=theater?direct(f,f.shows().getFirst(),2):tx(em->plans(em).create(f.user(),key(),r));
             assertThat(result.status()).isEqualTo(201);
-            assertThat(plan(f,createdId(result)).candidates()).hasSize(1);
-            assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(used+1);
+            assertThat(plan(f,createdId(result)).candidates()).hasSize(2);
+            assertThat(BookingWaitingTests.<List<BookingActivityService.Item>>tx(em->new BookingActivityService(em,holds(em,CLOCK)).active(f.user()))).hasSize(used+2);
         }
     }
 
@@ -635,7 +637,7 @@ class SmartBookingCandidatesTests {
                 r.movieId(),r.viewingDate(),party,null,null,show,new AudienceRequest(party,0,null,null))));
     }
 
-    @Test void directShowCreatesOneCandidateAndOverviewExcludesManualBookings() {
+    @Test void directShowCreatesIndependentZonesAndOverviewExcludesManualBookings() {
         var f=zoned();
         preferredStatus(f, f.shows().getLast(), SeatStatus.RESERVED);
         var result=direct(f,f.shows().getLast(),2);
@@ -645,8 +647,8 @@ class SmartBookingCandidatesTests {
         long manual=manualGroup(f,f.shows().getFirst());
         tx(em->service(em,CLOCK).register(f.user(),manual,key(),new WaitingRequest(List.of(f.shows().getFirst()),SeatPosition.SIDE_MIDDLE)));
         var all=tx(em->plans(em).get(f.user(),selected));
-        assertThat(all.candidates()).hasSize(1).extracting(SmartBookingCandidatesService.Candidate::kind)
-                .containsExactly("PREFERRED");
+        assertThat(all.candidates()).hasSize(2).extracting(SmartBookingCandidatesService.Candidate::kind)
+                .containsExactlyInAnyOrder("PREFERRED", "BALANCED");
         assertThat(all.candidates()).noneMatch(c->c.groupId().equals(manual));
         assertThatThrownBy(()->tx(em->plans(em).get(f.user(),manual))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         tx(em->{
@@ -656,8 +658,9 @@ class SmartBookingCandidatesTests {
         dispatcher(CLOCK).dispatch(f.shows().getLast());
         var candidate=tx(em->plans(em).get(f.user(),selected)).candidates().stream().filter(c->c.groupId()==selected).findFirst().orElseThrow();
         tx(em->BookingPaymentTests.service(em,CLOCK,true).pay(f.user(),candidate.payment().reservation().id(),key(),new MockPaymentRequest(PaymentMethod.MOCK,false)));
-        assertThat(tx(em->plans(em).get(f.user(),null)).candidates()).isEmpty();
-        assertThat(tx(em->plans(em).get(f.user(),selected)).candidates()).hasSize(1);
+        assertThat(tx(em->plans(em).get(f.user(),null)).candidates()).hasSize(1)
+                .allMatch(c->c.kind().equals("BALANCED"));
+        assertThat(tx(em->plans(em).get(f.user(),selected)).candidates()).hasSize(2);
     }
 
     @Test void directShowImmediatelyHoldsOnlyPreferredZoneWithSixSeatsSplitThreePlusThree() {
@@ -679,6 +682,26 @@ class SmartBookingCandidatesTests {
         assertThat(chosen.zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
         assertThat(all).extracting(SmartBookingCandidatesService.Candidate::zone).doesNotHaveDuplicates();
         assertThat(dispatcher(CLOCK).dispatch(show)).isZero();
+    }
+
+    @Test void soldOutShowCreatesThreeDistinctZoneWaitsAndReplayDoesNotDuplicateThem() {
+        var f=zoned(); var show=f.shows().getFirst();
+        tx(em->{ inventory(em,show).forEach(i->i.setStatus(SeatStatus.RESERVED)); return null; });
+        var r=request(f);
+        var request=new CreateBookingGroupRequest(BookingEntryPoint.THEATER_SMART,r.movieId(),r.viewingDate(),2,
+                null,null,show,r.audience());
+        var key=key();
+        var result=tx(em->plans(em).create(f.user(),key,request));
+        assertThat(result.status()).as(result.body()).isEqualTo(201);
+        var candidates=plan(f,createdId(result)).candidates();
+        assertThat(candidates).hasSize(3).allSatisfy(candidate->{
+            assertThat(candidate.showtimeId()).isEqualTo(show);
+            assertThat(candidate.waiting().items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+        });
+        assertThat(candidates).extracting(SmartBookingCandidatesService.Candidate::zone).doesNotHaveDuplicates();
+        var replay=tx(em->plans(em).create(f.user(),key,request));
+        assertThat(replay).isEqualTo(result);
+        assertThat(plan(f,createdId(result)).candidates()).hasSize(3);
     }
 
     @Test void directShowKeepsPreferredZoneWhenEverySeatIsOccupied() {

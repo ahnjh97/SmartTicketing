@@ -1,3 +1,4 @@
+import { formatShowDate } from '../utils/showtimeFormat.js';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
@@ -18,7 +19,7 @@ function HomeMovieCard({ movie, isUpcoming }) {
         <small><InlineDetails items={[formatRating(movie.rating), movie.runningTime ? `${movie.runningTime}분` : '시간 미확인']} /></small>
         {/* 상영예정작이면 개봉일 표시, 상영작이면 누적관객수 및 예매율 표시 */}
         {isUpcoming ? (
-            <small>{movie.releaseDate ? `${movie.releaseDate} 개봉` : '개봉일 미정'}</small>
+            <small>{movie.releaseDate ? `${formatShowDate(movie.releaseDate)} 개봉` : '개봉일 미정'}</small>
         ) : (
             <small><InlineDetails items={[`누적 ${(movie.audienceCount ?? 0).toLocaleString()}명`, `예매율 ${movie.bookingRate ?? 0}%`]} /></small>
         )}

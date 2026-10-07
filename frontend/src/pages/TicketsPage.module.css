@@ -64,23 +64,26 @@
     max-height: calc(100dvh - 48px);
     overflow: visible;
 }
-.ticketModalClose {
+.closeButton {
     position: absolute;
-    top: -42px;
-    right: -10px;
+    top: -46px;
+    right: -2px;
     z-index: 20;
     width: 34px;
     height: 34px;
     padding: 0;
     border: 0;
     background: transparent;
-    color: #555;
-    font-size: 28px;
-    line-height: 1;
+    color: #fff;
+    font-size: 30px;
+    font-weight: 300;
+    line-height: 34px;
+    text-align: center;
     cursor: pointer;
 }
 
-.ticketModalClose:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 2px; }
+.closeButton:hover { opacity: .78; }
+.closeButton:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 3px; }
 .ticketCard {
     position: relative;
     overflow: hidden;
@@ -147,7 +150,7 @@
 @media (max-width: 700px) {
     .ticketModalBackdrop { padding: 16px; }
     .ticketModal { width: min(100%, 700px); max-height: calc(100dvh - 32px); }
-    .ticketModalClose { top: -40px; right: 0; }
+    .closeButton { top: -42px; right: 0; }
     .ticketCard { max-height: calc(100dvh - 32px); }
     .ticketCardContent { grid-template-columns: minmax(0, .8fr) minmax(260px, 1.5fr); min-height: 320px; }
     .ticketCardLeft { padding: 26px 22px; }

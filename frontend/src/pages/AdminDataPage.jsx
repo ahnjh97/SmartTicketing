@@ -1,3 +1,4 @@
+import { formatShowtime } from '../utils/showtimeFormat.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { adminApi } from '../api/admin.js';
 import { seoulDate } from '../booking/state.js';
@@ -22,7 +23,7 @@ function collectionResult(result) {
     if (result?.failedIds?.length) parts.push(`수집 실패 ${result.failedIds.length}건 (영화 ID: ${result.failedIds.join(', ')})`);
     return parts.join(' · ');
 }
-const dateTime = value => value ? new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '—';
+const dateTime = value => value ? formatShowtime(value) : '—';
 const enabled = value => value === true || value === 1;
 
 function DataTabIcon({ kind }) {

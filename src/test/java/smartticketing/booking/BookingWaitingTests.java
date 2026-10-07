@@ -142,10 +142,10 @@ class BookingWaitingTests {
         statuses(f,QueueStatus.CANCELLED,QueueStatus.CANCELLED);
         tx(em -> { assertThat(em.find(BookingGroupHold.class,f.group)).isNull(); assertThat(inventory(em,f.shows.getLast())).allSatisfy(i -> assertThat(i.getStatus()).isEqualTo(SeatStatus.AVAILABLE)); return null; });
     }
-    @Test void crossGroupDuplicateRegistrationIsRejectedUnderRace() throws Exception {
+    @Test void crossGroupRegistrationForSameShowIsAllowedUnderRace() throws Exception {
         var f=fixture(2,2); var duplicate=another(f,2,true);
         var results=BookingPaymentTests.race(() -> register(f,f.shows,key()), () -> register(duplicate,duplicate.shows,key()));
-        assertThat(results.stream().map(r -> ((BookingResult)r).status())).containsExactlyInAnyOrder(201,409);
+        assertThat(results.stream().map(r -> ((BookingResult)r).status())).containsExactlyInAnyOrder(201,201);
     }
     @Test void duplicateIdsMismatchAndForeignAccessDoNotWrite() {
         var f=fixture(2,2); var foreign=fixture(2,2);

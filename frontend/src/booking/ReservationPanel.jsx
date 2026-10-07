@@ -1,3 +1,4 @@
+import { formatShowDate } from '../utils/showtimeFormat.js';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -30,7 +31,7 @@ export default function ReservationPanel({ flow, onRestart }) {
         <div className={styles.ticket} data-confirmed={confirmed}>
             <div className={styles.ticketMain}>
                 <div><h3>{r.movieTitle}</h3><p><InlineDetails items={[r.theaterName, r.screenName]} /></p>
-                    <p><InlineDetails items={[r.startTime.slice(0,10), <>{r.startTime.slice(11,16)} → {r.endTime.slice(11,16)}</>]} /></p>
+                    <p><InlineDetails items={[formatShowDate(r.startTime), <>{r.startTime.slice(11,16)} → {r.endTime.slice(11,16)}</>]} /></p>
                     <div className={styles.ticketSeats}><span>SEATS</span><strong>{r.seatLabels.join(', ')}</strong></div>
                     {ticket && <p className={styles.ticketNumber}>티켓 번호 <strong>{ticket.ticketNumber}</strong></p>}
                 </div>

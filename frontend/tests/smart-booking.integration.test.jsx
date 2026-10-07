@@ -17,7 +17,7 @@ function initial() {
     return {id:301,movieTitle:movie.title,partySize:2,candidates:['FAST','BALANCED','PREFERRED'].map((kind,i)=>({
         groupId:401+i,kind,movieTitle:movie.title,partySize:2,zone:['SIDE_MIDDLE','MIDDLE_REAR','MIDDLE_MIDDLE'][i],showtimeId:91,
         theaterName:'서울 극장',screenName:'1관',startTime:show.startTime,endTime:show.endTime,status:'ACTIVE',payment:null,
-        waiting:{groupId:401+i,groupStatus:'ACTIVE',activeReservationId:null,choices:[],items:[{id:601+i,showtimeId:91,queueNumber:i+1,aheadCount:i,status:'WAITING',seatZone:['SIDE_MIDDLE','MIDDLE_REAR','MIDDLE_MIDDLE'][i]}]},
+        waiting:{groupId:401+i,groupStatus:'ACTIVE',activeReservationId:null,choices:[],items:[{id:601+i,showtimeId:91,queueNumber:i+4,aheadCount:i,status:'WAITING',seatZone:['SIDE_MIDDLE','MIDDLE_REAR','MIDDLE_MIDDLE'][i]}]},
     }))};
 }
 function allocate(index) {
@@ -85,13 +85,14 @@ test('sold-out theater smart creates candidates for its selected show without re
     expect(body).toMatchObject({entryPoint:'THEATER_SMART',selectedShowtimeId:91,partySize:2});expect(body.startTimeFrom).toBeUndefined();
     expect(candidates().getAllByRole('button')).toHaveLength(3);
     expect(candidates().queryByText('직접 고른 회차')).toBeNull();
-    expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('대기번호');
+    expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('순번1번');
+    expect(within(screen.getByRole('region',{name:'후보 구역 대기'})).getByText(day.replaceAll('-', '.'))).toBeTruthy();
 });
 
 test('paying the side retains the center queue, then center can be paid and only the side cancelled',async()=>{
     allocate(0);mount();await loaded();
     fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
-    choose('선호 좌석');expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('대기번호');
+    choose('선호 좌석');expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('순번');
     expect(candidates().queryByRole('button',{name:/빠른 예매/})).toBeNull();
     allocate(2);fireEvent(window,new Event('focus'));
     fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
