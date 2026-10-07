@@ -258,6 +258,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
         BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot); updateAvailable(show, inventory, now);
+        NotificationService.holdExpired(em, group.getId());
         return true;
     }
 
