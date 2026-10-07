@@ -152,7 +152,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
         BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
         updateAvailable(show, inventory, now);
-        NotificationService.acquired(em, reservation, source == Source.WAITING);
+        // 알림은 실제 대기열 승급(Dispatcher)에서만 생성한다.
         return response(reservation, now);
     }
 
