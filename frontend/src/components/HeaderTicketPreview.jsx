@@ -18,16 +18,11 @@ function formatTime(value) {
 
 function formatTicketStatus(status) {
     switch (status) {
-        case "VALID":
-            return "사용 가능";
-        case "USED":
-            return "사용 처리됨";
-        case "CANCELLED":
-            return "취소됨";
-        case "EXPIRED":
-            return "만료됨";
-        default:
-            return status || "-";
+        case "VALID": return "사용 가능";
+        case "USED": return "사용 처리됨";
+        case "CANCELLED": return "취소됨";
+        case "EXPIRED": return "만료됨";
+        default: return status || "-";
     }
 }
 
@@ -54,9 +49,7 @@ export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave
                 <div className={styles.ticketCard}>
                     <div className={styles.ticketCardHeader}>
                         <span className={styles.ticketLabel}>CINEMA PASS</span>
-                        <span className={styles.ticketStatus}>
-                            {formatTicketStatus(ticket.status)}
-                        </span>
+                        <span className={styles.ticketStatus}>{formatTicketStatus(ticket.status)}</span>
                     </div>
 
                     <div className={styles.ticketCardContent}>
@@ -65,24 +58,10 @@ export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave
                                 <span className={styles.ticketInfoLabel}>MOVIE</span>
                                 <h2>{ticket.movieTitle || "-"}</h2>
                             </div>
-
                             <div className={styles.ticketCardInfo}>
-                                <div>
-                                    <span>THEATER</span>
-                                    <strong>
-                                        {ticket.theaterName || "-"} , {ticket.screenName || "-"}
-                                    </strong>
-                                </div>
-                                <div>
-                                    <span>SEAT</span>
-                                    <strong>{ticket.seats?.join(", ") || "-"}</strong>
-                                </div>
-                                <div>
-                                    <span>TIME</span>
-                                    <strong>
-                                        {formatTime(ticket.startTime)} ~ {formatTime(ticket.endTime)}
-                                    </strong>
-                                </div>
+                                <div><span>THEATER</span><strong>{ticket.theaterName || "-"} , {ticket.screenName || "-"}</strong></div>
+                                <div><span>SEAT</span><strong>{ticket.seats?.join(", ") || "-"}</strong></div>
+                                <div><span>TIME</span><strong>{formatTime(ticket.startTime)} ~ {formatTime(ticket.endTime)}</strong></div>
                             </div>
                         </div>
 
@@ -96,7 +75,6 @@ export default function HeaderTicketPreview({ ticket, onMouseEnter, onMouseLeave
                                     title={`티켓 QR - ${ticket.ticketNumber}`}
                                 />
                             </div>
-
                             <div className={styles.ticketNumber}>
                                 <span>TICKET NO.</span>
                                 <strong>{ticket.ticketNumber || "-"}</strong>
