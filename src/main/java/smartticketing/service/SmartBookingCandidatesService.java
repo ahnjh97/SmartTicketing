@@ -72,7 +72,11 @@ public class SmartBookingCandidatesService {
                 var draft = groups.build(userId, new CreateBookingGroupRequest(BookingEntryPoint.THEATER_SMART,
                         request.movieId(), CinemaDay.date(option.show().getStartTime()), request.partySize(),
                         null, null, option.show().getId(), request.audience()));
-                draft.setCandidateKind(selection.kind()); draft.setCandidateZone(option.zone()); drafts.add(draft);
+                draft.setCandidateKind(selection.kind()); draft.setCandidateZone(option.zone());
+                // 같은 스마트예매 요청에서 생성된 후보들은 동일한 createdAt을 공유한다.
+                // 대기 후보의 승급 시 다른 후보가 이미 즉시 선점 중인지 식별하는 배치 기준으로 사용한다.
+                draft.setCreatedAt(template.getCreatedAt()); draft.setUpdatedAt(template.getUpdatedAt());
+                drafts.add(draft);
             }
             drafts.forEach(em::persist);
             for (int index = 0; index < drafts.size(); index++) {
