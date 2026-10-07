@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 afterEach(()=>cleanup());
 
-test('explicit multi-show selection is required and renders number separately from people ahead',async()=>{
+test('explicit multi-show selection is required and renders current rank from people ahead',async()=>{
     render(<WaitingPanel flow={flow}/>);
     await screen.findByRole('checkbox',{name:/극장 1/}); expect(bookingApi.registerWaiting).not.toHaveBeenCalled();
     expect(screen.getByRole('button',{name:'선택한 0개 회차에 대기 신청'}).disabled).toBe(true);
@@ -25,7 +25,7 @@ test('explicit multi-show selection is required and renders number separately fr
     fireEvent.click(screen.getByRole('button',{name:'선택한 2개 회차에 대기 신청'}));
     await screen.findByRole('list',{name:'신청한 회차'});
     expect(bookingApi.registerWaiting).toHaveBeenCalledWith(7,[1,2],expect.any(String));
-    expect(screen.getAllByText('17')).toHaveLength(2); expect(screen.getAllByText('2건')).toHaveLength(2);
+    expect(screen.getAllByText('3번')).toHaveLength(2); expect(screen.getAllByText('2건')).toHaveLength(2);
 });
 test('paused and holding are distinct and server allocation refreshes the shared reservation flow',async()=>{
     data={...initial(),groupStatus:'HOLDING',activeReservationId:99,items:[item('HOLDING'),item('PAUSED',2)],choices:[]};
@@ -59,8 +59,19 @@ test('stale fetch is ignored after switching groups and cleaned-up requests are 
     await act(async()=>resolve({...initial(),items:[item('HOLDING')],activeReservationId:77,choices:[]}));
     expect(signal.aborted).toBe(true);expect(screen.queryByText('좌석 확보 후 결제 대기')).toBeNull();
 });
-test('expired opportunity stays terminal while resumed waiting keeps the issued number',async()=>{
+test('expired opportunity has no rank while resumed waiting shows current rank',async()=>{
     data={...initial(),items:[item('EXPIRED'),item('WAITING',2)],choices:[]};render(<WaitingPanel flow={flow}/>);
-    await screen.findByText('기회 종료');expect(screen.getByText('배정 대기')).toBeTruthy();expect(screen.getAllByText('17')).toHaveLength(2);
+    await screen.findByText('기회 종료');expect(screen.getByText('배정 대기')).toBeTruthy();expect(screen.getAllByText('3번')).toHaveLength(1);
     expect(screen.queryByRole('checkbox')).toBeNull();
+});
+
+test('issued number four shows first position and refreshes the current rank', async () => {
+    data = {...initial(), items: [{...item('WAITING'), queueNumber: 4, aheadCount: 0}], choices: []};
+    render(<WaitingPanel flow={flow}/>);
+    await screen.findByText('1번');
+    expect(screen.queryByText('4번')).toBeNull();
+    expect(screen.getByText('2026.10.03 15:00')).toBeTruthy();
+    data = {...data, items: [{...data.items[0], aheadCount: 2}]};
+    fireEvent.focus(window);
+    await screen.findByText('3번');
 });

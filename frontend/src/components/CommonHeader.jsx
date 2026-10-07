@@ -1,3 +1,4 @@
+import { formatShowtime } from '../utils/showtimeFormat.js';
 import InlineDetails from './InlineDetails.jsx';
 import BrandLogo from './BrandLogo.jsx';
 import HeaderTicketPreview from './HeaderTicketPreview.jsx';
@@ -17,7 +18,7 @@ const TYPE_LABELS = {
 };
 
 function formatDate(value) {
-    return value ? new Date(value).toLocaleString("ko-KR") : "-";
+    return value ? formatShowtime(value) : "-";
 }
 
 export default function CommonHeader(props) {

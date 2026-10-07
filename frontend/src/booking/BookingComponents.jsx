@@ -1,3 +1,4 @@
+import { formatShowDate } from '../utils/showtimeFormat.js';
 import InlineDetails from '../components/InlineDetails.jsx';
 import GlassButton from '../components/GlassButton.jsx';
 import ui from './BookingComponents.module.css';
@@ -24,7 +25,7 @@ export function ShowtimeCard({ show, selected, label, onClick }) {
     return <Tag className={ui.showtime} aria-pressed={onClick ? selected : undefined} onClick={onClick}>
         <small>{show.screenName}</small>
         <strong>{show.startTime.slice(11, 16)} → {show.endTime.slice(11, 16)}</strong>
-        <small>{show.startTime.slice(0, 10)}</small>
+        <small>{formatShowDate(show.startTime)}</small>
         <InlineDetails items={[`${show.availableSeats} / ${show.totalSeats}석`, label]} />
     </Tag>;
 }

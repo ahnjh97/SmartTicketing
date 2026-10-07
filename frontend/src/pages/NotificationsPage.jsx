@@ -1,3 +1,4 @@
+import { formatShowtime } from '../utils/showtimeFormat.js';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { notificationApi } from "../api/notifications.js";
@@ -12,7 +13,7 @@ const TYPE_LABELS = {
 };
 
 function formatDate(value) {
-    return value ? new Date(value).toLocaleString("ko-KR") : "-";
+    return value ? formatShowtime(value) : "-";
 }
 
 export default function NotificationsPage() {

@@ -1,3 +1,4 @@
+import { formatShowDate } from '../utils/showtimeFormat.js';
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
@@ -76,7 +77,7 @@ export default function ProfilePage() {
                 <div className={styles.info}>
                     <div><span>이름</span><strong>{user.name}</strong></div>
                     <div><span>아이디</span><strong>{user.loginId ?? "소셜 로그인"}</strong></div>
-                    <div><span>생년월일</span><strong>{user.birthDate ?? "미등록"}</strong></div>
+                    <div><span>생년월일</span><strong>{user.birthDate ? formatShowDate(user.birthDate) : "미등록"}</strong></div>
                     <div>
                         <span>로그인 연동</span>
                         {user.linkedProviders?.length ? (
