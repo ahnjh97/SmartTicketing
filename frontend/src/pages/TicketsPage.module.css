@@ -84,6 +84,15 @@
 .ticketCard {
     position: relative;
     overflow: hidden;
+    /* 절취선 원형 부분은 투명하게 뚫어 모달 뒤 배경이 그대로 보이게 한다. */
+    -webkit-mask-image:
+        radial-gradient(circle 15px at 0 50%, transparent 0 14px, #000 15px),
+        radial-gradient(circle 15px at 100% 50%, transparent 0 14px, #000 15px);
+    -webkit-mask-composite: source-in;
+    mask-image:
+        radial-gradient(circle 15px at 0 50%, transparent 0 14px, #000 15px),
+        radial-gradient(circle 15px at 100% 50%, transparent 0 14px, #000 15px);
+    mask-composite: intersect;
     width: 100%;
     max-height: calc(100dvh - 48px);
     border: 1px solid #d9d9d9;
@@ -98,15 +107,23 @@
     position: absolute;
     top: 50%;
     z-index: 4;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border: 0;
     border-radius: 50%;
     background: transparent;
     transform: translateY(-50%);
+    pointer-events: none;
 }
 .ticketCard::before { left: -15px; }
 .ticketCard::after { right: -15px; }
+
+.ticketCardContent {
+    position: relative;
+}
+.ticketCardRight {
+    border-left: 2px dashed #cfcfcf;
+}
 .ticketCardHeader { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 26px; border-bottom: 1px solid var(--booking-border); background: #f7f7f7; }
 .ticketLabel { font-size: 11px; font-weight: 800; letter-spacing: .14em; }
 .ticketStatus { padding: 5px 9px; border: 1px solid var(--booking-border); border-radius: 999px; font-size: 11px; font-weight: 700; }
