@@ -1,3 +1,4 @@
+import { formatShowtime } from '../utils/showtimeFormat.js';
 import { useEffect, useState } from 'react';
 import { bookingApi } from '../api/booking.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
@@ -28,9 +29,7 @@ export default function BookingHistory() {
             </span></div>
             <p className={styles.details}><InlineDetails items={[item.entryPoint === 'THEATER_NORMAL' ? '일반 예매' : '스마트 예매', getSeatLabel(item.zone), `${item.partySize}명`].filter(Boolean)}/></p>
             <p className={styles.details}><InlineDetails items={[item.theaterName, item.screenName]}/></p>
-            <p className={styles.details}>{new Date(item.startTime).toLocaleString('ko-KR', {
-                timeZone: 'Asia/Seoul', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-            })}</p>
+            <p className={styles.details}>{formatShowtime(item.startTime)}</p>
         </article>)}</div>
         {loading && <p className={styles.feedback} role="status">불러오는 중…</p>}
         {!loading && state.error && <div className={styles.historyFooter} role="alert">지난 내역을 불러오지 못했습니다.

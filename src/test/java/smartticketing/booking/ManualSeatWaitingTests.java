@@ -173,10 +173,10 @@ class ManualSeatWaitingTests {
         assertThat(state(f).items().getFirst()).isEqualTo(before);
     }
 
-    @Test void sameUserCannotAddAnotherExactQueueForTheSameShow() {
+    @Test void sameUserCanAddAnotherExactQueueForTheSameShow() {
         var f=manual(fixture(2,6)); var duplicate=manual(f); var all=seats(f);
         assertThat(waitFor(f,all.subList(0,2),key()).status()).isEqualTo(201);
-        assertThat(waitFor(duplicate,all.subList(2,4),key()).status()).isEqualTo(409);
+        assertThat(waitFor(duplicate,all.subList(2,4),key()).status()).isEqualTo(201);
         assertThat(waitFor(f,all.subList(2,4),key()).status()).isEqualTo(201);
         assertThat(state(f).items()).hasSize(1);
     }

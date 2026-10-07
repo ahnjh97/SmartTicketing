@@ -30,6 +30,7 @@
 .candidateStatus { flex-shrink: 0; color: var(--booking-accent); text-align: right; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .candidateDetail { min-width: 0; }
 .candidateSidebar > a { color: var(--booking-accent); font-size: 12px; min-height: 44px; display: flex; align-items: center; }
+.waitingNumber { display: flex; align-items: baseline; justify-content: center; gap: 12px; white-space: nowrap; }
 .waitingHelp { color: var(--booking-muted); font-size: 12px; line-height: 1.8; margin: 20px 0; text-align: left; }
 .waitingHelp summary { cursor: pointer; padding: 8px 0; }
 .candidateDetail p { line-height: 1.8; font-size: 13px; }

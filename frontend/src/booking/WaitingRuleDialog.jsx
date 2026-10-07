@@ -4,11 +4,6 @@ import { Link } from 'react-router-dom';
 import styles from './WaitingRuleDialog.module.css';
 
 const rules = {
-    WAITING_SHOWTIME_CONFLICT: {
-        title: '이미 신청한 회차입니다',
-        message: '같은 회차에는 한 구역만 대기할 수 있습니다.',
-        help: '기존 신청을 변경하거나 취소해주세요.',
-    },
     WAITING_SINGLE_ZONE_REQUIRED: {
         title: '한 구역의 좌석을 선택해주세요',
         message: '서로 다른 구역의 좌석을 함께 대기할 수 없습니다.',
@@ -16,11 +11,11 @@ const rules = {
     },
 };
 
-export default function WaitingRuleDialog({ error }) {
+export default function WaitingRuleDialog({ error, onClose }) {
     const [dismissed, setDismissed] = useState(null);
     const rule = rules[error?.code];
     return rule && dismissed !== error
-        ? <RuleDialog rule={rule} onClose={() => setDismissed(error)} /> : null;
+        ? <RuleDialog rule={rule} onClose={() => { setDismissed(error); onClose?.(); }} /> : null;
 }
 
 function RuleDialog({ rule, onClose }) {

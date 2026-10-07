@@ -1,3 +1,4 @@
+import { formatShowDate, formatShowTime, formatShowtime as time } from '../utils/showtimeFormat.js';
 import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
@@ -19,7 +20,7 @@ const status = candidate => {
     const queue = candidate.waiting?.items?.[0];
     return { WAITING: '대기 중', HOLDING: '좌석 확인 중', CANCELLED: '대기 취소', EXPIRED: '대기 종료' }[queue?.status] || '후보 확인 중';
 };
-const time = value => `${value.slice(5,10).replace('-', '/')} ${value.slice(11,16)}`;
+
 
 export default function SmartCandidates({ booking }) {
     const movieMode = !booking.theaterMode;
@@ -58,7 +59,7 @@ export default function SmartCandidates({ booking }) {
                     <span className={styles.cardTop}>
                         <strong>{titles[candidate.kind]}</strong>
                         {candidate.payment?.reservation?.status === 'PENDING' && <CandidateDeadline reservation={candidate.payment.reservation} receivedAt={flow.receivedAt}/>}
-                        {!candidate.payment?.reservation && <span className={styles.candidateStatus}>{candidate.waiting?.items?.[0]?.status === 'WAITING' ? `대기 ${candidate.waiting.items[0].queueNumber}번` : '대기 일시정지'}</span>}
+                        {!candidate.payment?.reservation && <span className={styles.candidateStatus}>{candidate.waiting?.items?.[0]?.status === 'WAITING' ? `순번 ${candidate.waiting.items[0].aheadCount + 1}번` : '대기 일시정지'}</span>}
                     </span>
                     <SeatZoneMap zone={candidate.zone} className={styles.zoneMap}/>
                 </button>)}
@@ -89,11 +90,11 @@ function CandidateWaiting({ candidate, flow }) {
     return <section className={reservationStyles.reservation} aria-label="후보 구역 대기">
         <div className={reservationStyles.resultIcon} aria-hidden="true">{waiting ? '◷' : '—'}</div>
         <h2>{status(candidate)}</h2>
-        {waiting ? <><div className={reservationStyles.clock}><span>대기번호</span><strong>{queue.queueNumber}<small>번</small></strong></div>
+        {waiting ? <><div className={`${reservationStyles.clock} ${styles.waitingNumber}`}><span>순번</span><strong>{queue.aheadCount + 1}<small>번</small></strong></div>
             <div className={reservationStyles.ticket}>
                 <div className={reservationStyles.ticketMain}><div><h3>{candidate.movieTitle}</h3>
                     <p><InlineDetails items={[candidate.theaterName, candidate.screenName]} /></p>
-                    <p><InlineDetails items={[candidate.startTime.slice(0,10), <>{candidate.startTime.slice(11,16)} → {candidate.endTime.slice(11,16)}</>]} /></p>
+                    <p><InlineDetails items={[formatShowDate(candidate.startTime), <>{formatShowTime(candidate.startTime)} → {formatShowTime(candidate.endTime)}</>]} /></p>
                     <div className={reservationStyles.ticketSeats}><span>{titles[candidate.kind]} · {candidate.partySize}명</span><strong>{getSeatLabel(candidate.zone) || '좌석 자동 배정'}</strong></div>
                 </div></div>
             </div>
