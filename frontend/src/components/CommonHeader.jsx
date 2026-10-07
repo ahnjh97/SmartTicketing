@@ -62,12 +62,14 @@ function HeaderContent({ user, disabled, setupRequired }) {
         if (!user || disabled) {
             seenNotificationIdsRef.current = null;
             setFloatingNotification(null);
+            setNotifications([]);
+            setUnreadCount(0);
             return;
         }
 
         let mounted = true;
 
-        const loadFloatingNotification = () => notificationApi.list(false)
+        const refreshNotifications = () => notificationApi.list(false)
             .then((items) => {
                 if (!mounted || !Array.isArray(items)) return;
 
@@ -77,31 +79,33 @@ function HeaderContent({ user, disabled, setupRequired }) {
 
                 if (seenNotificationIdsRef.current === null) {
                     seenNotificationIdsRef.current = new Set(items.map((item) => item.id));
-                    return;
+                } else {
+                    const seen = seenNotificationIdsRef.current;
+                    const next = actionable.find((item) => !seen.has(item.id));
+                    items.forEach((item) => seen.add(item.id));
+
+                    if (next) {
+                        if (floatingNotificationTimerRef.current) {
+                            window.clearTimeout(floatingNotificationTimerRef.current);
+                        }
+                        setFloatingNotification(next);
+                        floatingNotificationTimerRef.current = window.setTimeout(() => {
+                            setFloatingNotification(null);
+                        }, 3000);
+                    }
                 }
 
-                const seen = seenNotificationIdsRef.current;
-                const next = actionable.find((item) => !seen.has(item.id));
-                items.forEach((item) => seen.add(item.id));
-
-                if (!next) return;
-
-                if (floatingNotificationTimerRef.current) {
-                    window.clearTimeout(floatingNotificationTimerRef.current);
-                }
-                setFloatingNotification(next);
-                floatingNotificationTimerRef.current = window.setTimeout(() => {
-                    setFloatingNotification(null);
-                }, 3000);
+                setNotifications(items);
+                setUnreadCount(items.filter((item) => !item.read).length);
             })
             .catch(() => {});
 
-        loadFloatingNotification();
-        const timer = window.setInterval(loadFloatingNotification, 5000);
+        refreshNotifications();
+        const unsubscribe = notificationApi.subscribe(refreshNotifications);
 
         return () => {
             mounted = false;
-            window.clearInterval(timer);
+            unsubscribe();
         };
     }, [user, disabled]);
 
@@ -145,26 +149,6 @@ function HeaderContent({ user, disabled, setupRequired }) {
             </NavLink>
         );
     }
-
-    useEffect(() => {
-        if (!user || disabled) return;
-
-        let mounted = true;
-        const loadUnread = () => notificationApi.list(true)
-            .then((items) => {
-                if (mounted) setUnreadCount(Array.isArray(items) ? items.length : 0);
-            })
-            .catch(() => {
-                if (mounted) setUnreadCount(0);
-            });
-
-        loadUnread();
-        const timer = window.setInterval(loadUnread, 30000);
-        return () => {
-            mounted = false;
-            window.clearInterval(timer);
-        };
-    }, [user, disabled]);
 
     useEffect(() => {
         if (typeof ResizeObserver === "undefined") return;
