@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.server.ResponseStatusException;
 import smartticketing.dto.booking.*;
 import smartticketing.entity.*;
@@ -26,14 +27,14 @@ public class BookingPaymentService {
     private final BookingIdempotency operations;
     private final TicketService tickets;
     private final NotificationService notifications;
-    private final BookingWaitingDispatcher waitingDispatcher;
+    private final ApplicationEventPublisher eventPublisher;
     private final boolean allowFailure;
 
     public BookingPaymentService(EntityManager em, BookingHoldService holds, BookingIdempotency operations,
-            TicketService tickets, NotificationService notifications, BookingWaitingDispatcher waitingDispatcher,
+            TicketService tickets, NotificationService notifications, ApplicationEventPublisher eventPublisher,
             Environment environment, @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
         this.em = em; this.holds = holds; this.operations = operations; this.tickets = tickets;
-        this.notifications = notifications; this.waitingDispatcher = waitingDispatcher;
+        this.notifications = notifications; this.eventPublisher = eventPublisher;
         this.allowFailure = allowFailure && environment.acceptsProfiles(Profiles.of("dev", "test"));
     }
 
@@ -184,16 +185,14 @@ public class BookingPaymentService {
 
     private void scheduleWaitingDispatchAfterCommit(Long showId) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            // 방어 코드: 현재 호출 경로는 트랜잭션이지만, 다른 호출 경로에서도
-            // 대기열 승급 자체는 수행할 수 있도록 한다.
-            waitingDispatcher.dispatch(showId);
+            eventPublisher.publishEvent(new BookingWaitingWorker.WaitingDispatchRequested(showId));
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
-                    waitingDispatcher.dispatch(showId);
+                    eventPublisher.publishEvent(new BookingWaitingWorker.WaitingDispatchRequested(showId));
                 } catch (RuntimeException failure) {
                     // COMMIT 이후의 승급 실패는 예약 취소를 되돌릴 수 없으므로
                     // 기존 주기 Worker가 다음 sweep에서 다시 시도할 수 있게 한다.
