@@ -197,9 +197,7 @@ export default function TicketsPage() {
                         {ticketDates.map((date) => <option key={date} value={date}>{date.replaceAll('-', '.')}</option>)}
                     </select>
                 </div>
-                {loading ? null : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? (
-                    <p className={styles.empty}>{selectedDate === 'ALL' ? '발급된 티켓이 없습니다.' : '선택한 날짜의 티켓이 없습니다.'}</p>
-                ) : (
+                {loading ? null : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? null : (
                     <div className={styles.ticketGroups}>
                         {Object.entries(
                             filteredTickets.reduce((groups, ticket) => {

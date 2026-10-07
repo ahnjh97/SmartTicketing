@@ -4,7 +4,7 @@
     place-items: center;
     padding: 24px;
     box-sizing: border-box;
-    background: #f4f4f4;
+    background: var(--booking-surface);
     color: #171717;
 }
 .card {

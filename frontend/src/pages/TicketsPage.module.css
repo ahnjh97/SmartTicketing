@@ -33,7 +33,6 @@
 .cancelButton:focus-visible { outline: 2px solid var(--booking-danger); outline-offset: 2px; }
 .cancelButton:disabled { opacity: .55; cursor: wait; }
 .ticketCancelledStamp { position: absolute; top: 50%; left: 50%; z-index: 4; transform: translate(-50%, -50%) rotate(-12deg); padding: 8px 18px; border: 4px solid #b91c1c; border-radius: 7px; color: #b91c1c; background: rgb(255 255 255 / 90%); font-size: 30px; font-weight: 900; letter-spacing: .04em; pointer-events: none; }
-.empty { padding: 64px 24px; border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); text-align: center; color: var(--booking-muted); background: var(--booking-soft); }
 .ticketDateFilter:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 3px; }
 
 @media (max-width: 700px) {

@@ -16,12 +16,6 @@ const TYPE_LABELS = {
     PAYMENT_FAILED: "결제 실패",
 };
 
-const TICKET_STATUS_LABELS = {
-    VALID: "사용 가능",
-    USED: "사용 완료",
-    CANCELLED: "취소됨",
-};
-
 function formatDate(value) {
     return value ? new Date(value).toLocaleString("ko-KR") : "-";
 }
