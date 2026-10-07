@@ -137,6 +137,19 @@
 .common-header-ticket-item:last-child { border-bottom: 0; }
 .common-header-notification-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .common-header-notification-item.is-unread { background: rgb(255 196 38 / 7%); }
+.common-header-notification-item.is-actionable {
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    margin: 4px 6px;
+    transition: border-color 160ms ease, background-color 160ms ease;
+}
+.common-header-notification-item.is-actionable:hover,
+.common-header-notification-item.is-actionable:focus-visible {
+    border-color: #f5c542;
+    background: rgb(245 197 66 / 8%);
+    outline: none;
+}
 .common-header-notification-item strong,
 .common-header-ticket-title strong { font-size: 14px; }
 .common-header-notification-item p,

@@ -43,7 +43,6 @@ public class WaitingQueueService {
         queue.setOpportunityExpiresAt(now.plusMinutes(OPPORTUNITY_MINUTES));
         queue.setUpdatedAt(now);
 
-        notifications.queueTurn(queue.getUser().getId());
         return queue;
     }
 

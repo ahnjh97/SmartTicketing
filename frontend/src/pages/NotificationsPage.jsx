@@ -5,10 +5,8 @@ import { notificationApi } from "../api/notifications.js";
 import "./NotificationsPage.css";
 
 const TYPE_LABELS = {
-    SEAT_HOLD_STARTED: "좌석 선점",
     QUEUE_TURN: "대기 순서",
-    RESERVATION_COMPLETED: "예매 완료",
-    RESERVATION_CANCELLED: "예매 취소",
+    SEAT_HOLD_EXPIRED: "좌석 선점 만료",
     PAYMENT_FAILED: "결제 실패",
 };
 
@@ -61,8 +59,14 @@ export default function NotificationsPage() {
     }
 
     function openNotification(item) {
-        if (!item.groupId || !["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) return;
-        navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
+        if (!item.groupId) return;
+        if (item.type === "SEAT_HOLD_EXPIRED") {
+            navigate("/bookings?history=1");
+            return;
+        }
+        if (item.type === "QUEUE_TURN") {
+            navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
+        }
     }
 
     return (
@@ -94,7 +98,7 @@ export default function NotificationsPage() {
                         {notifications.map((item) => (
                             <article
                                 key={item.id}
-                                className={`notification-item${item.read ? "" : " is-unread"}${item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? " is-actionable" : ""}`}
+                                className={`notification-item${item.read ? "" : " is-unread"}${item.groupId && ["QUEUE_TURN", "SEAT_HOLD_EXPIRED"].includes(item.type) ? " is-actionable" : ""}`}
                                 role={item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? "link" : undefined}
                                 tabIndex={item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type) ? 0 : undefined}
                                 onClick={() => openNotification(item)}

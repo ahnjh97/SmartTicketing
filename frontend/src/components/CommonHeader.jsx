@@ -10,10 +10,8 @@ import { notificationApi } from "../api/notifications.js";
 import { ticketApi } from "../api/tickets.js";
 
 const TYPE_LABELS = {
-    SEAT_HOLD_STARTED: "좌석 선점",
     QUEUE_TURN: "대기 순서",
-    RESERVATION_COMPLETED: "예매 완료",
-    RESERVATION_CANCELLED: "예매 취소",
+    SEAT_HOLD_EXPIRED: "좌석 선점 만료",
     PAYMENT_FAILED: "결제 실패",
 };
 
@@ -235,10 +233,16 @@ function HeaderContent({ user, disabled, setupRequired }) {
     }
 
     function openNotification(item) {
-        if (!item.groupId || !["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type)) return;
+        if (!item.groupId) return;
         setOpenPanel(null);
         setOpenLocation(null);
-        navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
+        if (item.type === "SEAT_HOLD_EXPIRED") {
+            navigate("/bookings?history=1");
+            return;
+        }
+        if (item.type === "QUEUE_TURN") {
+            navigate(`/booking/restore?group=${encodeURIComponent(item.groupId)}`);
+        }
     }
 
     function handleNavigation(event) {
@@ -296,7 +300,7 @@ function HeaderContent({ user, disabled, setupRequired }) {
             {user && <>
                 <div className={`common-header-popover common-header-notification-popover${openPanel === "notifications" ? " is-open" : ""}`}>
                     <div className="common-header-popover-header"><div><strong>알림</strong>{unreadCount > 0 && <span>{unreadCount}개 읽지 않음</span>}</div><button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0}>모두 읽음</button></div>
-                    <div className="common-header-popover-body">{notificationLoading ? null : notifications.length === 0 ? <p className="common-header-popover-empty">새로운 알림이 없습니다.</p> : notifications.slice(0, 8).map((item) => { const actionable = item.groupId && ["SEAT_HOLD_STARTED", "QUEUE_TURN"].includes(item.type); return <article key={item.id} className={`common-header-notification-item${item.read ? "" : " is-unread"}${actionable ? " is-actionable" : ""}`} role={actionable ? "link" : undefined} tabIndex={actionable ? 0 : undefined} onClick={() => openNotification(item)} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && actionable) { event.preventDefault(); openNotification(item); } }}><div><strong>{TYPE_LABELS[item.type] ?? "알림"}</strong><p>{item.message}</p><time>{formatDate(item.createdAt)}</time></div><div className="common-header-popover-actions">{!item.read && <button type="button" onClick={(event) => { event.stopPropagation(); markNotificationRead(item.id); }}>읽음</button>}<button type="button" onClick={(event) => { event.stopPropagation(); removeNotification(item.id); }}>삭제</button></div></article>; })}</div>
+                    <div className="common-header-popover-body">{notificationLoading ? null : notifications.length === 0 ? <p className="common-header-popover-empty">새로운 알림이 없습니다.</p> : notifications.slice(0, 8).map((item) => { const actionable = item.groupId && ["QUEUE_TURN", "SEAT_HOLD_EXPIRED"].includes(item.type); return <article key={item.id} className={`common-header-notification-item${item.read ? "" : " is-unread"}${actionable ? " is-actionable" : ""}`} role={actionable ? "link" : undefined} tabIndex={actionable ? 0 : undefined} onClick={() => openNotification(item)} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && actionable) { event.preventDefault(); openNotification(item); } }}><div><strong>{TYPE_LABELS[item.type] ?? "알림"}</strong><p>{item.message}</p><time>{formatDate(item.createdAt)}</time></div><div className="common-header-popover-actions">{!item.read && <button type="button" onClick={(event) => { event.stopPropagation(); markNotificationRead(item.id); }}>읽음</button>}<button type="button" onClick={(event) => { event.stopPropagation(); removeNotification(item.id); }}>삭제</button></div></article>; })}</div>
                 </div>
 
                 <div className={`common-header-popover common-header-ticket-popover${openPanel === "tickets" ? " is-open" : ""}`}>

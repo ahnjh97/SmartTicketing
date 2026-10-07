@@ -76,8 +76,6 @@ public class BookingHoldService {
             reject(400, "일반예매 그룹만 좌석 직접 선점이 가능합니다.");
         if (source == Source.SMART && group.getEntryPoint() == BookingEntryPoint.THEATER_NORMAL)
             reject(400, "스마트예매 그룹이 필요합니다.");
-        if (source == Source.SMART && group.getCandidateKind() != null)
-            reject(409, "스마트예매 후보는 구역 대기 순서에 따라 자동 배정됩니다.");
         if (ids.size() != group.getPartySize()) reject(400, "요청 좌석 수는 전체 관람 인원과 같아야 합니다.");
         Long target = showtimeId;
         if (source == Source.MANUAL) {
@@ -258,6 +256,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
         BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot); updateAvailable(show, inventory, now);
+        NotificationService.holdExpired(em, group.getId());
         return true;
     }
 

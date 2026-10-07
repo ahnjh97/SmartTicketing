@@ -64,8 +64,9 @@ class SmartBookingCandidatesTests {
             var candidates=plan(f,createdId(result)).candidates(); assertThat(candidates).hasSize(2);
             var held=candidates.stream().filter(c->c.kind().equals("BALANCED")).findFirst().orElseThrow();
             assertThat(held.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
+            // BALANCED is immediately held, so the smart candidate must not receive a waiting number.
             tx(em->{ assertThat(em.createQuery("select count(q) from WaitingQueue q where q.user.id=:user and q.status=:status",Long.class)
-                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(used+1); return null; });
+                    .setParameter("user",f.user()).setParameter("status",QueueStatus.WAITING).getSingleResult()).isEqualTo(used); return null; });
         }
     }
 
@@ -115,12 +116,14 @@ class SmartBookingCandidatesTests {
             for(int i=0;i<expected;i++) {
                 var candidate=candidates.get(i);
                 assertThat(candidate.showtimeId()).isEqualTo(shows.get(i));
-                assertThat(candidate.waiting().items().getFirst().queueNumber()).isEqualTo(1);
                 if(i==firstAvailable) {
+                    // 즉시 선점 후보는 대기번호를 발급하지 않는다.
                     assertThat(candidate.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
-                    assertThat(candidate.waiting().items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+                    assertThat(candidate.waiting().items()).isEmpty();
                 } else {
                     assertThat(candidate.payment()).isNull();
+                    assertThat(candidate.waiting().items()).hasSize(1);
+                    assertThat(candidate.waiting().items().getFirst().queueNumber()).isEqualTo(1);
                     assertThat(candidate.waiting().items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
                 }
             }
@@ -354,7 +357,12 @@ class SmartBookingCandidatesTests {
         assertThat(candidate.kind()).isEqualTo("PREFERRED");
         assertThat(candidate.zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
         assertThat(candidate.payment().reservation().status()).isEqualTo(ReservationStatus.PENDING);
-        assertThat(candidate.waiting().items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(candidate.waiting().items()).isEmpty();
+        tx(em -> {
+            assertThat(BookingPaymentTests.notifications(em).list(f.user(), false))
+                    .noneMatch(n -> n.type() == NotificationType.QUEUE_TURN);
+            return null;
+        });
         var replay = tx(em -> plans(em).create(f.user(), key, request));
         assertThat(replay).isEqualTo(result);
         tx(em -> {

@@ -45,6 +45,10 @@ function dateKey(value) {
     return new Date(value).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 }
 
+function isShowtimeStarted(ticket) {
+    return ticket?.startTime && Date.now() >= Date.parse(ticket.startTime);
+}
+
 export default function TicketsPage() {
     const modal = useRef(null);
     const [tickets, setTickets] = useState([]);
@@ -253,7 +257,7 @@ export default function TicketsPage() {
                                                     </button>
                                                     <div className={styles.summaryBottom}>
                                                         <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
-                                                    {ticket.status === "VALID" && (
+                                                    {ticket.status === "VALID" && !isShowtimeStarted(ticket) && (
                                                         <button
                                                             type="button"
                                                             className={styles.cancelButton}

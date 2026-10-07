@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -23,8 +24,12 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<NotificationResponse> list(Long userId, boolean unreadOnly) {
+        var hidden = Set.of(NotificationType.SEAT_HOLD_STARTED, NotificationType.RESERVATION_COMPLETED, NotificationType.RESERVATION_CANCELLED);
         var l = unreadOnly ? notifications.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId) : notifications.findByUserIdOrderByCreatedAtDesc(userId);
-        return l.stream().map(n -> new NotificationResponse(n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt(), n.getBookingGroupId(), n.getReservationId())).toList();
+        return l.stream()
+                .filter(n -> !hidden.contains(n.getType()))
+                .map(n -> new NotificationResponse(n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt(), n.getBookingGroupId(), n.getReservationId()))
+                .toList();
     }
 
     public void read(Long userId, Long id) {
@@ -53,6 +58,31 @@ public class NotificationService {
         return create(id, NotificationType.SEAT_HOLD_STARTED, "좌석 5분 선점이 시작되었습니다. 제한 시간 내 결제를 완료해주세요.");
     }
 
+    public static void holdExpired(jakarta.persistence.EntityManager em, Long groupId) {
+        var turns = em.createQuery(
+                "select n from Notification n where n.bookingGroupId=:group and n.type=:type",
+                Notification.class)
+                .setParameter("group", groupId)
+                .setParameter("type", NotificationType.QUEUE_TURN)
+                .getResultList();
+        if (turns.isEmpty()) return;
+
+        var user = turns.getFirst().getUser();
+        turns.forEach(em::remove);
+        em.createQuery("delete from Notification n where n.bookingGroupId=:group and n.type=:type")
+                .setParameter("group", groupId)
+                .setParameter("type", NotificationType.SEAT_HOLD_EXPIRED)
+                .executeUpdate();
+
+        var expired = new Notification();
+        expired.setUser(user);
+        expired.setType(NotificationType.SEAT_HOLD_EXPIRED);
+        expired.setMessage("해당 회차의 좌석 선점 시간이 만료되었습니다. 다시 선점해주세요.");
+        expired.setCreatedAt(LocalDateTime.now());
+        expired.setBookingGroupId(groupId);
+        em.persist(expired);
+    }
+
     public static Notification link(Notification notification, Reservation reservation) {
         if (reservation.getRequestGroup() != null) {
             notification.setBookingGroupId(reservation.getRequestGroup().getId());
@@ -65,22 +95,15 @@ public class NotificationService {
     public static void acquired(jakarta.persistence.EntityManager em, Reservation reservation, boolean waiting) {
         var notification = new Notification();
         notification.setUser(reservation.getUser());
-        notification.setType(waiting ? NotificationType.QUEUE_TURN : NotificationType.SEAT_HOLD_STARTED);
-        notification.setMessage(waiting ? "대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요." : "좌석을 5분간 확보했습니다. 예약에서 남은 시간을 확인해주세요.");
+        if (!waiting) return;
+        notification.setType(NotificationType.QUEUE_TURN);
+        notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(reservation.getCreatedAt());
         em.persist(link(notification, reservation));
     }
 
     public Notification queueTurn(Long id) {
-        return create(id, NotificationType.QUEUE_TURN, "대기 순서가 되어 5분간 예매 기회가 시작되었습니다. 제한 시간 내 예매를 완료해주세요.");
-    }
-
-    public Notification completed(Long id) {
-        return create(id, NotificationType.RESERVATION_COMPLETED, "영화 예매가 완료되었습니다.");
-    }
-
-    public Notification cancelled(Long id) {
-        return create(id, NotificationType.RESERVATION_CANCELLED, "영화 예매가 취소되었습니다.");
+        return create(id, NotificationType.QUEUE_TURN, "대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
     }
 
     public Notification paymentFailed(Long id) {

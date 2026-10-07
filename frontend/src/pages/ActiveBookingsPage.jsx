@@ -1,6 +1,7 @@
 import { formatShowtime as showtime } from '../utils/showtimeFormat.js';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import BookingHistory from '../booking/BookingHistory.jsx';
 import { Link } from 'react-router-dom';
 import useAuth from '../hooks/useAuth.js';
@@ -60,13 +61,20 @@ function WaitingCard({ group }) {
 
 export default function ActiveBookingsPage() {
     const { user } = useAuth();
-    const [history, setHistory] = useState(false);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [history, setHistory] = useState(searchParams.get('history') === '1');
     const { items, error } = useActiveBookings(user?.id);
     const smart = (items || []).filter(item => item.entryPoint !== 'THEATER_NORMAL');
     const manual = (items || []).filter(item => item.entryPoint === 'THEATER_NORMAL');
     return <section className={styles.page}>
         <div className={styles.header}><h1>내 대기 및 선점</h1>
-            <GlassButton onClick={() => setHistory(value => !value)} aria-pressed={history}>{history ? '진행 중 보기' : '지난 내역'}</GlassButton>
+            <GlassButton onClick={() => {
+                setHistory(value => {
+                    const next = !value;
+                    setSearchParams(next ? { history: '1' } : {}, { replace: true });
+                    return next;
+                });
+            }} aria-pressed={history}>{history ? '진행 중 보기' : '지난 내역'}</GlassButton>
         </div>
         {history ? <BookingHistory key={user?.id}/> : <>
         {error && <p className={styles.feedback} role="alert">대기 및 선점 정보를 갱신하지 못했습니다. 페이지를 새로고침해 주세요.</p>}
