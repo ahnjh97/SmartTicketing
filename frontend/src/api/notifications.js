@@ -7,7 +7,7 @@ let reconnectTimer = null;
 
 function describeEvent(event) {
     const normalized = event.replace(/\r/g, "");
-    const eventName = normalized.match(/^event:\\s*(.*)$/m)?.[1]?.trim() ?? null;
+    const eventName = normalized.match(/^event:\s*(.*)$/m)?.[1]?.trim() ?? null;
     const dataLines = normalized
         .split("\n")
         .filter((line) => line.startsWith("data:"))
