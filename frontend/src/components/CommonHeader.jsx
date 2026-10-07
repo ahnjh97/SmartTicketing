@@ -59,7 +59,10 @@ function HeaderContent({ user, disabled, setupRequired }) {
     }, []);
 
     useEffect(() => {
+        console.log("[NOTIFICATION] HeaderContent effect", { userId: user?.id, disabled });
+
         if (!user || disabled) {
+            console.log("[NOTIFICATION] notification effect skipped", { hasUser: Boolean(user), disabled });
             seenNotificationIdsRef.current = null;
             setFloatingNotification(null);
             setNotifications([]);
@@ -69,7 +72,9 @@ function HeaderContent({ user, disabled, setupRequired }) {
 
         let mounted = true;
 
-        const refreshNotifications = () => notificationApi.list(false)
+        const refreshNotifications = () => {
+            console.log("[NOTIFICATION] refreshNotifications CALLED");
+            return notificationApi.list(false)
             .then((items) => {
                 console.log("[NOTIFICATION] refresh result", items);
                 if (!mounted || !Array.isArray(items)) return;
@@ -108,7 +113,11 @@ function HeaderContent({ user, disabled, setupRequired }) {
             });
 
         refreshNotifications();
-        const unsubscribe = notificationApi.subscribe(refreshNotifications);
+        console.log("[NOTIFICATION] subscribing SSE");
+        const unsubscribe = notificationApi.subscribe(() => {
+            console.log("[NOTIFICATION] SSE CALLBACK FIRED");
+            refreshNotifications();
+        });
 
         return () => {
             mounted = false;
