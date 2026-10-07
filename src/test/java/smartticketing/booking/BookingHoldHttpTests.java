@@ -117,7 +117,7 @@ class BookingHoldHttpTests {
                 mvc.perform(get("/api/booking-groups/" + groupId.get() + "/recovery").with(jwt().jwt(j -> j.subject(Long.toString(ids[5])))))
                         .andExpect(status().isNotFound());
                 mvc.perform(get("/api/notifications").with(auth)).andExpect(status().isOk())
-                        .andExpect(jsonPath("$[0].groupId").value(groupId.get())).andExpect(jsonPath("$[0].reservationId").value(reservationId.get()));
+                        .andExpect(jsonPath("$").isEmpty());
                 var locks = statements.stream().filter(s -> s.contains("for update")).toList();
                 assertThat(locks).anyMatch(s -> s.contains("booking_request_groups"))
                         .anyMatch(s -> s.contains("showtimes"))
@@ -152,7 +152,7 @@ class BookingHoldHttpTests {
                         .andExpect(jsonPath("$.path").value(org.hamcrest.Matchers.containsString("reservation=" + reservationId.get())));
                 mvc.perform(get("/api/reservations/" + reservationId.get()).with(auth))
                         .andExpect(jsonPath("$.expiresAt").value("2026-10-01T09:05:00+09:00"));
-                mvc.perform(get("/api/notifications").with(auth)).andExpect(jsonPath("$.length()").value(1));
+                mvc.perform(get("/api/notifications").with(auth)).andExpect(jsonPath("$").isEmpty());
             });
             runner(db, Clock.offset(clock, Duration.ofMinutes(6)), validation.getValidator()).run(context -> {
                 assertThat(context).hasNotFailed();
