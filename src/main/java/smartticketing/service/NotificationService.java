@@ -83,6 +83,15 @@ public class NotificationService {
         em.persist(expired);
     }
 
+    // 즉시선점이 확정된 스마트예매 배치에는 대기 순서 알림이 남아 있으면 안 된다.
+    public static void clearQueueTurns(jakarta.persistence.EntityManager em, List<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) return;
+        em.createQuery("delete from Notification n where n.bookingGroupId in :groups and n.type=:type")
+                .setParameter("groups", groupIds)
+                .setParameter("type", NotificationType.QUEUE_TURN)
+                .executeUpdate();
+    }
+
     public static Notification link(Notification notification, Reservation reservation) {
         if (reservation.getRequestGroup() != null) {
             notification.setBookingGroupId(reservation.getRequestGroup().getId());
