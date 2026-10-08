@@ -3,51 +3,158 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SmartTicketing Cache Test Report</title>
+<title>SmartTicketing Redis Cache Test Report</title>
 <style>
 body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fb;color:#172033}
-.wrap{max-width:1100px;margin:40px auto;padding:0 24px}
+.wrap{max-width:1180px;margin:40px auto;padding:0 24px}
 h1{margin-bottom:8px}.sub{color:#687386;margin-bottom:28px}
 .card{background:#fff;border:1px solid #e3e7ef;border-radius:14px;padding:22px;margin:16px 0;box-shadow:0 4px 14px rgba(20,30,50,.05)}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
 .metric{padding:18px;border-radius:12px;background:#f8f9fc}.label{font-size:13px;color:#687386}.value{font-size:27px;font-weight:700;margin-top:6px}
 table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid #edf0f5;text-align:right}th:first-child,td:first-child{text-align:left}
-.on{font-weight:700}.good{font-weight:700}.note{color:#687386;line-height:1.6}
+.target{font-size:12px;color:#687386;font-weight:400;margin-left:8px}
+.summary{overflow-x:auto}.note{color:#687386;line-height:1.6}
 @media(max-width:750px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>SmartTicketing Redis Cache 부하테스트</h1>
-<div class="sub">Target: 1-common · VUs: 10 · Iterations: 100 · BASE_URL: http://localhost:8080</div>
+<h1>SmartTicketing Redis Cache 기능별 부하테스트</h1>
+<div class="sub">Profile: load · VUs: 10 · Iterations: 100 · BASE_URL: http://localhost:8080</div>
 
-<div class="card">
-<h2>핵심 결과</h2>
-<div class="grid">
-<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">5.11%</div></div>
-<div class="metric"><div class="label">P95 응답시간 개선</div><div class="value">33.93%</div></div>
-<div class="metric"><div class="label">처리량 개선</div><div class="value">-6.56%</div></div>
-</div>
-</div>
-
-<div class="card">
-<h2>Cache ON / OFF 비교</h2>
+<div class="card summary">
+<h2>전체 기능 요약</h2>
 <table>
-<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
-<tr><td>평균 응답시간</td><td>49.93 ms</td><td>52.62 ms</td><td>5.11%</td></tr>
-<tr><td>중앙값</td><td>42.32 ms</td><td>37.03 ms</td><td>-14.29%</td></tr>
-<tr><td>P95</td><td>114.64 ms</td><td>173.5 ms</td><td>33.93%</td></tr>
-<tr><td>최대 응답시간</td><td>162.13 ms</td><td>209.1 ms</td><td>22.46%</td></tr>
-<tr><td>처리량</td><td>136.996417 req/s</td><td>146.615076 req/s</td><td>-6.56%</td></tr>
-<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><th>기능</th><th>ON 평균(ms)</th><th>OFF 평균(ms)</th><th>평균 개선</th><th>P95 개선</th><th>처리량 개선</th></tr>
+<tr><td>공통 조회</td><td>52.21</td><td>60.52</td><td>13.73%</td><td>14.91%</td><td>22.47%</td></tr><tr><td>영화 목록</td><td>33.6</td><td>47.42</td><td>29.14%</td><td>18.75%</td><td>35.4%</td></tr><tr><td>상영시간 조회</td><td>63.05</td><td>40.07</td><td>-57.35%</td><td>-49.56%</td><td>-34.26%</td></tr><tr><td>좌석맵 조회</td><td>30.37</td><td>21.92</td><td>-38.55%</td><td>-94.8%</td><td>-24.38%</td></tr><tr><td>거리순 극장 조회</td><td>49.39</td><td>44.3</td><td>-11.49%</td><td>-35.82%</td><td>-10.7%</td></tr><tr><td>도보 극장 조회</td><td>17.54</td><td>64.28</td><td>72.71%</td><td>86.33%</td><td>37.02%</td></tr><tr><td>대중교통 극장 조회</td><td>37.27</td><td>28.58</td><td>-30.41%</td><td>-32.24%</td><td>-6.99%</td></tr>
 </table>
 </div>
 
 <div class="card">
-<h2>테스트 검증</h2>
-<p>Cache ON: checks 200/1, HTTP 실패율 0%</p>
-<p>Cache OFF: checks 200/1, HTTP 실패율 0%</p>
-<p class="note">        Cache ON/OFF                 .                                .</p>
+<h2>공통 조회 <span class="target">1-common</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">13.73%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">14.91%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">22.47%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>52.21 ms</td><td>60.52 ms</td><td>13.73%</td></tr>
+<tr><td>중앙값</td><td>35.26 ms</td><td>44.61 ms</td><td>20.96%</td></tr>
+<tr><td>P95</td><td>131.79 ms</td><td>154.89 ms</td><td>14.91%</td></tr>
+<tr><td>최대 응답시간</td><td>404.09 ms</td><td>168.98 ms</td><td>-139.13%</td></tr>
+<tr><td>처리량</td><td>148.800622 req/s</td><td>121.500556 req/s</td><td>22.47%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>200/1</td><td>200/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>영화 목록 <span class="target">1-catalog</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">29.14%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">18.75%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">35.40%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>33.6 ms</td><td>47.42 ms</td><td>29.14%</td></tr>
+<tr><td>중앙값</td><td>24.18 ms</td><td>30.61 ms</td><td>21.01%</td></tr>
+<tr><td>P95</td><td>118.74 ms</td><td>146.15 ms</td><td>18.75%</td></tr>
+<tr><td>최대 응답시간</td><td>179.67 ms</td><td>316.54 ms</td><td>43.24%</td></tr>
+<tr><td>처리량</td><td>236.809616 req/s</td><td>174.891646 req/s</td><td>35.40%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>200/1</td><td>200/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>상영시간 조회 <span class="target">3-showtime</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">-57.35%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">-49.56%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">-34.26%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>63.05 ms</td><td>40.07 ms</td><td>-57.35%</td></tr>
+<tr><td>중앙값</td><td>41.85 ms</td><td>19.87 ms</td><td>-110.62%</td></tr>
+<tr><td>P95</td><td>192.24 ms</td><td>128.54 ms</td><td>-49.56%</td></tr>
+<tr><td>최대 응답시간</td><td>318.77 ms</td><td>725.75 ms</td><td>56.08%</td></tr>
+<tr><td>처리량</td><td>138.990101 req/s</td><td>211.409026 req/s</td><td>-34.26%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>400/1</td><td>400/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>좌석맵 조회 <span class="target">3-seat</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">-38.55%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">-94.80%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">-24.38%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>30.37 ms</td><td>21.92 ms</td><td>-38.55%</td></tr>
+<tr><td>중앙값</td><td>14.24 ms</td><td>11.58 ms</td><td>-22.97%</td></tr>
+<tr><td>P95</td><td>146.57 ms</td><td>75.24 ms</td><td>-94.80%</td></tr>
+<tr><td>최대 응답시간</td><td>148.21 ms</td><td>129.45 ms</td><td>-14.49%</td></tr>
+<tr><td>처리량</td><td>207.63072 req/s</td><td>274.554206 req/s</td><td>-24.38%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>200/1</td><td>200/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>거리순 극장 조회 <span class="target">5-distance</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">-11.49%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">-35.82%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">-10.70%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>49.39 ms</td><td>44.3 ms</td><td>-11.49%</td></tr>
+<tr><td>중앙값</td><td>19.45 ms</td><td>28.78 ms</td><td>32.42%</td></tr>
+<tr><td>P95</td><td>202.53 ms</td><td>149.12 ms</td><td>-35.82%</td></tr>
+<tr><td>최대 응답시간</td><td>255.39 ms</td><td>244.17 ms</td><td>-4.60%</td></tr>
+<tr><td>처리량</td><td>99.785175 req/s</td><td>111.73863 req/s</td><td>-10.70%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>200/1</td><td>200/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>도보 극장 조회 <span class="target">5-walk</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">72.71%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">86.33%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">37.02%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>17.54 ms</td><td>64.28 ms</td><td>72.71%</td></tr>
+<tr><td>중앙값</td><td>14.48 ms</td><td>32.48 ms</td><td>55.42%</td></tr>
+<tr><td>P95</td><td>41 ms</td><td>300.01 ms</td><td>86.33%</td></tr>
+<tr><td>최대 응답시간</td><td>102.32 ms</td><td>304.76 ms</td><td>66.43%</td></tr>
+<tr><td>처리량</td><td>73.922055 req/s</td><td>53.951608 req/s</td><td>37.02%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>100/1</td><td>100/1</td><td>-</td></tr>
+</table>
+</div><div class="card">
+<h2>대중교통 극장 조회 <span class="target">5-transit</span></h2>
+<div class="grid">
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">-30.41%</div></div>
+<div class="metric"><div class="label">P95 개선</div><div class="value">-32.24%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">-6.99%</div></div>
+</div>
+<table>
+<tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
+<tr><td>평균 응답시간</td><td>37.27 ms</td><td>28.58 ms</td><td>-30.41%</td></tr>
+<tr><td>중앙값</td><td>24.13 ms</td><td>15.22 ms</td><td>-58.54%</td></tr>
+<tr><td>P95</td><td>155.79 ms</td><td>117.81 ms</td><td>-32.24%</td></tr>
+<tr><td>최대 응답시간</td><td>171.41 ms</td><td>159.04 ms</td><td>-7.78%</td></tr>
+<tr><td>처리량</td><td>37.906628 req/s</td><td>40.753969 req/s</td><td>-6.99%</td></tr>
+<tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
+<tr><td>Checks</td><td>100/1</td><td>100/1</td><td>-</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>테스트 방식</h2>
+<p class="note">동일한 k6 조건으로 각 기능을 Redis Cache ON과 OFF에서 각각 측정했습니다. 모든 기능의 ON 측정을 완료한 뒤 OFF 측정을 진행하여 기능별 결과를 비교합니다.</p>
+<p class="note">Cache ON/OFF는 Smart-booking summary cache 모드만 전환하며 QR Redis는 계속 ON 상태입니다.</p>
 </div>
 </div>
 </body>
