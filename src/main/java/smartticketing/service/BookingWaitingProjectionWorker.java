@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /** Rebuild even after Redis loss when all outbox events were already acknowledged. */
 @Component
-@ConditionalOnProperty(name="booking.waiting.redis-enabled",havingValue="true",matchIfMissing=true)
+@ConditionalOnProperty(name="app.cache.enabled",havingValue="true")
 public class BookingWaitingProjectionWorker {
     private final BookingWaitingProjection projection;
     private final AdminMaintenanceGate gate;

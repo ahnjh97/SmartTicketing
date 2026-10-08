@@ -51,6 +51,19 @@ class BookingWaitingRedisTests {
         assertThat(actual.items()).allMatch(i -> i.aheadCount()==1);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
+    @Test void disabledRanksUseDbAndProjectionDoesNotContactRedis() {
+        var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
+        var unused=org.mockito.Mockito.mock(StringRedisTemplate.class);
+        var disabled=new BookingWaitingRanks(unused,false,db.jdbcUrl());
+        var projection=new BookingWaitingProjection(SharedEntityManagerCreator.createSharedEntityManager(db.factory()),disabled,manager());
+        projection.refresh(first.shows().getFirst());
+        projection.repairIfNeeded(first.shows().getFirst());
+        var expected=state(second);
+        readStatements.clear();
+        assertThat(cachedState(second,disabled).items()).isEqualTo(expected.items());
+        assertThat(readStatements).anyMatch(sql -> sql.contains("count(") && sql.contains("waiting_queues"));
+        org.mockito.Mockito.verifyNoInteractions(unused);
+    }
     @Test void versionMismatchAndRedisLossFallBackThenRebuild() {
         var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
         for(var show:first.shows()) projection().refresh(show);

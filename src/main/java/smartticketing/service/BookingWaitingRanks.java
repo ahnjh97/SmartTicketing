@@ -48,7 +48,7 @@ public class BookingWaitingRanks {
             """,List.class);
 
     public BookingWaitingRanks(StringRedisTemplate redis,
-            @Value("${booking.waiting.redis-enabled:true}") boolean enabled,
+            @Value("${app.cache.enabled:false}") boolean enabled,
             @Value("${spring.datasource.url}") String database) {
         this.redis=redis; this.enabled=enabled;
         prefix="booking-ranks:v1:"+UUID.nameUUIDFromBytes(database.getBytes(java.nio.charset.StandardCharsets.UTF_8))+":";
