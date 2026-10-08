@@ -69,7 +69,7 @@ public class MainService {
         MainChartResponseDto cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
         if (cached != null) {
             hitCount.incrementAndGet();
-            localCache.put(cacheKey, new LocalCacheEntry(cached, localCacheTtlNanos));
+            cacheLocally(cacheKey, cached);
             logProgress();
             logSlowRequest("L2_HIT", requestStart, 0L, 0L);
             return cached;
@@ -101,7 +101,7 @@ public class MainService {
             long secondGetMs = elapsedMs(secondGetStart);
             if (cached != null) {
                 hitCount.incrementAndGet();
-                localCache.put(cacheKey, LocalCacheEntry.create(cached, localCacheTtlNanos));
+                cacheLocally(cacheKey, cached);
                 newFuture.complete(cached);
                 logProgress();
                 logSlowRequest("LOADER_SECOND_HIT", requestStart, 0L, secondGetMs);
@@ -109,18 +109,9 @@ public class MainService {
             }
 
             long dbStart = System.nanoTime();
-            long totalAudience = movieRepository.sumActiveAudienceCount();
-
-            List<MovieChartResponseDto> nowShowing = toChart(
-                    movieRepository.findTop10ByActiveTrueAndReleaseDateLessThanEqualOrderByAudienceCountDescReleaseDateDesc(baseDate),
-                    totalAudience);
-            List<MovieChartResponseDto> comingSoon = toChart(
-                    movieRepository.findTop10ByActiveTrueAndReleaseDateAfterOrderByReleaseDateAscTitleAsc(baseDate),
-                    totalAudience);
+            MainChartResponseDto response = loadChart(baseDate);
             long dbMs = elapsedMs(dbStart);
-
-            MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
-            localCache.put(cacheKey, new LocalCacheEntry(response, localCacheTtlNanos));
+            cacheLocally(cacheKey, response);
 
             long putStart = System.nanoTime();
             queryCache.put("main", cacheKey, response);
@@ -138,6 +129,17 @@ public class MainService {
         } finally {
             loadingCache.remove(cacheKey, newFuture);
         }
+    }
+
+    private MainChartResponseDto loadChart(LocalDate date) {
+        long total = movieRepository.sumActiveAudienceCount();
+        return new MainChartResponseDto(toChart(movieRepository
+                .findTop10ByActiveTrueAndReleaseDateLessThanEqualOrderByAudienceCountDescReleaseDateDesc(date), total),
+                toChart(movieRepository.findTop10ByActiveTrueAndReleaseDateAfterOrderByReleaseDateAscTitleAsc(date), total));
+    }
+
+    private void cacheLocally(String key, MainChartResponseDto value) {
+        localCache.put(key, LocalCacheEntry.create(value, localCacheTtlNanos));
     }
 
     private void logLoaderTiming(long dbMs, long putMs, long secondGetMs) {
