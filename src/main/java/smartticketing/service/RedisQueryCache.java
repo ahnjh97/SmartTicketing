@@ -1,5 +1,7 @@
 package smartticketing.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,8 @@ import java.time.Duration;
 /** Read-only API query cache. Redis failures fall back to the existing query path. */
 @Component
 public class RedisQueryCache {
+    private static final Logger log = LoggerFactory.getLogger(RedisQueryCache.class);
+    private static final long SLOW_MS = 50L;
     private final StringRedisTemplate redis;
     private final boolean enabled;
     private final Duration ttl;
@@ -34,8 +38,16 @@ public class RedisQueryCache {
     public <T> T get(String namespace, String logicalKey, Class<T> type) {
         if (!available()) return null;
         try {
+            long redisStart = System.nanoTime();
             String value = redis.opsForValue().get(key(namespace, logicalKey));
-            return value == null ? null : json.readValue(value, type);
+            long redisMs = elapsedMs(redisStart);
+            if (redisMs >= SLOW_MS) log.warn("REDIS_QUERY_CACHE_GET namespace={} hit={} duration={}ms", namespace, value != null, redisMs);
+            if (value == null) return null;
+            long deserializeStart = System.nanoTime();
+            T result = json.readValue(value, type);
+            long deserializeMs = elapsedMs(deserializeStart);
+            if (deserializeMs >= SLOW_MS) log.warn("REDIS_QUERY_CACHE_DESERIALIZE namespace={} duration={}ms bytes={}", namespace, deserializeMs, value.length());
+            return result;
         } catch (RuntimeException ex) {
             failed();
             return null;
@@ -45,8 +57,16 @@ public class RedisQueryCache {
     public <T> T get(String namespace, String logicalKey, TypeReference<T> type) {
         if (!available()) return null;
         try {
+            long redisStart = System.nanoTime();
             String value = redis.opsForValue().get(key(namespace, logicalKey));
-            return value == null ? null : json.readValue(value, type);
+            long redisMs = elapsedMs(redisStart);
+            if (redisMs >= SLOW_MS) log.warn("REDIS_QUERY_CACHE_GET namespace={} hit={} duration={}ms", namespace, value != null, redisMs);
+            if (value == null) return null;
+            long deserializeStart = System.nanoTime();
+            T result = json.readValue(value, type);
+            long deserializeMs = elapsedMs(deserializeStart);
+            if (deserializeMs >= SLOW_MS) log.warn("REDIS_QUERY_CACHE_DESERIALIZE namespace={} duration={}ms bytes={}", namespace, deserializeMs, value.length());
+            return result;
         } catch (RuntimeException ex) {
             failed();
             return null;
@@ -56,10 +76,20 @@ public class RedisQueryCache {
     public void put(String namespace, String logicalKey, Object value) {
         if (value == null || !available()) return;
         try {
-            redis.opsForValue().set(key(namespace, logicalKey), json.writeValueAsString(value), ttl);
+            long serializeStart = System.nanoTime();
+            String payload = json.writeValueAsString(value);
+            long serializeMs = elapsedMs(serializeStart);
+            long redisStart = System.nanoTime();
+            redis.opsForValue().set(key(namespace, logicalKey), payload, ttl);
+            long redisMs = elapsedMs(redisStart);
+            if (serializeMs >= SLOW_MS || redisMs >= SLOW_MS) log.warn("REDIS_QUERY_CACHE_PUT namespace={} serialize={}ms redis={}ms bytes={}", namespace, serializeMs, redisMs, payload.length());
         } catch (RuntimeException ex) {
             failed();
         }
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 
     private String key(String namespace, String logicalKey) {
