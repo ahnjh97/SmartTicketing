@@ -5,6 +5,27 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const LAT = __ENV.LAT || '37.5665';
 const LON = __ENV.LON || '126.9780';
 const ADDRESS = __ENV.ADDRESS || '';
+const LOGIN_ID = __ENV.LOGIN_ID || '';
+const PASSWORD = __ENV.PASSWORD || '';
+
+function authHeaders() {
+    if (!LOGIN_ID || !PASSWORD) {
+        throw new Error('nearby k6 test requires LOGIN_ID and PASSWORD environment variables');
+    }
+
+    const login = http.post(
+        `${BASE_URL}/api/auth/login`,
+        JSON.stringify({ loginId: LOGIN_ID, password: PASSWORD }),
+        { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    if (login.status !== 200) {
+        throw new Error(`nearby login failed: status=${login.status}`);
+    }
+
+    const body = login.json();
+    return { Authorization: `Bearer ${body.accessToken}` };
+}
 
 const VUS = Number(__ENV.VUS || 10);
 const ITERATIONS = Number(__ENV.ITERATIONS || 100);
@@ -31,6 +52,7 @@ export default function () {
         (ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : '');
 
     const res = http.get(url, {
+        headers: authHeaders(),
         tags: { cache_test: '05-nearby', endpoint: 'nearby-distance' },
         timeout: __ENV.HTTP_TIMEOUT || '60s',
     });
