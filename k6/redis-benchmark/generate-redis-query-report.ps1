@@ -1,5 +1,5 @@
 param(
-    [string]$ResultRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'benchmark-results\redis-query')
+    [string]$ResultRoot = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path 'benchmark-results\redis-query')
 )
 
 $ErrorActionPreference = 'Stop'
