@@ -23,12 +23,15 @@ public class MainService {
 
     private static final Logger log = LoggerFactory.getLogger(MainService.class);
     private static final long SLOW_REQUEST_MS = 50L;
+    private static final long LOCAL_CACHE_TTL_MS = 500L;
 
     private final MovieRepository movieRepository;
     private final String referenceDate;
     private final RedisQueryCache queryCache;
     private final ConcurrentHashMap<String, CompletableFuture<MainChartResponseDto>> loadingCache =
             new ConcurrentHashMap<>();
+    /** Short L1 cache prevents a Redis round-trip for the hottest main-page query. */
+    private final ConcurrentHashMap<String, LocalCacheEntry> localCache = new ConcurrentHashMap<>();
 
     private final AtomicLong requestCount = new AtomicLong();
     private final AtomicLong hitCount = new AtomicLong();
@@ -50,11 +53,23 @@ public class MainService {
         LocalDate baseDate = getBaseDate();
         String cacheKey = baseDate.toString();
 
+        LocalCacheEntry localEntry = localCache.get(cacheKey);
+        if (localEntry != null && !localEntry.isExpired()) {
+            hitCount.incrementAndGet();
+            logProgress();
+            logSlowRequest("L1_HIT", requestStart, 0L, 0L);
+            return localEntry.value();
+        }
+        if (localEntry != null) {
+            localCache.remove(cacheKey, localEntry);
+        }
+
         MainChartResponseDto cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
         if (cached != null) {
             hitCount.incrementAndGet();
+            localCache.put(cacheKey, new LocalCacheEntry(cached));
             logProgress();
-            logSlowRequest("HIT", requestStart, 0L, 0L);
+            logSlowRequest("L2_HIT", requestStart, 0L, 0L);
             return cached;
         }
 
@@ -84,6 +99,7 @@ public class MainService {
             long secondGetMs = elapsedMs(secondGetStart);
             if (cached != null) {
                 hitCount.incrementAndGet();
+                localCache.put(cacheKey, new LocalCacheEntry(cached));
                 newFuture.complete(cached);
                 logProgress();
                 logSlowRequest("LOADER_SECOND_HIT", requestStart, 0L, secondGetMs);
@@ -102,6 +118,7 @@ public class MainService {
             long dbMs = elapsedMs(dbStart);
 
             MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
+            localCache.put(cacheKey, new LocalCacheEntry(response));
 
             long putStart = System.nanoTime();
             queryCache.put("main", cacheKey, response);
@@ -147,6 +164,16 @@ public class MainService {
         if (count % 100 == 0) {
             log.info("MAIN_CACHE_STATS requests={} hits={} misses={} loaders={} joins={}",
                     count, hitCount.get(), missCount.get(), loaderCount.get(), joinCount.get());
+        }
+    }
+
+    private record LocalCacheEntry(MainChartResponseDto value, long expiresAtNanos) {
+        private LocalCacheEntry(MainChartResponseDto value) {
+            this(value, System.nanoTime() + LOCAL_CACHE_TTL_MS * 1_000_000L);
+        }
+
+        private boolean isExpired() {
+            return System.nanoTime() >= expiresAtNanos;
         }
     }
 
