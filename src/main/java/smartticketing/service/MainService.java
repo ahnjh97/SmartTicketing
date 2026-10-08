@@ -18,16 +18,22 @@ public class MainService {
 
     private final MovieRepository movieRepository;
     private final String referenceDate;
+    private final RedisQueryCache queryCache;
 
     public MainService(
             MovieRepository movieRepository,
-            @Value("${app.reference-date:}") String referenceDate) {
+            @Value("${app.reference-date:}") String referenceDate,
+            RedisQueryCache queryCache) {
         this.movieRepository = movieRepository;
         this.referenceDate = referenceDate;
+        this.queryCache = queryCache;
     }
 
     public MainChartResponseDto getMainChart() {
         LocalDate baseDate = getBaseDate();
+        String cacheKey = baseDate.toString();
+        MainChartResponseDto cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
+        if (cached != null) return cached;
         long totalAudience = movieRepository.sumActiveAudienceCount();
 
         List<MovieChartResponseDto> nowShowing = toChart(
@@ -37,7 +43,9 @@ public class MainService {
                 movieRepository.findTop10ByActiveTrueAndReleaseDateAfterOrderByReleaseDateAscTitleAsc(baseDate),
                 totalAudience);
 
-        return new MainChartResponseDto(nowShowing, comingSoon);
+        MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
+        queryCache.put("main", cacheKey, response);
+        return response;
     }
 
     // 설정된 기준일이 있으면 그 날짜, 없으면 오늘(한국 시간)
