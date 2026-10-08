@@ -4,9 +4,9 @@ param(
     [string]$Duration = '30s',
     [int]$PreAllocatedVUs = 100,
     [int]$MaxVUs = 1000,
-    [int]$MovieId = 1,
+    [int]$MovieId = 14,
     [int]$TheaterId = 0,
-    [int]$ShowtimeId = 0,
+    [int]$ShowtimeId = 115260,
     [string]$Date = '',
     [double]$Latitude = 37.5665,
     [double]$Longitude = 126.9780
