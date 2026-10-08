@@ -39,25 +39,64 @@ function Set-CacheMode([bool]$Enabled) {
     if ($LASTEXITCODE -ne 0) { throw "캐시 모드 변경 실패: $mode" }
 }
 
+function Get-ListeningBackendPids {
+    $connections = @(Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue)
+    return @($connections | Select-Object -ExpandProperty OwningProcess -Unique)
+}
+
 function Wait-Backend {
-    for ($i=0; $i -lt 60; $i++) {
+    param([int]$TimeoutSeconds = 120)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    Write-Host ("백엔드 시작 대기: 최대 {0}초" -f $TimeoutSeconds) -ForegroundColor Yellow
+
+    while ((Get-Date) -lt $deadline) {
         try {
-            $r = Invoke-WebRequest -Uri "$BaseUrl/api/main" -UseBasicParsing -TimeoutSec 2
-            if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { return }
+            $r = Invoke-WebRequest -Uri "$BaseUrl/api/main" -UseBasicParsing -TimeoutSec 3
+            if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) {
+                $pids = @(Get-ListeningBackendPids)
+                if ($pids.Count -gt 0) {
+                    $script:managedBackendPids = @($pids)
+                    Write-Host ("백엔드 정상 응답 확인 (PID: {0})" -f ($pids -join ', ')) -ForegroundColor Green
+                    Start-Sleep -Seconds 5
+                    return
+                }
+            }
         } catch {}
-        Start-Sleep -Seconds 1
+        Start-Sleep -Seconds 2
     }
-    throw "백엔드가 60초 안에 $BaseUrl 에서 응답하지 않았습니다."
+
+    throw ("백엔드가 {0}초 안에 정상 응답하지 않았습니다." -f $TimeoutSeconds)
+}
+
+function Wait-BackendStopped {
+    param([int]$TimeoutSeconds = 60)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    Write-Host ("백엔드 종료 대기: 최대 {0}초" -f $TimeoutSeconds) -ForegroundColor Yellow
+
+    while ((Get-Date) -lt $deadline) {
+        $pids = @(Get-ListeningBackendPids)
+        if ($pids.Count -eq 0) {
+            Start-Sleep -Seconds 3
+            Write-Host "8080 포트 완전 종료 확인" -ForegroundColor Green
+            return
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    $remaining = @(Get-ListeningBackendPids)
+    throw ("백엔드가 {0}초 안에 종료되지 않았습니다. 현재 PID: {1}" -f $TimeoutSeconds, ($remaining -join ', '))
 }
 
 function Start-ManagedBackend([bool]$Enabled) {
-    $port = @(Get-ListeningBackendPids)
-    if ($port.Count -gt 0) {
-        throw "8080 포트가 이미 사용 중입니다. IDE의 백엔드를 종료한 뒤 -ManageBackend로 실행하세요."
+    $existing = @(Get-ListeningBackendPids)
+    if ($existing.Count -gt 0) {
+        throw ("8080 포트가 이미 사용 중입니다. PID: {0}. IDE 백엔드를 먼저 종료하세요." -f ($existing -join ', '))
     }
 
     $action = if ($Enabled) { "on" } else { "off" }
-    $backendProcess = Start-Process powershell.exe -ArgumentList @(
+    $script:backendProcess = Start-Process powershell.exe -ArgumentList @(
         "-NoProfile","-ExecutionPolicy","Bypass","-File",
         (Join-Path $root "scripts\local-dev.ps1"),"-Action",$action
     ) -PassThru -WindowStyle Minimized
@@ -69,16 +108,12 @@ function Stop-ManagedBackend {
     $pids = @($script:managedBackendPids + @(Get-ListeningBackendPids) | Where-Object { $_ } | Select-Object -Unique)
 
     foreach ($pid in $pids) {
-        try {
-            & taskkill.exe /PID ([int]$pid) /T /F | Out-Null
-        } catch {}
+        try { & taskkill.exe /PID ([int]$pid) /T /F | Out-Null } catch {}
     }
 
-    if ($backendProcess) {
-        try {
-            & taskkill.exe /PID $backendProcess.Id /T /F | Out-Null
-        } catch {}
-        $backendProcess = $null
+    if ($script:backendProcess) {
+        try { & taskkill.exe /PID $script:backendProcess.Id /T /F | Out-Null } catch {}
+        $script:backendProcess = $null
     }
 
     $script:managedBackendPids = @()
