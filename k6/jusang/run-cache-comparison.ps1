@@ -26,7 +26,6 @@ $onSummary = Join-Path $resultsDir "cache-on-summary.json"
 $offSummary = Join-Path $resultsDir "cache-off-summary.json"
 $backendProcess = $null
 
-if (-not (Test-Path $runner)) { throw "run-cache-test.ps1을 찾을 수 없습니다." }
 if (-not (Test-Path $reportGenerator)) { throw "generate-cache-report.ps1을 찾을 수 없습니다." }
 if (-not (Get-Command k6 -ErrorAction SilentlyContinue)) { throw "k6 명령을 찾을 수 없습니다." }
 
