@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("1-common","1-catalog","3-showtime","3-seat","5-distance","5-walk","5-transit")]
-    [string]$Target = "1-common",
+    [ValidateSet("all","1-common","1-catalog","3-showtime","3-seat","5-distance","5-walk","5-transit")]
+    [string]$Target = "all",
     [ValidateSet("smoke","load")]
     [string]$Profile = "load",
     [string]$BaseUrl = "http://localhost:8080",
@@ -22,8 +22,9 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $reportGenerator = Join-Path $PSScriptRoot "generate-cache-report.ps1"
 $resultsDir = Join-Path $PSScriptRoot "cache-comparison-results"
 $jsonPath = Join-Path $PSScriptRoot "cache-test-results.json"
-$onSummary = Join-Path $resultsDir "cache-on-summary.json"
-$offSummary = Join-Path $resultsDir "cache-off-summary.json"
+$summaryDir = $resultsDir
+$targetNames = @("1-common","1-catalog","3-showtime","3-seat","5-distance","5-walk","5-transit")
+$targetsToRun = if ($Target -eq "all") { $targetNames } else { @($Target) }
 $backendProcess = $null
 $managedBackendPids = @()
 
@@ -153,7 +154,7 @@ function Stop-ManagedBackend {
     throw ("     60               .    PID: {0}" -f ($remaining -join ', '))
 }
 
-function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
+function Invoke-K6Summary([string]$TestTarget, [string]$Mode, [string]$SummaryPath) {
     $env:BASE_URL = $BaseUrl
     $env:VUS = "$Vus"
     $env:ITERATIONS = "$Iterations"
@@ -165,7 +166,7 @@ function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
     $env:LON = $Lon
     $env:ADDRESS = $Address
 
-    $scriptName = switch ($Target) {
+    $scriptName = switch ($TestTarget) {
         "1-common" { "01-common-query.js" }
         "1-catalog" { "01-catalog-query.js" }
         "3-showtime" { "03-showtime-query.js" }
@@ -218,9 +219,12 @@ function Improvement([double]$on, [double]$off) {
 
 try {
     Write-Host ""
-    Write-Host "=== SmartTicketing Redis Cache ON/OFF       ===" -ForegroundColor Green
-    Write-Host "Target=$Target Profile=$Profile VUs=$Vus Iterations=$Iterations"
+    Write-Host "=== SmartTicketing Redis Cache ON/OFF =================================" -ForegroundColor Green
+    Write-Host "Targets=$($targetsToRun -join ', ') Profile=$Profile VUs=$Vus Iterations=$Iterations"
 
+    $allResults = [ordered]@{}
+
+    # Start ON once, then run every feature against the same ON backend.
     if ($ManageBackend) {
         Set-CacheMode $true
         Start-ManagedBackend $true
@@ -229,7 +233,12 @@ try {
         Write-Host "Cache ON      .                                  ." -ForegroundColor Yellow
     }
 
-    Invoke-K6Summary "CACHE ON" $onSummary
+    foreach ($testTarget in $targetsToRun) {
+        $onSummary = Join-Path $summaryDir ("{0}-cache-on-summary.json" -f $testTarget)
+        Write-Host ""
+        Write-Host "===== [$testTarget] CACHE ON =====" -ForegroundColor Green
+        Invoke-K6Summary $testTarget "CACHE ON" $onSummary
+    }
 
     if ($ManageBackend) {
         Stop-ManagedBackend
@@ -241,35 +250,45 @@ try {
         Read-Host "             Enter"
     }
 
-    Invoke-K6Summary "CACHE OFF" $offSummary
+    foreach ($testTarget in $targetsToRun) {
+        $offSummary = Join-Path $summaryDir ("{0}-cache-off-summary.json" -f $testTarget)
+        Write-Host ""
+        Write-Host "===== [$testTarget] CACHE OFF =====" -ForegroundColor Yellow
+        Invoke-K6Summary $testTarget "CACHE OFF" $offSummary
 
-    $on = Convert-Summary $onSummary
-    $off = Convert-Summary $offSummary
+        $on = Convert-Summary (Join-Path $summaryDir ("{0}-cache-on-summary.json" -f $testTarget))
+        $off = Convert-Summary $offSummary
+
+        $allResults[$testTarget] = [ordered]@{
+            cache_on = $on
+            cache_off = $off
+            comparison = [ordered]@{
+                avg_response_time_improvement_percent = Improvement $on.http_req_duration_ms.avg $off.http_req_duration_ms.avg
+                median_response_time_improvement_percent = Improvement $on.http_req_duration_ms.median $off.http_req_duration_ms.median
+                p95_response_time_improvement_percent = Improvement $on.http_req_duration_ms.p95 $off.http_req_duration_ms.p95
+                max_response_time_improvement_percent = Improvement $on.http_req_duration_ms.max $off.http_req_duration_ms.max
+                throughput_improvement_percent = [math]::Round((($on.throughput_req_per_sec - $off.throughput_req_per_sec) / $off.throughput_req_per_sec) * 100, 2)
+            }
+        }
+    }
 
     $data = [ordered]@{
         generated_at = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         test = [ordered]@{
-            target = $Target
+            target = if ($Target -eq "all") { "all" } else { $Target }
+            targets = $targetsToRun
             profile = $Profile
             base_url = $BaseUrl
             vus = $Vus
             iterations = $Iterations
         }
-        results = [ordered]@{
-            cache_on = $on
-            cache_off = $off
-        }
+        results = $allResults
         comparison = [ordered]@{
-            avg_response_time_improvement_percent = Improvement $on.http_req_duration_ms.avg $off.http_req_duration_ms.avg
-            median_response_time_improvement_percent = Improvement $on.http_req_duration_ms.median $off.http_req_duration_ms.median
-            p95_response_time_improvement_percent = Improvement $on.http_req_duration_ms.p95 $off.http_req_duration_ms.p95
-            max_response_time_improvement_percent = Improvement $on.http_req_duration_ms.max $off.http_req_duration_ms.max
-            throughput_improvement_percent = [math]::Round((($on.throughput_req_per_sec - $off.throughput_req_per_sec) / $off.throughput_req_per_sec) * 100, 2)
             interpretation = "        Cache ON/OFF                 .                                ."
         }
     }
 
-    $data | ConvertTo-Json -Depth 8 | Set-Content -Path $jsonPath -Encoding UTF8
+    $data | ConvertTo-Json -Depth 12 | Set-Content -Path $jsonPath -Encoding UTF8
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $reportGenerator
     if ($LASTEXITCODE -ne 0) { throw "HTML          " }
 
