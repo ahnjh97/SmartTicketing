@@ -27,8 +27,8 @@ $offSummary = Join-Path $resultsDir "cache-off-summary.json"
 $backendProcess = $null
 $managedBackendPids = @()
 
-if (-not (Test-Path $reportGenerator)) { throw "generate-cache-report.ps1을 찾을 수 없습니다." }
-if (-not (Get-Command k6 -ErrorAction SilentlyContinue)) { throw "k6 명령을 찾을 수 없습니다." }
+if (-not (Test-Path $reportGenerator)) { throw "generate-cache-report.ps1           ." }
+if (-not (Get-Command k6 -ErrorAction SilentlyContinue)) { throw "k6              ." }
 
 if ($Profile -eq "smoke") { $Vus = 1; $Iterations = 1 }
 New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
@@ -36,7 +36,7 @@ New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 function Set-CacheMode([bool]$Enabled) {
     $mode = if ($Enabled) { "set-on" } else { "set-off" }
     & cmd.exe /d /c "`"$root\local.cmd`" $mode"
-    if ($LASTEXITCODE -ne 0) { throw "캐시 모드 변경 실패: $mode" }
+    if ($LASTEXITCODE -ne 0) { throw "           : $mode" }
 }
 
 function Get-ListeningBackendPids {
@@ -48,7 +48,7 @@ function Wait-Backend {
     param([int]$TimeoutSeconds = 120)
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    Write-Host ("백엔드 시작 대기: 최대 {0}초" -f $TimeoutSeconds) -ForegroundColor Yellow
+    Write-Host ("         :    {0} " -f $TimeoutSeconds) -ForegroundColor Yellow
 
     while ((Get-Date) -lt $deadline) {
         try {
@@ -57,7 +57,7 @@ function Wait-Backend {
                 $pids = @(Get-ListeningBackendPids)
                 if ($pids.Count -gt 0) {
                     $script:managedBackendPids = @($pids)
-                    Write-Host ("백엔드 정상 응답 확인 (PID: {0})" -f ($pids -join ', ')) -ForegroundColor Green
+                    Write-Host ("             (PID: {0})" -f ($pids -join ', ')) -ForegroundColor Green
                     Start-Sleep -Seconds 5
                     return
                 }
@@ -66,33 +66,33 @@ function Wait-Backend {
         Start-Sleep -Seconds 2
     }
 
-    throw ("백엔드가 {0}초 안에 정상 응답하지 않았습니다." -f $TimeoutSeconds)
+    throw ("     {0}                  ." -f $TimeoutSeconds)
 }
 
 function Wait-BackendStopped {
     param([int]$TimeoutSeconds = 60)
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    Write-Host ("백엔드 종료 대기: 최대 {0}초" -f $TimeoutSeconds) -ForegroundColor Yellow
+    Write-Host ("         :    {0} " -f $TimeoutSeconds) -ForegroundColor Yellow
 
     while ((Get-Date) -lt $deadline) {
         $pids = @(Get-ListeningBackendPids)
         if ($pids.Count -eq 0) {
             Start-Sleep -Seconds 3
-            Write-Host "8080 포트 완전 종료 확인" -ForegroundColor Green
+            Write-Host "8080            " -ForegroundColor Green
             return
         }
         Start-Sleep -Seconds 2
     }
 
     $remaining = @(Get-ListeningBackendPids)
-    throw ("백엔드가 {0}초 안에 종료되지 않았습니다. 현재 PID: {1}" -f $TimeoutSeconds, ($remaining -join ', '))
+    throw ("     {0}               .    PID: {1}" -f $TimeoutSeconds, ($remaining -join ', '))
 }
 
 function Start-ManagedBackend([bool]$Enabled) {
     $existing = @(Get-ListeningBackendPids)
     if ($existing.Count -gt 0) {
-        throw ("8080 포트가 이미 사용 중입니다. PID: {0}. IDE 백엔드를 먼저 종료하세요." -f ($existing -join ', '))
+        throw ("8080               . PID: {0}. IDE              ." -f ($existing -join ', '))
     }
 
     $action = if ($Enabled) { "on" } else { "off" }
@@ -143,9 +143,9 @@ function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
     }
 
     $scriptPath = Join-Path $PSScriptRoot $scriptName
-    Write-Host "[$Mode] k6 실행: $scriptName" -ForegroundColor Cyan
+    Write-Host "[$Mode] k6   : $scriptName" -ForegroundColor Cyan
     & k6 run $scriptPath --summary-export $SummaryPath
-    if ($LASTEXITCODE -ne 0) { throw "[$Mode] k6 테스트 실패" }
+    if ($LASTEXITCODE -ne 0) { throw "[$Mode] k6       " }
 }
 
 function Convert-Summary([string]$Path) {
@@ -179,7 +179,7 @@ function Improvement([double]$on, [double]$off) {
 
 try {
     Write-Host ""
-    Write-Host "=== SmartTicketing Redis Cache ON/OFF 자동 비교 ===" -ForegroundColor Green
+    Write-Host "=== SmartTicketing Redis Cache ON/OFF       ===" -ForegroundColor Green
     Write-Host "Target=$Target Profile=$Profile VUs=$Vus Iterations=$Iterations"
 
     if ($ManageBackend) {
@@ -187,7 +187,7 @@ try {
         Start-ManagedBackend $true
     } else {
         Set-CacheMode $true
-        Write-Host "Cache ON 저장 완료. 현재 실행 중인 백엔드가 반드시 재시작된 상태인지 확인하세요." -ForegroundColor Yellow
+        Write-Host "Cache ON      .                                  ." -ForegroundColor Yellow
     }
 
     Invoke-K6Summary "CACHE ON" $onSummary
@@ -198,8 +198,8 @@ try {
         Start-ManagedBackend $false
     } else {
         Set-CacheMode $false
-        Write-Host "Cache OFF 저장 완료. 백엔드를 재시작한 뒤 Enter를 누르세요." -ForegroundColor Yellow
-        Read-Host "백엔드 재시작 완료 후 Enter"
+        Write-Host "Cache OFF      .             Enter      ." -ForegroundColor Yellow
+        Read-Host "             Enter"
     }
 
     Invoke-K6Summary "CACHE OFF" $offSummary
@@ -226,16 +226,16 @@ try {
             p95_response_time_improvement_percent = Improvement $on.http_req_duration_ms.p95 $off.http_req_duration_ms.p95
             max_response_time_improvement_percent = Improvement $on.http_req_duration_ms.max $off.http_req_duration_ms.max
             throughput_improvement_percent = [math]::Round((($on.throughput_req_per_sec - $off.throughput_req_per_sec) / $off.throughput_req_per_sec) * 100, 2)
-            interpretation = "이번 실행에서 Cache ON/OFF를 각각 측정한 실제 결과입니다. 반복 실행하면 보다 안정적인 벤치마크를 얻을 수 있습니다."
+            interpretation = "        Cache ON/OFF                 .                                ."
         }
     }
 
     $data | ConvertTo-Json -Depth 8 | Set-Content -Path $jsonPath -Encoding UTF8
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $reportGenerator
-    if ($LASTEXITCODE -ne 0) { throw "HTML 리포트 생성 실패" }
+    if ($LASTEXITCODE -ne 0) { throw "HTML          " }
 
     Write-Host ""
-    Write-Host "완료!" -ForegroundColor Green
+    Write-Host "  !" -ForegroundColor Green
     Write-Host "JSON : $jsonPath"
     Write-Host "HTML : $(Join-Path $PSScriptRoot 'cache-test-report.html')"
 
