@@ -11,7 +11,8 @@ vi.mock('../src/api/booking.js', () => ({ bookingApi: { group: vi.fn(), payment:
 const group = { id: 7, status: 'ACTIVE' };
 const candidates = { candidates: [] };
 beforeEach(() => {
-    vi.useFakeTimers(); vi.clearAllMocks();
+    vi.useFakeTimers(); vi.resetAllMocks();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     bookingApi.group.mockResolvedValue(group);
     bookingApi.waiting.mockResolvedValue({ items: [] });
@@ -26,6 +27,61 @@ function visibility(value) {
     });
 }
 function Wrapper({ children }) { return <MemoryRouter initialEntries={['/?group=7&smart=1']}>{children}</MemoryRouter>; }
+
+function ReservationWrapper({ children }) { return <MemoryRouter initialEntries={['/?group=7&reservation=9']}>{children}</MemoryRouter>; }
+
+test.each(['CONFIRMED', 'CANCELLED', 'EXPIRED'])('manual: %s stops timers but retains focus and manual refresh', async status => {
+    bookingApi.payment.mockResolvedValue({ reservation: { id: 9, status } });
+    const hook = renderHook(() => useManualHold(), { wrapper: ReservationWrapper });
+    await tick(0); await tick(60000);
+    expect(bookingApi.payment).toHaveBeenCalledTimes(1);
+    visibility('hidden'); visibility('visible'); await tick(0);
+    expect(bookingApi.payment).toHaveBeenCalledTimes(2);
+    act(() => hook.result.current.refresh()); await tick(0);
+    expect(bookingApi.payment).toHaveBeenCalledTimes(3);
+    await tick(60000); expect(bookingApi.payment).toHaveBeenCalledTimes(3);
+});
+
+test.each(['COMPLETED', 'CANCELLED', 'EXPIRED'])('manual: %s group without reservation stops timers', async status => {
+    bookingApi.group.mockResolvedValue({ ...group, status });
+    renderHook(() => useManualHold(), { wrapper: Wrapper });
+    await tick(60000); expect(bookingApi.group).toHaveBeenCalledTimes(1);
+});
+
+test('manual: pending payment continues polling until confirmed', async () => {
+    bookingApi.payment.mockResolvedValue({ reservation: { id: 9, status: 'PENDING' } });
+    renderHook(() => useManualHold(), { wrapper: ReservationWrapper });
+    await tick(2999); expect(bookingApi.payment).toHaveBeenCalledTimes(1);
+    bookingApi.payment.mockResolvedValue({ reservation: { id: 9, status: 'CONFIRMED' } });
+    await tick(1); expect(bookingApi.payment).toHaveBeenCalledTimes(2);
+    await tick(60000); expect(bookingApi.payment).toHaveBeenCalledTimes(2);
+});
+
+test.each([
+    [5000, 0, 4000], [5000, 0.5, 5000], [5000, 0.99, 5980],
+    [20000, 0.99, 10000], [100, 0.5, 3000], [undefined, 0.5, 3000], ['bad', 0.5, 3000],
+])('manual: server delay %s and random %s schedule after %s ms', async (nextPollAfterMs, random, expected) => {
+    Math.random.mockReturnValue(random);
+    bookingApi.waiting.mockResolvedValue({ items: [{ status: 'WAITING' }], nextPollAfterMs });
+    renderHook(() => useManualHold(), { wrapper: Wrapper });
+    await tick(expected - 1); expect(bookingApi.waiting).toHaveBeenCalledTimes(1);
+    await tick(1); expect(bookingApi.waiting).toHaveBeenCalledTimes(2);
+});
+
+test('manual: failed focus refresh retries and a new pending hold resumes polling', async () => {
+    bookingApi.payment.mockResolvedValue({ reservation: { id: 9, status: 'EXPIRED' } });
+    renderHook(() => useManualHold(), { wrapper: ReservationWrapper });
+    await tick(0);
+    bookingApi.payment.mockRejectedValueOnce(new Error('temporary network failure'));
+    act(() => window.dispatchEvent(new Event('focus'))); await tick(0);
+    expect(bookingApi.payment).toHaveBeenCalledTimes(2);
+    bookingApi.payment.mockResolvedValue({ reservation: { id: 10, status: 'PENDING' } });
+    bookingApi.group.mockResolvedValue({ ...group, status: 'HOLDING', activeReservationId: 10 });
+    await tick(3000);
+    expect(bookingApi.payment).toHaveBeenLastCalledWith(10, expect.any(AbortSignal));
+    const calls = bookingApi.payment.mock.calls.length;
+    await tick(3000); expect(bookingApi.payment).toHaveBeenCalledTimes(calls + 1);
+});
 
 for (const mode of ['manual', 'smart']) {
     const mount = () => renderHook(() => mode === 'manual' ? useManualHold() : useSmartCandidates(user, null, false), { wrapper: Wrapper });

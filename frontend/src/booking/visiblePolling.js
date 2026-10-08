@@ -4,16 +4,21 @@ export function startVisiblePolling(read, delay, initialDelay = 0) {
     const visible = () => document.visibilityState !== 'hidden';
     const schedule = wait => {
         clearTimeout(timer);
-        if (active && visible()) timer = setTimeout(poll, wait);
+        if (active && visible() && wait !== null) timer = setTimeout(poll, wait);
     };
     async function poll() {
         if (!active || !visible() || running) return;
         running = true;
         controller = new AbortController();
-        try { await read(controller.signal); }
+        // A read may choose its next delay; null pauses timers but keeps focus refreshes.
+        let nextDelay = delay;
+        try {
+            const requestedDelay = await read(controller.signal);
+            if (requestedDelay !== undefined) nextDelay = requestedDelay;
+        }
         finally {
             running = false;
-            schedule(resume ? 0 : delay);
+            schedule(resume ? 0 : nextDelay);
             resume = false;
         }
     }

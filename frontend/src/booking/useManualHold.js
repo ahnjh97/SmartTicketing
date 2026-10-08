@@ -62,6 +62,15 @@ export default function useManualHold({ smart = false } = {}) {
                     }
                     setResult({ identity, group, waiting, reservation, payment, receivedAt: performance.now() });
                     if (reservation) setFailure(null);
+                    if (!smart) {
+                        if (['CONFIRMED', 'CANCELLED', 'EXPIRED'].includes(reservation?.status)
+                            || !reservation && ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(group?.status)) return null;
+                        if (waiting) {
+                            const suggested = Number(waiting.nextPollAfterMs);
+                            const delay = Number.isFinite(suggested) && suggested > 0 ? Math.max(3000, Math.min(10000, suggested)) : 3000;
+                            return Math.min(10000, delay * (0.8 + Math.random() * 0.4));
+                        }
+                    }
                 }
             } catch (error) { if (active && !signal.aborted && sequence === requestSequence && generation.current === readGeneration && !gate.current) setFailure({ identity, error }); }
         }
