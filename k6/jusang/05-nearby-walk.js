@@ -50,8 +50,10 @@ export default function (data) {
     });
 
     check(res, {
-        'nearby walk response received': (r) => r.status >= 200 && r.status < 500,
+        'nearby walk status 200': (r) => r.status === 200,
+        'nearby walk body exists': (r) => r.body && r.body.length > 0,
     });
+    if (res.status !== 200) console.log(`nearby-walk failed: status=${res.status}, body=${res.body || '<empty>'}`);
 
     sleep(Number(__ENV.SLEEP || 0.1));
 }
