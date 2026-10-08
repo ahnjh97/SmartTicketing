@@ -1,6 +1,6 @@
 import { fail } from 'k6';
 import { Trend } from 'k6/metrics';
-import { BASE_URL, get, loadOptions, writeSummary } from './lib.js';
+import { get, loadOptions, writeSummary } from './lib.js';
 
 export const options = loadOptions();
 
@@ -20,7 +20,7 @@ export function setup() {
 }
 
 export default function (data) {
-  get(`${BASE_URL ? `/api/showtimes/${data.showtimeId}/seats` : `/api/showtimes/${data.showtimeId}/seats`}`, duration);
+  get(`/api/showtimes/${data.showtimeId}/seats`, duration);
 }
 
 export function handleSummary(data) {
