@@ -1,0 +1,14 @@
+**
+!gradlew
+!gradle/
+!gradle/**
+!build.gradle
+!settings.gradle
+!src/
+!src/**
+!k6/
+!k6/redis-comparison.js
+!scripts/
+!scripts/benchmark/
+!scripts/benchmark/redis-report.mjs
+!scripts/benchmark/container-entrypoint.sh

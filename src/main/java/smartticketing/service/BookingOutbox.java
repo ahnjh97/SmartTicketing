@@ -1,6 +1,7 @@
 package smartticketing.service;
 
 import jakarta.persistence.EntityManager;
+import org.springframework.orm.jpa.EntityManagerProxy;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import smartticketing.entity.BookingOutboxEvent;
@@ -19,7 +20,12 @@ public final class BookingOutbox {
     private static final String VERSION = "select revision from booking_outbox_streams where showtime_id=:show for update";
 
     public static void append(EntityManager em, Long show, Type type, Long group, String reason, LocalDateTime now) {
-        if (!em.isJoinedToTransaction()) throw new IllegalStateException("Outbox requires the domain transaction");
+        // Spring's extended proxy reports its own synchronization registration, which
+        // can be false for a resource-local transaction begun by JpaTransactionManager.
+        // Check the underlying persistence context without opening a new transaction.
+        EntityManager target = em;
+        while (target instanceof EntityManagerProxy proxy) target = proxy.getTargetEntityManager();
+        if (!target.isJoinedToTransaction()) throw new IllegalStateException("Outbox requires the domain transaction");
         validate(show,type,reason,now);
         em.createNativeQuery(NEXT_VERSION).setParameter("show",show).executeUpdate();
         long version = ((Number)em.createNativeQuery(VERSION).setParameter("show",show).getSingleResult()).longValue();

@@ -280,6 +280,33 @@ class BookingWaitingTests {
         assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
 
+    @Test void fullShowsSkipWriteLocksAndReturnToRecoveryAfterSeatRelease() {
+        var f=fixture(1,1); register(f); long show=f.shows.getFirst();
+        tx(em -> { inventory(em,show).forEach(i -> i.setStatus(SeatStatus.BLOCKED)); return null; });
+        var d=dispatcher(CLOCK);
+        assertThat(d.pendingShows()).doesNotContain(show);
+        readStatements.clear();
+        assertThat(d.dispatch(show)).isZero();
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("for update"));
+        statuses(f,QueueStatus.WAITING,QueueStatus.WAITING);
+        tx(em -> { inventory(em,show).forEach(i -> i.setStatus(SeatStatus.AVAILABLE)); return null; });
+        assertThat(d.pendingShows()).contains(show);
+        assertThat(d.dispatch(show)).isEqualTo(1);
+        statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void closedShowsStillExpireWaitingEvenWithoutAvailableSeats() {
+        var f=fixture(1,1); register(f); long show=f.shows.getFirst();
+        tx(em -> {
+            inventory(em,show).forEach(i -> i.setStatus(SeatStatus.BLOCKED));
+            em.find(Showtime.class,show).setStatus(ShowtimeStatus.CANCELLED); return null;
+        });
+        var d=dispatcher(CLOCK);
+        assertThat(d.pendingShows()).contains(show);
+        assertThat(d.dispatch(show)).isZero();
+        statuses(f,QueueStatus.EXPIRED,QueueStatus.WAITING);
+    }
+
     @Test void restartAndRepeatedDispatchRetainOneLinkedOpportunityNotification() {
         var f = fixture(2,2); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst());
         long reservation = state(f).activeReservationId();

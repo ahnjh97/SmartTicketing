@@ -35,6 +35,45 @@ class BookingOutboxTests {
         return store.claim(EnumSet.allOf(Type.class),now,Duration.ofSeconds(30));
     }
 
+    @Test void springProxiesAppendAndRollbackInTheExistingJpaTransaction() {
+        var factory=org.mockito.Mockito.mock(jakarta.persistence.EntityManagerFactory.class,
+                org.mockito.AdditionalAnswers.delegatesTo(db.factory()));
+        var info=org.mockito.Mockito.mock(EntityManagerFactoryInfo.class);
+        org.mockito.Mockito.doAnswer(invocation -> ExtendedEntityManagerCreator
+                .createApplicationManagedEntityManager(db.open(),info)).when(factory).createEntityManager();
+        var manager=new JpaTransactionManager(factory);
+        manager.setJpaDialect(new org.springframework.orm.jpa.vendor.HibernateJpaDialect());
+        var transaction=new TransactionTemplate(manager);
+        var shared=SharedEntityManagerCreator.createSharedEntityManager(factory);
+        long show=990001;
+        transaction.executeWithoutResult(status -> {
+            // Reproduce the production proxy's false negative with an active DB transaction.
+            assertThat(shared.isJoinedToTransaction()).isFalse();
+            assertThat(((jakarta.persistence.EntityManager)shared.getDelegate()).isJoinedToTransaction()).isTrue();
+            BookingOutbox.append(shared,show,Type.BOOKING_CHANGED,null,"COMMIT",NOW);
+        });
+        assertThat(events()).singleElement().satisfies(e -> assertThat(e.getAggregateVersion()).isEqualTo(1));
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+            BookingOutbox.append(shared,show,Type.BOOKING_CHANGED,null,"ROLLBACK",NOW);
+            throw new IllegalStateException("force rollback");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("force rollback");
+        transaction.executeWithoutResult(status -> BookingOutbox.append(shared,show,Type.BOOKING_CHANGED,null,"AFTER",NOW));
+        assertThat(events()).extracting(BookingOutboxEvent::getAggregateVersion).containsExactly(1L,2L);
+        assertThatThrownBy(() -> BookingOutbox.append(shared,show,Type.BOOKING_CHANGED,null,"NO_TX",NOW))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(events()).hasSize(2);
+    }
+
+    @Test void extendedProxyWithoutTransactionCannotAppend() {
+        try(var raw=db.open()) {
+            var proxy=ExtendedEntityManagerCreator.createApplicationManagedEntityManager(raw,
+                    org.mockito.Mockito.mock(EntityManagerFactoryInfo.class));
+            assertThatThrownBy(() -> BookingOutbox.append(proxy,990002L,Type.BOOKING_CHANGED,null,"NO_TX",NOW))
+                    .isInstanceOf(IllegalStateException.class).hasMessage("Outbox requires the domain transaction");
+        }
+        assertThat(events()).isEmpty();
+    }
+
     @Test void registrationAndEventsCommitTogetherAndReplayDoesNotDuplicate() {
         var f=fixture(1,1); var key=key();
         assertThat(register(f,f.shows(),key).status()).isEqualTo(201);

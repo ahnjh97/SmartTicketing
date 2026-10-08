@@ -13,6 +13,13 @@ import java.util.*;
 @Service
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class BookingWaitingDispatcher {
+    // A hint only: inventory is checked again under the existing MySQL locks.
+    // Closed/started shows must still be visited to expire their waiting rows.
+    private static final String ACTIONABLE = """
+            (s.status<>:scheduled or s.startTime<=:now or exists (
+                select i.id from ShowtimeSeat i where i.showtime=s and i.status=:available
+                and i.reservation is null and i.holdExpiredAt is null and i.seat.active=true))
+            """;
     private final EntityManager em;
     private final BookingHoldService holds;
     private final BookingWaitingService waiting;
@@ -28,8 +35,13 @@ public class BookingWaitingDispatcher {
     }
 
     public List<Long> pendingShows() {
-        return read.execute(s -> em.createQuery("select distinct q.showtime.id from WaitingQueue q where q.requestGroup is not null and q.status=:status order by q.showtime.id", Long.class)
+        return read.execute(s -> actionable("select distinct s.id from WaitingQueue q join q.showtime s where q.requestGroup is not null and q.status=:status and " + ACTIONABLE + " order by s.id")
                 .setParameter("status", QueueStatus.WAITING).getResultList());
+    }
+
+    private TypedQuery<Long> actionable(String query) {
+        return em.createQuery(query,Long.class).setParameter("scheduled",ShowtimeStatus.SCHEDULED)
+                .setParameter("now",holds.now()).setParameter("available",SeatStatus.AVAILABLE);
     }
 
     public int dispatch(Long showId) {
@@ -38,6 +50,10 @@ public class BookingWaitingDispatcher {
     }
 
     private int dispatchInDatabase(Long showId) {
+        // Skip group write locks when no seat can possibly be assigned. Keep this after
+        // the Redis gate so a busy show does not add DB work. A racing release is retried.
+        if (Boolean.TRUE.equals(read.execute(s -> actionable("select s.id from Showtime s where s.id=:show and " + ACTIONABLE)
+                .setParameter("show",showId).getResultList().isEmpty()))) return 0;
         var groups = read.execute(s -> em.createQuery("""
                 select distinct q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
                 and q.requestGroup is not null and q.status in :statuses order by q.requestGroup.id
