@@ -10,7 +10,7 @@ $ErrorActionPreference="Stop"
 if($Profile -eq "smoke"){$Vus=1;$Iterations=1}
 if(-not $env:K6_LOGIN_ID -or -not $env:K6_PASSWORD){throw "K6_LOGIN_ID와 K6_PASSWORD를 먼저 설정하세요."}
 $args1=@("-Profile",$Profile,"-BaseUrl",$BaseUrl,"-Vus","$Vus","-Iterations","$Iterations","-MovieId",$MovieId,"-TheaterId",$TheaterId,"-ShowtimeId",$ShowtimeId,"-Date",$Date)
-$args5=@("-Profile",$Profile,"-BaseUrl",$BaseUrl,"-Vus","$Vus","-Iterations","$Iterations,"-Lat",$Lat,"-Lon",$Lon,"-Address",$Address)
+$args5=@("-Profile",$Profile,"-BaseUrl",$BaseUrl,"-Vus","$Vus","-Iterations","$Iterations"-Lat",$Lat,"-Lon",$Lon,"-Address",$Address)
 if($ManageBackend){$args1+="-ManageBackend";$args5+="-ManageBackend"}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRootun-cache-comparison.ps1" @args1
 if($LASTEXITCODE -ne 0){throw "1/3 Redis 비교 실패"}
