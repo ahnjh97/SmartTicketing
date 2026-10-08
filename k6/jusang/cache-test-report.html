@@ -1,0 +1,54 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SmartTicketing Cache Test Report</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fb;color:#172033}
+.wrap{max-width:1100px;margin:40px auto;padding:0 24px}
+h1{margin-bottom:8px}.sub{color:#687386;margin-bottom:28px}
+.card{background:#fff;border:1px solid #e3e7ef;border-radius:14px;padding:22px;margin:16px 0;box-shadow:0 4px 14px rgba(20,30,50,.05)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.metric{padding:18px;border-radius:12px;background:#f8f9fc}.label{font-size:13px;color:#687386}.value{font-size:27px;font-weight:700;margin-top:6px}
+table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px solid #edf0f5;text-align:right}th:first-child,td:first-child{text-align:left}
+.on{font-weight:700}.good{font-weight:700}.note{color:#687386;line-height:1.6}
+@media(max-width:750px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>SmartTicketing Redis Cache 遺?섑뀒?ㅽ듃</h1>
+<div class="sub">Target: 1-common 쨌 VUs: 10 쨌 Iterations: 100 쨌 BASE_URL: http://localhost:8080</div>
+
+<div class="card">
+<h2>?듭떖 寃곌낵</h2>
+<div class="grid">
+<div class="metric"><div class="label">?됯퇏 ?묐떟?쒓컙 媛쒖꽑</div><div class="value">12.28%</div></div>
+<div class="metric"><div class="label">P95 ?묐떟?쒓컙 媛쒖꽑</div><div class="value">36.66%</div></div>
+<div class="metric"><div class="label">泥섎━??媛쒖꽑</div><div class="value">18.60%</div></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Cache ON / OFF 鍮꾧탳</h2>
+<table>
+<tr><th>吏??/th><th>Cache ON</th><th>Cache OFF</th><th>媛쒖꽑</th></tr>
+<tr><td>?됯퇏 ?묐떟?쒓컙</td><td>83.44 ms</td><td>95.13 ms</td><td>12.28%</td></tr>
+<tr><td>以묒븰媛?/td><td>42.96 ms</td><td>54.63 ms</td><td>21.37%</td></tr>
+<tr><td>P95</td><td>241.67 ms</td><td>381.58 ms</td><td>36.66%</td></tr>
+<tr><td>理쒕? ?묐떟?쒓컙</td><td>242.69 ms</td><td>382.79 ms</td><td>36.60%</td></tr>
+<tr><td>泥섎━??/td><td>102.366037 req/s</td><td>86.312667 req/s</td><td>18.60%</td></tr>
+<tr><td>?ㅽ뙣??/td><td>0.0%</td><td>0.0%</td><td>-</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>?뚯뒪??寃利?/h2>
+<p>Cache ON: checks 200/200, HTTP ?ㅽ뙣??0.0%</p>
+<p>Cache OFF: checks 200/200, HTTP ?ㅽ뙣??0.0%</p>
+<p class="note">Cache ON showed lower response latency and higher throughput under this test condition. Results are from one ON/OFF run each, so repeated runs are recommended before treating the percentages as stable benchmarks.</p>
+</div>
+</div>
+</body>
+</html>
