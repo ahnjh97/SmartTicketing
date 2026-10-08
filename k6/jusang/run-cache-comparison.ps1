@@ -183,14 +183,14 @@ function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
 
 function Convert-Summary([string]$Path) {
     $s = Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
-    $d = $s.metrics.http_req_duration.values
-    $failed = [double]$s.metrics.http_req_failed.values.rate
-    $reqRate = [double]$s.metrics.http_reqs.values.rate
-    $checks = $s.metrics.checks.values
+    $d = $s.metrics.http_req_duration
+    $failed = [double]$s.metrics.http_req_failed.value
+    $reqRate = [double]$s.metrics.http_reqs.rate
+    $checks = $s.metrics.checks
 
     $result = [pscustomobject]@{
         http_req_failed_rate_percent = [math]::Round($failed * 100, 4)
-        checks_total = [int]$checks.count
+        checks_total = [int]$checks.value
         checks_succeeded = [int]$checks.passes
         checks_failed = [int]$checks.fails
         http_req_duration_ms = [ordered]@{
