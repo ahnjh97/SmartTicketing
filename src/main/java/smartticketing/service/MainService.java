@@ -101,7 +101,7 @@ public class MainService {
             long secondGetMs = elapsedMs(secondGetStart);
             if (cached != null) {
                 hitCount.incrementAndGet();
-                localCache.put(cacheKey, new LocalCacheEntry(cached));
+                localCache.put(cacheKey, LocalCacheEntry.create(cached, localCacheTtlNanos));
                 newFuture.complete(cached);
                 logProgress();
                 logSlowRequest("LOADER_SECOND_HIT", requestStart, 0L, secondGetMs);
@@ -170,8 +170,8 @@ public class MainService {
     }
 
     private record LocalCacheEntry(MainChartResponseDto value, long expiresAtNanos) {
-        private LocalCacheEntry(MainChartResponseDto value, long ttlNanos) {
-            this(value, System.nanoTime() + ttlNanos);
+        private static LocalCacheEntry create(MainChartResponseDto value, long ttlNanos) {
+            return new LocalCacheEntry(value, System.nanoTime() + ttlNanos);
         }
 
         private boolean isExpired() {
