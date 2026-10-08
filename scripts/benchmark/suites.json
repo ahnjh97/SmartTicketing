@@ -1,0 +1,11 @@
+[
+  {"id":"booking","name":"예매 대기 순번·상태·취소표 배정 ON/OFF"},
+  {"id":"main","name":"메인 화면 ON/OFF","script":"redis-benchmark/01-main-query.js"},
+  {"id":"movies","name":"영화 목록 ON/OFF","script":"redis-benchmark/01-movies-query.js"},
+  {"id":"theaters","name":"극장 목록 ON/OFF","script":"redis-benchmark/01-theaters-query.js"},
+  {"id":"showtimes","name":"상영시간 조회 ON/OFF","script":"redis-benchmark/03-showtime-query.js"},
+  {"id":"seats","name":"좌석도 조회 ON/OFF","script":"redis-benchmark/03-seat-map-query.js"},
+  {"id":"distance","name":"거리순 극장 조회 ON/OFF","script":"redis-benchmark/05-distance-query.js"},
+  {"id":"login","name":"로그인 부하 (임시 계정, Redis 비교 아님)","script":"login-spike.js"},
+  {"id":"all","name":"전체 순차 실행 (예매 + 조회 + 로그인)"}
+]

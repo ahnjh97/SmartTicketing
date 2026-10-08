@@ -41,7 +41,7 @@ class ShowtimeQueryTests {
         em.persist(movie); movieId = movie.getId();
         new BookingSeedService(em, CLOCK).seed(List.of(theaterId));
         em.flush(); em.clear();
-        query = new ShowtimeQueryService(em, new BookingCatalogService(em), CLOCK);
+        query = new ShowtimeQueryService(em, new BookingCatalogService(em, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled")), CLOCK, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
     }
     @AfterEach void rollback() {
         if (em.getTransaction().isActive()) em.getTransaction().rollback(); em.close();

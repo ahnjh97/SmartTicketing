@@ -86,11 +86,11 @@ tasks.register('bookingRedisBenchmark', JavaExec) {
 	doFirst {
 		copy {
 			from sourceSets.test.output.classesDirs
-			include 'smartticketing/booking/BookingRedisBenchmark*.class', 'smartticketing/booking/TemporaryMysqlDatabase.class'
+			include 'smartticketing/booking/BookingRedisBenchmark*.class', 'smartticketing/booking/QueryRedisBenchmark*.class', 'smartticketing/booking/BenchmarkProcess.class', 'smartticketing/booking/BenchmarkBackend.class', 'smartticketing/booking/TemporaryMysqlDatabase.class'
 			into fixtureDir
 		}
 	}
-	mainClass = 'smartticketing.booking.BookingRedisBenchmark'
+	mainClass = System.getenv('BENCH_SUITE') && System.getenv('BENCH_SUITE') != 'booking' ? 'smartticketing.booking.QueryRedisBenchmark' : 'smartticketing.booking.BookingRedisBenchmark'
 	maxHeapSize = '1536m'
 	// Optional benchmark-only runtime; project compilation and normal bootRun stay on Java 21.
 	if (System.getenv('BOOKING_LOAD_JAVA')) executable = System.getenv('BOOKING_LOAD_JAVA')

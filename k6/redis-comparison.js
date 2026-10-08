@@ -7,7 +7,7 @@ import { Trend, Rate, Counter } from 'k6/metrics';
 // duplicates every account/token in each VU and competes with the local server.
 const users = new SharedArray('users', () => JSON.parse(open(__ENV.FIXTURE)).users);
 const dispatch = new SharedArray('dispatch', () => JSON.parse(open(__ENV.FIXTURE)).dispatch);
-const base = 'http://127.0.0.1:18081';
+const base = __ENV.BASE_URL || 'http://127.0.0.1:18081';
 const kind = __ENV.CASE;
 const latency = new Trend('operation_ms', true);
 const assigned = new Trend('assignment_ms', true);

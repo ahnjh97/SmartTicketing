@@ -16,21 +16,40 @@ services:
       start_period: 20s
   redis:
     image: redis:7-alpine
-    network_mode: service:mysql
     cpus: 1
     mem_limit: 256m
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
       timeout: 3s
       retries: 20
+  backend:
+    image: ${BENCH_BACKEND_IMAGE:?backend image required}
+    build:
+      context: ${BENCHMARK_OUTPUT:?output path required}/image-context
+      target: prebuilt
+    cpus: 4
+    mem_limit: 4g
+    environment:
+      DB_PASSWORD: ${BENCH_DB_PASSWORD:?test password required}
+      TZ: Asia/Seoul
+  k6:
+    image: grafana/k6:2.3.0
+    user: "0:0"
+    cpus: 2
+    mem_limit: 2g
+    working_dir: /app
+    volumes:
+      - ../../k6:/app/k6:ro
+      - ${BENCHMARK_OUTPUT:?output path required}:/results
   runner:
     image: smartticketing-benchmark:java21-local
     build:
       context: ../..
       dockerfile: scripts/benchmark/Dockerfile
-    network_mode: service:mysql
     cpus: 4
     mem_limit: 4g
     depends_on:
@@ -40,13 +59,21 @@ services:
         condition: service_healthy
     environment:
       BOOKING_LOAD_TEST: "true"
+      BENCH_SUITE: ${BENCH_SUITE:-booking}
+      BENCH_CACHE_MODE: ${BENCH_CACHE_MODE:-compare}
+      BENCH_RATE: ${BENCH_RATE:-50}
+      BENCH_DURATION: ${BENCH_DURATION:-30s}
+      BENCH_PRE_VUS: ${BENCH_PRE_VUS:-100}
+      BENCH_MAX_VUS: ${BENCH_MAX_VUS:-1000}
+      BENCH_LOGIN_USERS: ${BENCH_LOGIN_USERS:-100}
       BOOKING_LOAD_SMOKE: ${BENCH_SMOKE:-false}
       BOOKING_LOAD_OUTPUT: /results/run
       BOOKING_TEST_MYSQL_USER: root
       BOOKING_TEST_MYSQL_PASSWORD: ${BENCH_DB_PASSWORD:?test password required}
-      K6_BINARY: /usr/local/bin/k6
+      BOOKING_TEST_MYSQL_HOST: mysql
       TZ: Asia/Seoul
     volumes:
       - ${BENCHMARK_OUTPUT:?output path required}:/results
 volumes:
   mysql-data:
+  redis-data:

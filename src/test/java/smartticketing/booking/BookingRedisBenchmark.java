@@ -1,10 +1,6 @@
 package smartticketing.booking;
 
 import jakarta.persistence.EntityManager;
-import org.springframework.boot.SpringApplication;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import smartticketing.SmartTicketingApplication;
-import smartticketing.auth.JwtService;
 import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
 import tools.jackson.databind.json.JsonMapper;
@@ -15,7 +11,7 @@ import java.util.*;
 /** Local opt-in only. Each run owns a fresh UUID schema and its scoped Redis keys. */
 public class BookingRedisBenchmark {
     static final JsonMapper JSON=JsonMapper.builder().build();
-    static final LocalDateTime NOW=LocalDateTime.now(ZoneId.of("Asia/Seoul")).withNano(0);
+    static final LocalDateTime NOW=LocalDateTime.parse(System.getenv().getOrDefault("BENCH_NOW",LocalDateTime.now(ZoneId.of("Asia/Seoul")).withNano(0).toString()));
     record Reader(long user,long group,int ahead) {}
     record Release(long owner,long reservation,long user,long group,long seat) {}
     static Users user(EntityManager em,int n) {
@@ -35,17 +31,30 @@ public class BookingRedisBenchmark {
     public static void main(String[] args) throws Exception {
         if(!"true".equals(System.getenv("BOOKING_LOAD_TEST"))) throw new IllegalStateException("Explicit local load opt-in required");
         Path output=Path.of(System.getenv("BOOKING_LOAD_OUTPUT")).toAbsolutePath();Files.createDirectories(output);
-        Path k6=Path.of(System.getenv("K6_BINARY")).toAbsolutePath();
+        boolean child="true".equals(System.getenv("BENCH_CHILD"));
+        if(!child)
         Files.writeString(output.resolve("environment.json"),JSON.writeValueAsString(Map.of(
                 "java",System.getProperty("java.version"),"os",System.getProperty("os.name"),
                 "logicalProcessors",Runtime.getRuntime().availableProcessors(),"maxHeapBytes",Runtime.getRuntime().maxMemory(),
-                "startedAt",OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString(),"port",18081)));
+                "startedAt",OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString(),"port",8080,"freshJvmPerCase",true,"cacheMode",BenchmarkProcess.cacheMode(),"execution","production-prebuilt-jar")));
         boolean smoke="true".equals(System.getenv("BOOKING_LOAD_SMOKE"));
         boolean diagnostic="true".equals(System.getenv("BOOKING_LOAD_DIAGNOSTIC"));
-        var modes=smoke||diagnostic?List.of(false,true):List.of(false,true,true,false);
+        var modes=BenchmarkProcess.modes(smoke||diagnostic,false);
+        if(!child) {
+            var scenarios=smoke?List.of("dispatch"):diagnostic?List.of("waiting-800","dispatch"):
+                    List.of("waiting-100","waiting-400","waiting-800","status-400","dispatch");
+            for(String scenario:scenarios) for(int i=0;i<modes.size();i++) {
+                boolean enabled=modes.get(i);
+                BenchmarkProcess.run(BookingRedisBenchmark.class,Map.of("BENCH_CASE",scenario,
+                        "BENCH_CACHE_ENABLED",Boolean.toString(enabled),"BENCH_RUN_LABEL",String.format("%02d-%s",i+1,enabled?"on":"off"),
+                        "BENCH_NOW",NOW.toString()));
+            }
+            return;
+        }
+        modes=List.of(Boolean.parseBoolean(System.getenv("BENCH_CACHE_ENABLED")));
         int run=0;
         for(boolean enabled:modes) {
-            String label=String.format("%02d-%s",++run,enabled?"on":"off");Path dir=output.resolve(label);Files.createDirectories(dir);
+            String label=System.getenv("BENCH_RUN_LABEL");Path dir=output.resolve(label);Files.createDirectories(dir);
             System.out.println("BENCH_START "+label);
             var readers=new ArrayList<Reader>();var releases=new ArrayList<Release>();
             try(var db=new TemporaryMysqlDatabase()) {
@@ -76,51 +85,47 @@ public class BookingRedisBenchmark {
                     }
                     em.getTransaction().commit();
                 }
-                var props=new ArrayList<>(List.of("--server.address=127.0.0.1","--server.port=18081","--spring.profiles.active=test",
+                var props=new ArrayList<>(List.of("--server.address=0.0.0.0","--server.port=8080",
                     "--tmdb.auto-import=false","--kakao.catalog.auto-import=false","--booking.seed.enabled=false","--showtime.seed.enabled=false",
                     "--app.admin.initial-password=","--spring.jpa.show-sql=false","--spring.jpa.hibernate.ddl-auto=validate",
-                    "--app.cache.enabled="+enabled,"--spring.data.redis.host=127.0.0.1","--spring.data.redis.port=6379",
-                    "--spring.datasource.url="+db.jdbcUrl(),"--spring.datasource.username="+System.getenv("BOOKING_TEST_MYSQL_USER"),"--spring.datasource.password="+System.getenv("BOOKING_TEST_MYSQL_PASSWORD"),
-                    "--JWT_SECRET=local-load-only-not-production-secret-2026-123456789","--TMDB_ACCESS_TOKEN=local-test","--ADMIN_KEY=local-test",
+                    "--app.cache.enabled="+enabled,"--spring.data.redis.host=redis","--spring.data.redis.port=6379",
+                    "--app.cache.main-local-ttl-ms=500","--app.cache.query-ttl-ms=2000",
+                    "--spring.datasource.url="+db.jdbcUrl(),"--spring.datasource.username="+System.getenv("BOOKING_TEST_MYSQL_USER"),
+                    "--JWT_SECRET="+BenchmarkBackend.SECRET,"--TMDB_ACCESS_TOKEN=local-test","--ADMIN_KEY=local-test",
                     "--logging.level.root=WARN"));
-                try(var app=SpringApplication.run(SmartTicketingApplication.class,props.toArray(String[]::new))) {
-                    var web=(org.springframework.boot.tomcat.TomcatWebServer)app.getClass().getMethod("getWebServer").invoke(app);
-                    var protocol=(org.apache.coyote.AbstractProtocol<?>)web.getTomcat().getConnector().getProtocolHandler();
-                    Files.writeString(dir.resolve("connector.json"),JSON.writeValueAsString(Map.of(
-                            "acceptCount",protocol.getAcceptCount(),"maxConnections",protocol.getMaxConnections(),"maxThreads",protocol.getMaxThreads())));
-                    var jwt=app.getBean(JwtService.class);var data=new LinkedHashMap<String,Object>();
+                try(var backend=new BenchmarkBackend(props,dir.resolve("backend-"+System.getenv("BENCH_CASE")))) {
+                    var jwt=BenchmarkBackend.jwt();var data=new LinkedHashMap<String,Object>();
                     data.put("users",readers.stream().map(r->Map.of("token",jwt.issueAccessToken(r.user()),"group",r.group(),"ahead",r.ahead())).toList());
                     data.put("dispatch",releases.stream().map(r->Map.of("token",jwt.issueAccessToken(r.user()),"ownerToken",jwt.issueAccessToken(r.owner()),"reservation",r.reservation(),"group",r.group(),"seat",r.seat())).toList());
                     Path fixture=dir.resolve("fixture.json");Files.writeString(fixture,JSON.writeValueAsString(data));
                     var cases=smoke?List.of(new String[]{"warmup","waiting","5","3s"},new String[]{"dispatch","dispatch","4","1s"}):diagnostic?
                         List.of(new String[]{"warmup","waiting","20","5s"},new String[]{"waiting-800","waiting","800","25s"},new String[]{"dispatch","dispatch","80","1s"}):
                         List.of(new String[]{"warmup","waiting","20","15s"},new String[]{"waiting-100","waiting","100","25s"},new String[]{"waiting-400","waiting","400","25s"},new String[]{"waiting-800","waiting","800","25s"},new String[]{"status-400","status","400","20s"},new String[]{"dispatch","dispatch","80","1s"});
+                    String selected=System.getenv("BENCH_CASE");
+                    cases=cases.stream().filter(c->c[0].equals("warmup")||c[0].equals(selected)).toList();
+                    cases.getFirst()[0]="warmup-"+selected;
+                    if(selected.equals("status-400")) cases.getFirst()[1]="status";
+                    Files.writeString(dir.resolve(selected+"-isolation.json"),JSON.writeValueAsString(Map.of(
+                            "containerId",backend.containerId,"pid",ProcessHandle.current().pid(),"database",db.jdbcUrl(),"redis",enabled,
+                            "localCache",true,"localTtlMs",500,"queryTtlMs",2000,"freshJvm",true)));
                     for(var c:cases) {
                         System.out.println("BENCH_CASE "+label+" "+c[0]);
-                        var os=(com.sun.management.OperatingSystemMXBean)java.lang.management.ManagementFactory.getOperatingSystemMXBean();
-                        long cpuStart=os.getProcessCpuTime(),wallStart=System.nanoTime();
-                        var pb=new ProcessBuilder(k6.toString(),"run","--no-usage-report","--quiet",Path.of("k6/redis-comparison.js").toAbsolutePath().toString());
-                        var env=pb.environment();env.put("FIXTURE",fixture.toString());env.put("CASE",c[1]);env.put("VUS",c[2]);env.put("DURATION",c[3]);env.put("SUMMARY",dir.resolve(c[0]+".json").toString());
-                        pb.redirectErrorStream(true).redirectOutput(dir.resolve(c[0]+".log").toFile());
-                        var peakConnections=new java.util.concurrent.atomic.AtomicLong();
-                        var peakBusyThreads=new java.util.concurrent.atomic.AtomicLong();
-                        var sampler=java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
-                        sampler.scheduleAtFixedRate(() -> {
-                            peakConnections.accumulateAndGet(protocol.getConnectionCount(),Math::max);
-                            if(protocol.getExecutor() instanceof java.util.concurrent.ThreadPoolExecutor executor)
-                                peakBusyThreads.accumulateAndGet(executor.getActiveCount(),Math::max);
-                            else if(protocol.getExecutor() instanceof org.apache.tomcat.util.threads.ThreadPoolExecutor executor)
-                                peakBusyThreads.accumulateAndGet(executor.getActiveCount(),Math::max);
-                        },0,200,java.util.concurrent.TimeUnit.MILLISECONDS);
-                        int code;
-                        try { code=pb.start().waitFor(); } finally { sampler.shutdownNow(); }
+                        long wallStart=System.nanoTime();
+                        var env=new HashMap<String,String>();
+                        env.put("BASE_URL",BenchmarkBackend.BASE_URL);env.put("FIXTURE",fixture.toString());env.put("CASE",c[1]);env.put("VUS",c[2]);env.put("DURATION",c[3]);env.put("SUMMARY",dir.resolve(c[0]+".json").toString());
+                        int code=BenchmarkBackend.k6(List.of("run","--no-usage-report","--quiet","k6/redis-comparison.js"),env,dir.resolve(c[0]+".log"));
                         System.out.println("BENCH_DONE "+label+" "+c[0]+" exit="+code);
                         Files.writeString(dir.resolve(c[0]+"-runtime.json"),JSON.writeValueAsString(Map.of(
                                 "exitCode",code,"wallSeconds",(System.nanoTime()-wallStart)/1e9,
-                                "jvmCpuSeconds",(os.getProcessCpuTime()-cpuStart)/1e9,
-                                "peakConnections",peakConnections.get(),"peakBusyThreads",peakBusyThreads.get())));
+                                "runtimeMetrics","JVM internals not sampled across containers")));
                         if(code!=0 && code!=99) throw new IllegalStateException("k6 execution failed: "+dir.resolve(c[0]+".log"));
-                        if(c[0].equals("warmup") && code!=0) throw new IllegalStateException("Smoke/warmup checks failed");
+                        if(c[0].startsWith("warmup")) {
+                            var metrics=JSON.readTree(Files.readString(dir.resolve(c[0]+".json"))).path("metrics");
+                            var success=metrics.path("operation_success").path("values");
+                            if(code!=0||success.path("passes").asLong()==0||success.path("fails").asLong()!=0
+                                    ||metrics.path("http_req_failed").path("values").path("rate").asDouble()!=0)
+                                throw new IllegalStateException("Smoke/warmup checks failed");
+                        }
                     }
                     var validation=new LinkedHashMap<String,Object>();validation.put("mode",enabled);validation.put("readers",readers.size());validation.put("dispatchCases",releases.size());
                     try(var em=db.open()) {
@@ -130,12 +135,7 @@ public class BookingRedisBenchmark {
                         validation.put("duplicateActiveSeats",duplicate.size());
                         validation.put("outboxPending",em.createNativeQuery("select count(*) from booking_outbox_events where status<>'COMPLETED'",Long.class).getSingleResult());
                     }
-                    Files.writeString(dir.resolve("validation.json"),JSON.writeValueAsString(validation));
-                    // Remove only this temporary DB's namespaced booking Redis keys.
-                    var redis=app.getBean(StringRedisTemplate.class);String scope=UUID.nameUUIDFromBytes(db.jdbcUrl().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
-                    for(String prefix:List.of("booking-ranks:v1:","booking-dispatch:v1:","smart-summary:v1:")) {
-                        var keys=redis.keys(prefix+scope+":*");if(keys!=null&&!keys.isEmpty())redis.delete(keys);
-                    }
+                    Files.writeString(dir.resolve(selected.equals("dispatch")?"validation.json":selected+"-validation.json"),JSON.writeValueAsString(validation));
                 }
                 Files.deleteIfExists(dir.resolve("fixture.json"));
                 System.out.println("BENCH_CLEANED "+label);

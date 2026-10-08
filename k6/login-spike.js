@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check, sleep, randomSeed } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const USERS = Number(__ENV.USERS || 5000); // 동시에 로그인 버튼을 누르는 사람 수
@@ -21,8 +21,9 @@ export const options = {
 };
 
 export default function () {
+    randomSeed(20261008 + __VU);
     // SPREAD초 안에서 각자 랜덤한 순간에 로그인 버튼을 누름 (기본 0초 = 완전 동시)
-    sleep(Math.random() * Number(__ENV.SPREAD || 45));
+    sleep(Math.random() * Number(__ENV.SPREAD ?? 45));
     const res = http.post(
         `${BASE_URL}/api/auth/login`,
         JSON.stringify({ loginId: __ENV.LOGIN_ID, password: __ENV.PASSWORD }),

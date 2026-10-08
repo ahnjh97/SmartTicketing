@@ -98,7 +98,7 @@ class BookingSmartTests {
             var group = em.find(BookingRequestGroup.class, f.group);
             group.setStartTimeFrom(LocalTime.of(11, 30));
             group.setStartTimeTo(LocalTime.of(12, 0));
-            var query = new ShowtimeQueryService(em, new BookingCatalogService(em), CLOCK);
+            var query = new ShowtimeQueryService(em, new BookingCatalogService(em, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled")), CLOCK, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
             var shows = query.showtimes(f.movie, null, NOW.toLocalDate(), LocalTime.of(11, 30), LocalTime.of(12, 0));
             assertThat(shows.items()).extracting(ShowtimeResponse.ShowtimeItem::id).containsExactly(f.shows.getLast());
             assertThat(shows.items().getFirst().endTime().toLocalTime()).isEqualTo(LocalTime.of(14, 0));
