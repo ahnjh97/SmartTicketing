@@ -1,4 +1,3 @@
-
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
@@ -8,22 +7,12 @@ const LON = __ENV.LON || '126.9780';
 const ADDRESS = __ENV.ADDRESS || '';
 const LOGIN_ID = __ENV.LOGIN_ID || '';
 const PASSWORD = __ENV.PASSWORD || '';
-
 const VUS = Number(__ENV.VUS || 5);
 const ITERATIONS = Number(__ENV.ITERATIONS || 20);
 
 export const options = {
-    scenarios: {
-        nearby_transit: {
-            executor: 'shared-iterations',
-            vus: VUS,
-            iterations: ITERATIONS,
-            maxDuration: __ENV.MAX_DURATION || '10m',
-        },
-    },
-    thresholds: {
-        http_req_failed: ['rate<0.05'],
-    },
+    scenarios: { nearby_transit: { executor: 'shared-iterations', vus: VUS, iterations: ITERATIONS, maxDuration: __ENV.MAX_DURATION || '10m' } },
+    thresholds: { http_req_failed: ['rate<0.05'], checks: ['rate>0.99'] },
 };
 
 export function setup() {
@@ -34,24 +23,15 @@ export function setup() {
 }
 
 export default function (data) {
-    const url =
-        `${BASE_URL}/api/theaters/nearby` +
-        `?latitude=${encodeURIComponent(LAT)}` +
-        `&longitude=${encodeURIComponent(LON)}` +
-        `&sort=TRANSIT` +
-        (ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : '');
-
-    const res = http.get(url, {
-        headers: { Authorization: data.authorization },
-        tags: { cache_test: '05-nearby', endpoint: 'nearby-transit' },
-        timeout: __ENV.HTTP_TIMEOUT || '180s',
-    });
-
+    const url = `${BASE_URL}/api/theaters/nearby?latitude=${encodeURIComponent(LAT)}&longitude=${encodeURIComponent(LON)}&sort=TRANSIT${ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : ''}`;
+    const res = http.get(url, { headers: { Authorization: data.authorization }, tags: { cache_test: '05-nearby', endpoint: 'nearby-transit' }, timeout: __ENV.HTTP_TIMEOUT || '180s' });
+    let theaters = [];
+    try { theaters = res.status === 200 ? res.json() : []; } catch (_) {}
     check(res, {
         'nearby transit status 200': (r) => r.status === 200,
-        'nearby transit body exists': (r) => r.body && r.body.length > 0,
+        'nearby transit body exists': () => Array.isArray(theaters) && theaters.length > 0,
+        'nearby transit contains route': () => theaters.length > 0 && theaters.some((t) => t.transitMinutes != null && Number(t.transitMinutes) > 0),
     });
     if (res.status !== 200) console.log(`nearby-transit failed: status=${res.status}, body=${res.body || '<empty>'}`);
-
     sleep(Number(__ENV.SLEEP || 0.2));
 }
