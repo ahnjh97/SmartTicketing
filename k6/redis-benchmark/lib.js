@@ -2,10 +2,10 @@ import { check } from 'k6';
 import http from 'k6/http';
 
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
-export const RATE = Number(__ENV.K6_RATE || 50);
-export const DURATION = __ENV.K6_DURATION || '30s';
-export const PRE_VUS = Number(__ENV.K6_PRE_VUS || 50);
-export const MAX_VUS = Number(__ENV.K6_MAX_VUS || 200);
+export const RATE = Number(__ENV.REDIS_BENCH_RATE || 50);
+export const DURATION = __ENV.REDIS_BENCH_DURATION || '30s';
+export const PRE_VUS = Number(__ENV.REDIS_BENCH_PRE_VUS || 50);
+export const MAX_VUS = Number(__ENV.REDIS_BENCH_MAX_VUS || 200);
 
 export function loadOptions() {
   return {
@@ -57,6 +57,6 @@ export function writeSummary(data, feature, metricNames) {
   const file = __ENV.RESULT_FILE || `benchmark-results/${feature}-${summary.cacheMode}.json`;
   return {
     [file]: JSON.stringify(summary, null, 2),
-    stdout: `Redis ${summary.cacheMode} | ${feature} | p95=${summary.metrics.httpReqDuration?.['p(95)'] ?? 'n/a'}ms | p99=${summary.metrics.httpReqDuration?.['p(99)'] ?? 'n/a'}ms\n`,
+    stdout: `Redis ${summary.cacheMode} | ${feature} | rate=${RATE}/s | p95=${summary.metrics.httpReqDuration?.['p(95)'] ?? 'n/a'}ms | p99=${summary.metrics.httpReqDuration?.['p(99)'] ?? 'n/a'}ms\\n`,
   };
 }
