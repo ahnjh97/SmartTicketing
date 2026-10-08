@@ -44,6 +44,7 @@ export default function (data) {
         (ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : '');
 
     const res = http.get(url, {
+        headers: { Authorization: data.authorization },
         tags: { cache_test: '05-nearby', endpoint: 'nearby-walk' },
         timeout: __ENV.HTTP_TIMEOUT || '120s',
     });
