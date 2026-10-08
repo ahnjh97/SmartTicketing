@@ -90,17 +90,17 @@ section{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px}
 </style>
 </head>
 <body>
-<h1>SmartTicketing Redis ON/OFF 성능 비교</h1>
-<div class="meta">생성 시각: $generated · 대상: 로컬 백엔드 · 동일 부하 조건</div>
-<div class="note">Redis OFF는 기존 MySQL 조회 경로, Redis ON은 동일 조회 경로에 2초 TTL Redis query cache를 추가한 결과입니다. 양수 개선율은 ON이 더 빠르다는 뜻입니다.</div>
-<h2>종합 비교</h2>
+<h1>SmartTicketing Redis ON/OFF &#49457;&#45733; &#48708;&#44368;</h1>
+<div class="meta">&#49373;&#49457; &#49884;&#44033;: $generated · &#45824;&#49345;: &#47196;&#52980; &#48177;&#50644;&#46300; · &#46041;&#51068; &#48512;&#54616; &#51312;&#44148;</div>
+<div class="note">Redis OFF&#45716; &#44592;&#51316; MySQL &#51312;&#54924; &#44221;&#47196;, Redis ON&#51008; &#46041;&#51068; &#51312;&#54924; &#44221;&#47196;&#50640; 2&#52488; TTL Redis query cache&#47484; &#52628;&#44032;&#54620; &#44208;&#44284;&#51077;&#45768;&#45796;. &#50577;&#49688; &#44060;&#49440;&#50984;&#51008; ON&#51060; &#45908; &#48736;&#47476;&#45796;&#45716; &#46907;&#51077;&#45768;&#45796;.</div>
+<h2>&#51333;&#54633; &#48708;&#44368;</h2>
 <table>
-<thead><tr><th>기능</th><th>OFF p95(ms)</th><th>ON p95(ms)</th><th>p95 개선율</th><th>OFF p99(ms)</th><th>ON p99(ms)</th><th>p99 개선율</th><th>OFF 오류율</th><th>ON 오류율</th><th>판정</th></tr></thead>
+<thead><tr><th>&#44592;&#45733;</th><th>OFF p95(ms)</th><th>ON p95(ms)</th><th>p95 &#44060;&#49440;&#50984;</th><th>OFF p99(ms)</th><th>ON p99(ms)</th><th>p99 &#44060;&#49440;&#50984;</th><th>OFF &#50724;&#47448;&#50984;</th><th>ON &#50724;&#47448;&#50984;</th><th>&#54032;&#51221;</th></tr></thead>
 <tbody>$tableRows</tbody>
 </table>
-<h2>p95 그래프</h2><div class="grid">$p95Charts</div>
-<h2>p99 그래프</h2><div class="grid">$p99Charts</div>
-<h2>원본 JSON</h2><p>각 기능별 OFF/ON 원본 결과는 같은 폴더에 보존됩니다.</p>
+<h2>p95 &#44536;&#47000;&#54532;</h2><div class="grid">$p95Charts</div>
+<h2>p99 &#44536;&#47000;&#54532;</h2><div class="grid">$p99Charts</div>
+<h2>&#50896;&#48376; JSON</h2><p>각 &#44592;&#45733;별 OFF/ON 원본 결과는 같은 폴더에 보존됩니다.</p>
 </body>
 </html>
 "@
