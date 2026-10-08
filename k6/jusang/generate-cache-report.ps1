@@ -19,6 +19,25 @@ $on = $data.results.cache_on
 $off = $data.results.cache_off
 $cmp = $data.comparison
 
+if ($null -eq $on -or $null -eq $off) {
+    throw "결과 JSON에 cache_on/cache_off 데이터가 없습니다."
+}
+
+$required = @(
+    $on.http_req_duration_ms.avg,
+    $on.http_req_duration_ms.median,
+    $on.http_req_duration_ms.p95,
+    $on.throughput_req_per_sec,
+    $off.http_req_duration_ms.avg,
+    $off.http_req_duration_ms.median,
+    $off.http_req_duration_ms.p95,
+    $off.throughput_req_per_sec
+)
+
+if ($required | Where-Object { $null -eq $_ }) {
+    throw "결과 JSON의 성능 지표가 비어 있습니다."
+}
+
 $html = @"
 <!doctype html>
 <html lang="ko">
