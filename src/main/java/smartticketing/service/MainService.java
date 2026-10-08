@@ -23,11 +23,11 @@ public class MainService {
 
     private static final Logger log = LoggerFactory.getLogger(MainService.class);
     private static final long SLOW_REQUEST_MS = 50L;
-    private static final long LOCAL_CACHE_TTL_MS = 500L;
 
     private final MovieRepository movieRepository;
     private final String referenceDate;
     private final RedisQueryCache queryCache;
+    private final long localCacheTtlNanos;
     private final ConcurrentHashMap<String, CompletableFuture<MainChartResponseDto>> loadingCache =
             new ConcurrentHashMap<>();
     /** Short L1 cache prevents a Redis round-trip for the hottest main-page query. */
@@ -42,10 +42,12 @@ public class MainService {
     public MainService(
             MovieRepository movieRepository,
             @Value("${app.reference-date:}") String referenceDate,
-            RedisQueryCache queryCache) {
+            RedisQueryCache queryCache,
+            @Value("${app.cache.main-local-ttl-ms:500}") long localCacheTtlMs) {
         this.movieRepository = movieRepository;
         this.referenceDate = referenceDate;
         this.queryCache = queryCache;
+        this.localCacheTtlNanos = Math.max(100L, localCacheTtlMs) * 1_000_000L;
     }
 
     public MainChartResponseDto getMainChart() {
@@ -67,7 +69,7 @@ public class MainService {
         MainChartResponseDto cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
         if (cached != null) {
             hitCount.incrementAndGet();
-            localCache.put(cacheKey, new LocalCacheEntry(cached));
+            localCache.put(cacheKey, new LocalCacheEntry(cached, localCacheTtlNanos));
             logProgress();
             logSlowRequest("L2_HIT", requestStart, 0L, 0L);
             return cached;
@@ -118,7 +120,7 @@ public class MainService {
             long dbMs = elapsedMs(dbStart);
 
             MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
-            localCache.put(cacheKey, new LocalCacheEntry(response));
+            localCache.put(cacheKey, new LocalCacheEntry(response, localCacheTtlNanos));
 
             long putStart = System.nanoTime();
             queryCache.put("main", cacheKey, response);
@@ -168,8 +170,8 @@ public class MainService {
     }
 
     private record LocalCacheEntry(MainChartResponseDto value, long expiresAtNanos) {
-        private LocalCacheEntry(MainChartResponseDto value) {
-            this(value, System.nanoTime() + LOCAL_CACHE_TTL_MS * 1_000_000L);
+        private LocalCacheEntry(MainChartResponseDto value, long ttlNanos) {
+            this(value, System.nanoTime() + ttlNanos);
         }
 
         private boolean isExpired() {
