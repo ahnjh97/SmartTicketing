@@ -45,22 +45,45 @@ function Get-RedisPing {
 }
 
 function Assert-Ubuntu {
-    $null = & wsl.exe -d Ubuntu -u root --exec /bin/true 2>&1
+    $registered = & wsl.exe --list --quiet 2>&1
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot list WSL distributions. Check wsl --status.' }
+    $names = @($registered | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
+    $ubuntu = @($names | Where-Object { $_ -match '^Ubuntu(?:-\d+\.\d+)?$' })
+    if ($names -contains 'Ubuntu') { $distribution = 'Ubuntu' }
+    elseif ($ubuntu.Count -eq 1) { $distribution = $ubuntu[0] }
+    elseif ($ubuntu.Count -gt 1) { throw "Multiple Ubuntu distributions found: $($ubuntu -join ', '). Use a distribution named Ubuntu to select one explicitly." }
+    else { throw 'No Ubuntu distribution is registered. Install Ubuntu and launch it once, then run local.cmd setup.' }
+    $null = & wsl.exe -d $distribution -u root --exec /bin/true 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw 'Ubuntu is not ready. Finish WSL installation/reboot, launch Ubuntu once to create its user, then run local.cmd setup.'
+        throw "WSL distribution $distribution could not start. Launch it once and complete setup, then run local.cmd setup."
     }
+    return $distribution
 }
 
 function Invoke-Redis([ValidateSet('setup', 'start')][string]$Command) {
-    Assert-Ubuntu
+    $distribution = Assert-Ubuntu
     # Pass only the checked-in script to WSL; no .env or credentials enter Linux.
     $scriptText = [IO.File]::ReadAllText($redisScript).Replace("`r`n", "`n")
     # Windows PowerShell adds CRLF when piping to native processes, even after
     # Replace above. Normalize inside WSL before Bash reads the script.
-    $scriptText | & wsl.exe -d Ubuntu -u root --exec bash -c "tr -d '\r' | bash -s -- $Command"
+    $scriptText | & wsl.exe -d $distribution -u root --exec bash -c "tr -d '\r' | bash -s -- $Command"
     if ($LASTEXITCODE -ne 0) { throw "Redis $Command failed. Check the WSL output above." }
-    if (-not (Get-RedisPing)) { throw 'Redis started in WSL, but Windows localhost:6379 did not return PONG.' }
+    # systemd services alone do not keep WSL alive after its last client exits.
+    # Keep one hidden client per distro. flock prevents duplicate keepalive jobs.
+    # It exits naturally when Windows restarts or the user shuts down WSL.
+    $keeper = Start-Process -FilePath 'wsl.exe' -ArgumentList @('-d', $distribution, '-u', 'root', '--exec',
+        'flock', '-n', '/run/smartticketing-redis.keepalive', 'sleep', 'infinity') -WindowStyle Hidden -PassThru
+    if ($keeper.WaitForExit(500) -and $keeper.ExitCode -ne 1) {
+        throw 'Could not keep the Redis WSL session running.'
+    }
+    $ready = $false
+    for ($attempt = 0; $attempt -lt 10; $attempt++) {
+        if (Get-RedisPing) { $ready = $true; break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $ready) { throw 'Redis started in WSL, but Windows localhost:6379 did not return PONG.' }
     Write-Host 'Redis: 127.0.0.1:6379 -> PONG' -ForegroundColor Green
+    Write-Host "WSL Redis session kept alive in background ($distribution)."
 }
 
 function Start-LocalBackend([bool]$Enabled) {
@@ -104,7 +127,9 @@ function Invoke-Action([string]$Choice) {
         'set-off' { Set-CacheMode $false }
         'status' {
             Write-Host "Saved local cache mode: $(Get-CacheMode) (takes effect after backend restart)"
-            Write-Host "Redis localhost:6379 PONG: $(Get-RedisPing)"
+            $ready = Get-RedisPing
+            Write-Host "Redis localhost:6379 PONG: $ready"
+            if (-not $ready) { Write-Host 'Redis is unavailable. Run local.cmd redis-start (or menu 1), then check again.' -ForegroundColor Yellow }
             Write-Host 'Application cache: smart-booking summaries (2-second TTL).'
         }
     }
