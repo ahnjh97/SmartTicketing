@@ -50,8 +50,10 @@ export default function (data) {
     });
 
     check(res, {
-        'nearby transit response received': (r) => r.status >= 200 && r.status < 500,
+        'nearby transit status 200': (r) => r.status === 200,
+        'nearby transit body exists': (r) => r.body && r.body.length > 0,
     });
+    if (res.status !== 200) console.log(`nearby-transit failed: status=${res.status}, body=${res.body || '<empty>'}`);
 
     sleep(Number(__ENV.SLEEP || 0.2));
 }
