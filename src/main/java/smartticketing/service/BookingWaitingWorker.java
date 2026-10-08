@@ -25,6 +25,7 @@ public class BookingWaitingWorker {
     private void sweepAvailable() {
         for (var show : dispatcher.pendingShows()) {
             try { dispatcher.dispatch(show); }
+            catch (BookingDispatchGate.Busy busy) { /* Another worker owns this show; the next scan can retry. */ }
             catch (RuntimeException failure) { log.warn("Waiting allocation deferred: show={}, error={}", show, failure.getClass().getSimpleName()); }
         }
     }

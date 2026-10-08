@@ -128,4 +128,33 @@ class BookingWaitingRedisTests {
         readStatements.clear(); cachedState(f,ranks);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
+
+    @Test void busyShowDoesNotReadDbOrAcknowledgeEventAndRetriesAfterRelease() {
+        tx(em -> { em.createQuery("delete from BookingOutboxEvent").executeUpdate(); return null; });
+        var f=fixture(1,1);
+        register(f,List.of(f.shows().getFirst()),key());
+        var dispatcher=dispatcher(CLOCK);
+        var gate=new BookingDispatchGate(redis,true,30000,db.jdbcUrl());
+        ReflectionTestUtils.setField(dispatcher,"dispatchGate",gate);
+        var store=new BookingOutboxStore(SharedEntityManagerCreator.createSharedEntityManager(db.factory()),manager());
+        var handler=new BookingWaitingOutboxHandler(dispatcher,projection(),true);
+        var worker=new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),CLOCK);
+        gate.run(f.shows().getFirst(),() -> {
+            readStatements.clear();
+            assertThatThrownBy(() -> dispatcher.dispatch(f.shows().getFirst())).isInstanceOf(BookingDispatchGate.Busy.class);
+            assertThat(readStatements).isEmpty();
+            new BookingWaitingWorker(dispatcher,new AdminMaintenanceGate()).sweep();
+            worker.recover();
+            return 0;
+        });
+        statuses(f,QueueStatus.WAITING);
+        var events=tx(em -> em.createQuery("select e from BookingOutboxEvent e where e.groupId=:g",BookingOutboxEvent.class)
+                .setParameter("g",f.group()).getResultList());
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().getStatus()).isEqualTo(BookingOutboxEvent.Status.PENDING);
+        assertThat(events.getFirst().getAttempts()).isEqualTo(1);
+        var retry=new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),java.time.Clock.offset(CLOCK,java.time.Duration.ofSeconds(3)));
+        for(int i=0;i<3;i++) retry.recover();
+        statuses(f,QueueStatus.HOLDING);
+    }
 }
