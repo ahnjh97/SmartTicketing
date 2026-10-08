@@ -130,7 +130,7 @@ function Invoke-Action([string]$Choice) {
             $ready = Get-RedisPing
             Write-Host "Redis localhost:6379 PONG: $ready"
             if (-not $ready) { Write-Host 'Redis is unavailable. Run local.cmd redis-start (or menu 1), then check again.' -ForegroundColor Yellow }
-            Write-Host 'Application cache: smart summaries, waiting ranks/repair, dispatch locks. QR Redis is independent.'
+            Write-Host 'Application cache: smart summaries, waiting ranks/repair, dispatch locks, and read-only query cache. QR Redis is independent.'
         }
     }
 }

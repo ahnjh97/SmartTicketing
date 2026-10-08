@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @Transactional
@@ -30,16 +31,19 @@ public class KakaoMapService {
     private final RestClient restClient;
     private final String restApiKey;
     private final NearbyTheaterPerformance performance;
+    private final RedisQueryCache queryCache;
     private final ExecutorService transitExecutor = Executors.newFixedThreadPool(8);
 
     public KakaoMapService(
             TheaterRepository theaters,
             @Value("${kakao.map.rest-api-key:}") String restApiKey,
-            NearbyTheaterPerformance performance
+            NearbyTheaterPerformance performance,
+            RedisQueryCache queryCache
     ) {
         this.theaters = theaters;
         this.restApiKey = restApiKey;
         this.performance = performance;
+        this.queryCache = queryCache;
         this.restClient = RestClient.builder()
                 .baseUrl("https://dapi.kakao.com")
                 .build();
@@ -82,6 +86,14 @@ public class KakaoMapService {
             int radius,
             String sort
     ) {
+        String normalizedSort = normalizeSort(sort);
+        String cacheKey = String.format(Locale.ROOT, "%.6f:%.6f:%s", latitude, longitude, normalizedSort);
+        if ("DISTANCE".equals(normalizedSort)) {
+            List<NearbyTheaterResponse> cached = queryCache.get("nearby-distance", cacheKey,
+                    new TypeReference<List<NearbyTheaterResponse>>() {});
+            if (cached != null) return cached;
+        }
+
         performance.start(
                 address != null && !address.isBlank()
                         ? address
@@ -89,7 +101,9 @@ public class KakaoMapService {
         );
 
         try {
-            return findNearbyTheatersInternal(latitude, longitude, sort);
+            List<NearbyTheaterResponse> response = findNearbyTheatersInternal(latitude, longitude, normalizedSort);
+            if ("DISTANCE".equals(normalizedSort)) queryCache.put("nearby-distance", cacheKey, response);
+            return response;
         } finally {
             performance.finish();
         }

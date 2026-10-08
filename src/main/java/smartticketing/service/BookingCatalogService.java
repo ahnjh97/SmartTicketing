@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.type.TypeReference;
 import smartticketing.dto.booking.CatalogResponse.*;
 import smartticketing.entity.Movie;
 import smartticketing.entity.Theater;
@@ -13,8 +14,12 @@ import smartticketing.entity.Theater;
 @Transactional(readOnly = true)
 public class BookingCatalogService {
     private final EntityManager em;
+    private final RedisQueryCache queryCache;
 
-    public BookingCatalogService(EntityManager em) { this.em = em; }
+    public BookingCatalogService(EntityManager em, RedisQueryCache queryCache) {
+        this.em = em;
+        this.queryCache = queryCache;
+    }
 
     public Page<MovieItem> movies(int page, int size) {
         return movies(page, size, false);
@@ -22,12 +27,17 @@ public class BookingCatalogService {
 
     public Page<MovieItem> movies(int page, int size, boolean landscapeOnly) {
         int offset = offset(page, size);
+        String cacheKey = page + ":" + size + ":" + landscapeOnly;
+        Page<MovieItem> cached = queryCache.get("movies", cacheKey, new TypeReference<Page<MovieItem>>() {});
+        if (cached != null) return cached;
         String where = " where m.active = true" + (landscapeOnly
                 ? " and m.backdropUrl is not null and trim(m.backdropUrl) <> ''" : "");
         var items = em.createQuery("from Movie m" + where + " order by m.id", Movie.class)
                 .setFirstResult(offset).setMaxResults(size).getResultList().stream().map(MovieItem::from).toList();
         long total = em.createQuery("select count(m) from Movie m" + where, Long.class).getSingleResult();
-        return new Page<>(items, page, size, total);
+        Page<MovieItem> response = new Page<>(items, page, size, total);
+        queryCache.put("movies", cacheKey, response);
+        return response;
     }
 
     public MovieDetail movie(Long id) { return MovieDetail.from(requireMovie(id)); }
@@ -42,6 +52,9 @@ public class BookingCatalogService {
         if (term.length() > 100) throw new IllegalArgumentException("검색어는 100자 이하여야 합니다.");
         // 와일드카드 자체를 검색할 수 있게 이스케이프한다.
         String pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        String cacheKey = term + ":" + page + ":" + size + ":" + (brand == null ? "" : brand.name());
+        Page<TheaterItem> cached = queryCache.get("theaters", cacheKey, new TypeReference<Page<TheaterItem>>() {});
+        if (cached != null) return cached;
         String where = " where t.active = true and (t.name like :pattern escape '!' or t.address like :pattern escape '!')";
         if (brand != null) where += " and t.brand=:brand";
         var rows = em.createQuery("from Theater t" + where + " order by t.name, t.id", Theater.class).setParameter("pattern", pattern);
@@ -49,7 +62,9 @@ public class BookingCatalogService {
         if (brand != null) { rows.setParameter("brand", brand); count.setParameter("brand", brand); }
         var items = rows.setFirstResult(offset).setMaxResults(size).getResultList().stream().map(TheaterItem::from).toList();
         long total = count.getSingleResult();
-        return new Page<>(items, page, size, total);
+        Page<TheaterItem> response = new Page<>(items, page, size, total);
+        queryCache.put("theaters", cacheKey, response);
+        return response;
     }
 
     public TheaterItem theater(Long id) { return TheaterItem.from(requireTheater(id)); }

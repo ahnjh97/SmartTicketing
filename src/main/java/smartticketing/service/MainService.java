@@ -1,5 +1,7 @@
 package smartticketing.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,33 +13,174 @@ import smartticketing.repository.MovieRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @Transactional(readOnly = true)
 public class MainService {
 
+    private static final Logger log = LoggerFactory.getLogger(MainService.class);
+    private static final long SLOW_REQUEST_MS = 50L;
+
     private final MovieRepository movieRepository;
     private final String referenceDate;
+    private final RedisQueryCache queryCache;
+    private final long localCacheTtlNanos;
+    private final ConcurrentHashMap<String, CompletableFuture<MainChartResponseDto>> loadingCache =
+            new ConcurrentHashMap<>();
+    /** Short L1 cache prevents a Redis round-trip for the hottest main-page query. */
+    private final ConcurrentHashMap<String, LocalCacheEntry> localCache = new ConcurrentHashMap<>();
+
+    private final AtomicLong requestCount = new AtomicLong();
+    private final AtomicLong hitCount = new AtomicLong();
+    private final AtomicLong missCount = new AtomicLong();
+    private final AtomicLong loaderCount = new AtomicLong();
+    private final AtomicLong joinCount = new AtomicLong();
 
     public MainService(
             MovieRepository movieRepository,
-            @Value("${app.reference-date:}") String referenceDate) {
+            @Value("${app.reference-date:}") String referenceDate,
+            RedisQueryCache queryCache,
+            @Value("${app.cache.main-local-ttl-ms:500}") long localCacheTtlMs) {
         this.movieRepository = movieRepository;
         this.referenceDate = referenceDate;
+        this.queryCache = queryCache;
+        this.localCacheTtlNanos = Math.max(100L, localCacheTtlMs) * 1_000_000L;
     }
 
     public MainChartResponseDto getMainChart() {
+        long requestStart = System.nanoTime();
         LocalDate baseDate = getBaseDate();
-        long totalAudience = movieRepository.sumActiveAudienceCount();
+        String cacheKey = baseDate.toString();
 
-        List<MovieChartResponseDto> nowShowing = toChart(
-                movieRepository.findTop10ByActiveTrueAndReleaseDateLessThanEqualOrderByAudienceCountDescReleaseDateDesc(baseDate),
-                totalAudience);
-        List<MovieChartResponseDto> comingSoon = toChart(
-                movieRepository.findTop10ByActiveTrueAndReleaseDateAfterOrderByReleaseDateAscTitleAsc(baseDate),
-                totalAudience);
+        LocalCacheEntry localEntry = localCache.get(cacheKey);
+        if (localEntry != null && !localEntry.isExpired()) {
+            hitCount.incrementAndGet();
+            logProgress();
+            logSlowRequest("L1_HIT", requestStart, 0L, 0L);
+            return localEntry.value();
+        }
+        if (localEntry != null) {
+            localCache.remove(cacheKey, localEntry);
+        }
 
-        return new MainChartResponseDto(nowShowing, comingSoon);
+        MainChartResponseDto cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
+        if (cached != null) {
+            hitCount.incrementAndGet();
+            localCache.put(cacheKey, new LocalCacheEntry(cached, localCacheTtlNanos));
+            logProgress();
+            logSlowRequest("L2_HIT", requestStart, 0L, 0L);
+            return cached;
+        }
+
+        missCount.incrementAndGet();
+
+        CompletableFuture<MainChartResponseDto> newFuture = new CompletableFuture<>();
+        CompletableFuture<MainChartResponseDto> existingFuture =
+                loadingCache.putIfAbsent(cacheKey, newFuture);
+
+        if (existingFuture != null) {
+            joinCount.incrementAndGet();
+            long joinStart = System.nanoTime();
+            MainChartResponseDto result = existingFuture.join();
+            long joinMs = elapsedMs(joinStart);
+            logSlowJoin(joinMs);
+            logProgress();
+            logSlowRequest("JOIN", requestStart, joinMs, 0L);
+            return result;
+        }
+
+        loaderCount.incrementAndGet();
+        try {
+            // Another request may have populated Redis between the initial GET and
+            // becoming the loader for this cache key.
+            long secondGetStart = System.nanoTime();
+            cached = queryCache.get("main", cacheKey, MainChartResponseDto.class);
+            long secondGetMs = elapsedMs(secondGetStart);
+            if (cached != null) {
+                hitCount.incrementAndGet();
+                localCache.put(cacheKey, LocalCacheEntry.create(cached, localCacheTtlNanos));
+                newFuture.complete(cached);
+                logProgress();
+                logSlowRequest("LOADER_SECOND_HIT", requestStart, 0L, secondGetMs);
+                return cached;
+            }
+
+            long dbStart = System.nanoTime();
+            long totalAudience = movieRepository.sumActiveAudienceCount();
+
+            List<MovieChartResponseDto> nowShowing = toChart(
+                    movieRepository.findTop10ByActiveTrueAndReleaseDateLessThanEqualOrderByAudienceCountDescReleaseDateDesc(baseDate),
+                    totalAudience);
+            List<MovieChartResponseDto> comingSoon = toChart(
+                    movieRepository.findTop10ByActiveTrueAndReleaseDateAfterOrderByReleaseDateAscTitleAsc(baseDate),
+                    totalAudience);
+            long dbMs = elapsedMs(dbStart);
+
+            MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
+            localCache.put(cacheKey, new LocalCacheEntry(response, localCacheTtlNanos));
+
+            long putStart = System.nanoTime();
+            queryCache.put("main", cacheKey, response);
+            long putMs = elapsedMs(putStart);
+
+            newFuture.complete(response);
+
+            logLoaderTiming(dbMs, putMs, secondGetMs);
+            logProgress();
+            logSlowRequest("LOAD", requestStart, 0L, dbMs + putMs);
+            return response;
+        } catch (RuntimeException e) {
+            newFuture.completeExceptionally(e);
+            throw e;
+        } finally {
+            loadingCache.remove(cacheKey, newFuture);
+        }
+    }
+
+    private void logLoaderTiming(long dbMs, long putMs, long secondGetMs) {
+        if (dbMs >= SLOW_REQUEST_MS || putMs >= SLOW_REQUEST_MS || secondGetMs >= SLOW_REQUEST_MS) {
+            log.warn("MAIN_CACHE_LOADER db={}ms redisSecondGet={}ms redisPut={}ms",
+                    dbMs, secondGetMs, putMs);
+        }
+    }
+
+    private void logSlowJoin(long joinMs) {
+        if (joinMs >= SLOW_REQUEST_MS) {
+            log.warn("MAIN_CACHE_JOIN_WAIT {}ms", joinMs);
+        }
+    }
+
+    private void logSlowRequest(String path, long requestStart, long joinMs, long backendMs) {
+        long totalMs = elapsedMs(requestStart);
+        if (totalMs >= SLOW_REQUEST_MS) {
+            log.warn("MAIN_REQUEST path={} total={}ms join={}ms backend={}ms",
+                    path, totalMs, joinMs, backendMs);
+        }
+    }
+
+    private void logProgress() {
+        long count = requestCount.incrementAndGet();
+        if (count % 100 == 0) {
+            log.info("MAIN_CACHE_STATS requests={} hits={} misses={} loaders={} joins={}",
+                    count, hitCount.get(), missCount.get(), loaderCount.get(), joinCount.get());
+        }
+    }
+
+    private record LocalCacheEntry(MainChartResponseDto value, long expiresAtNanos) {
+        private static LocalCacheEntry create(MainChartResponseDto value, long ttlNanos) {
+            return new LocalCacheEntry(value, System.nanoTime() + ttlNanos);
+        }
+
+        private boolean isExpired() {
+            return System.nanoTime() >= expiresAtNanos;
+        }
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 
     // 설정된 기준일이 있으면 그 날짜, 없으면 오늘(한국 시간)
@@ -49,7 +192,8 @@ public class MainService {
 
     private List<MovieChartResponseDto> toChart(List<Movie> movies, long totalAudience) {
         return movies.stream()
-                .map(movie -> MovieChartResponseDto.from(movie, calculateBookingRate(movie.getAudienceCount(), totalAudience)))
+                .map(movie -> MovieChartResponseDto.from(movie,
+                        calculateBookingRate(movie.getAudienceCount(), totalAudience)))
                 .toList();
     }
 
