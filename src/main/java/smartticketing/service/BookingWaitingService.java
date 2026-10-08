@@ -198,14 +198,55 @@ public class BookingWaitingService {
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
     }
 
+    private record ReadBatch(Map<Long,List<WaitingQueue>> queues, Map<Long,Long> ahead,
+                             Map<Long,Seat> seats, Map<Long,BookingGroupHold> holds) {}
+
+    private ReadBatch readBatch(List<Long> groupIds) {
+        var queues = new HashMap<Long,List<WaitingQueue>>();
+        var ahead = new HashMap<Long,Long>();
+        var seats = new HashMap<Long,Seat>();
+        var slots = new HashMap<Long,BookingGroupHold>();
+        if (groupIds.isEmpty()) return new ReadBatch(queues,ahead,seats,slots);
+        var rows = em.createQuery("""
+                select q from WaitingQueue q join fetch q.showtime s join fetch s.screen c join fetch c.theater
+                left join fetch q.requestedSeatIds where q.requestGroup.id in :groups order by q.id
+                """, WaitingQueue.class).setParameter("groups",groupIds).getResultList();
+        rows.forEach(q -> queues.computeIfAbsent(q.getRequestGroup().getId(),ignored -> new ArrayList<>()).add(q));
+        if (!rows.isEmpty()) {
+            var counts = em.createQuery("""
+                    select q.id,count(a.id) from WaitingQueue q
+                    left join WaitingQueue a on a.showtime.id=q.showtime.id and a.requestGroup is not null
+                    and a.status=:waiting and coalesce(a.zoneQueueNumber,a.queueNumber)<coalesce(q.zoneQueueNumber,q.queueNumber)
+                    and (a.seatZone=q.seatZone or (a.seatZone is null and q.seatZone is null))
+                    where q.requestGroup.id in :groups group by q.id
+                    """, Object[].class).setParameter("waiting",QueueStatus.WAITING).setParameter("groups",groupIds).getResultList();
+            counts.forEach(row -> ahead.put((Long)row[0],(Long)row[1]));
+            var requested = rows.stream().flatMap(q -> q.getRequestedSeatIds().stream()).distinct().toList();
+            if (!requested.isEmpty()) em.createQuery("select s from Seat s where s.id in :ids",Seat.class)
+                    .setParameter("ids",requested).getResultList().forEach(s -> seats.put(s.getId(),s));
+        }
+        em.createQuery("select h from BookingGroupHold h join fetch h.reservation where h.id in :groups",BookingGroupHold.class)
+                .setParameter("groups",groupIds).getResultList().forEach(h -> slots.put(h.getId(),h));
+        return new ReadBatch(queues,ahead,seats,slots);
+    }
+
+    Map<Long,WaitingResponse> snapshots(List<BookingRequestGroup> groups) {
+        var reads = readBatch(groups.stream().map(BookingRequestGroup::getId).toList());
+        var responses = new HashMap<Long,WaitingResponse>();
+        for (var group : groups) responses.put(group.getId(),response(group,true,false,reads));
+        return responses;
+    }
+
     WaitingResponse snapshot(BookingRequestGroup group) { return response(group,true,false); }
     private WaitingResponse response(BookingRequestGroup group) { return response(group,false,true); }
     private WaitingResponse response(BookingRequestGroup group, boolean snapshot, boolean includeChoices) {
+        return response(group,snapshot,includeChoices,snapshot ? readBatch(List.of(group.getId())) : null);
+    }
+    private WaitingResponse response(BookingRequestGroup group, boolean snapshot, boolean includeChoices, ReadBatch reads) {
         var now = holds.now();
-        var state = snapshot ? BookingReadState.group(em, group, now) : null;
+        var state = snapshot ? BookingReadState.group(group, reads.holds().get(group.getId()), now) : null;
         var groupStatus = snapshot ? state.status() : group.getStatus();
-        var rows = snapshot ? em.createQuery("select q from WaitingQueue q where q.requestGroup.id=:g order by q.id",WaitingQueue.class)
-                .setParameter("g",group.getId()).getResultList() : BookingQueueLifecycle.rows(em, group.getId());
+        var rows = snapshot ? reads.queues().getOrDefault(group.getId(),List.of()) : BookingQueueLifecycle.rows(em, group.getId());
         var items = new ArrayList<WaitingResponse.Item>();
         for (var q : rows) {
             var status=snapshot ? BookingReadState.queue(q, state, now) : q.getStatus();
@@ -214,11 +255,13 @@ public class BookingWaitingService {
                 status=QueueStatus.EXPIRED;
                 if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); }
             }
-            var requestedSeats = q.getRequestedSeatIds().isEmpty() ? List.<Seat>of() : em.createQuery(
+            var requestedSeats = snapshot ? q.getRequestedSeatIds().stream().map(reads.seats()::get).filter(Objects::nonNull)
+                    .sorted(Comparator.comparing(Seat::getSeatRow).thenComparing(Seat::getSeatNumber)).toList()
+                    : q.getRequestedSeatIds().isEmpty() ? List.<Seat>of() : em.createQuery(
                     "select s from Seat s where s.id in :ids order by s.seatRow, s.seatNumber", Seat.class)
                     .setParameter("ids", q.getRequestedSeatIds()).getResultList();
             // Every waiting request in the same zone shares the same position count.
-            long ahead = em.createQuery("""
+            long ahead = snapshot ? reads.ahead().getOrDefault(q.getId(),0L) : em.createQuery("""
                     select count(q) from WaitingQueue q where q.showtime.id=:s and q.requestGroup is not null
                     and q.status=:status and coalesce(q.zoneQueueNumber,q.queueNumber)<:number
                     and ((:zone is null and q.seatZone is null) or q.seatZone=:zone)
@@ -237,7 +280,7 @@ public class BookingWaitingService {
                 from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom()); until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
                 if (!until.isAfter(from)) until = until.plusDays(1);
             }
-            var candidates = em.createQuery("select s from Showtime s where s.movie.id=:m and s.startTime>=:from and s.startTime>:now"
+            var candidates = em.createQuery("select s from Showtime s join fetch s.screen c join fetch c.theater join fetch s.movie where s.movie.id=:m and s.startTime>=:from and s.startTime>:now"
                     + (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART ? " and s.startTime<=:until" : " and s.startTime<:until")
                     + " order by s.startTime,s.id", Showtime.class)
                     .setParameter("m", group.getMovie().getId()).setParameter("from", from).setParameter("until", until).setParameter("now", now).getResultList();

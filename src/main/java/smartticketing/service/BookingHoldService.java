@@ -225,6 +225,27 @@ public class BookingHoldService {
                 .setParameter("now", now()).setMaxResults(limit).getResultList();
     }
 
+    public record ExpiryCandidate(Long groupId, LocalDateTime expiresAt) {}
+    public record ExpiryBacklog(long count, long oldestDelayMs) {}
+
+    @Transactional(readOnly = true)
+    public List<ExpiryCandidate> expiredBatch(LocalDateTime cutoff, ExpiryCandidate after, int limit) {
+        var query = em.createQuery("select h.id, h.expiresAt from BookingGroupHold h where h.expiresAt<=:cutoff"
+                + (after == null ? "" : " and (h.expiresAt>:afterTime or (h.expiresAt=:afterTime and h.id>:afterId))")
+                + " order by h.expiresAt,h.id", Object[].class).setParameter("cutoff", cutoff);
+        if (after != null) query.setParameter("afterTime", after.expiresAt()).setParameter("afterId", after.groupId());
+        return query.setMaxResults(limit).getResultList().stream()
+                .map(row -> new ExpiryCandidate((Long) row[0], (LocalDateTime) row[1])).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ExpiryBacklog expiryBacklog() {
+        var time = now();
+        var row = em.createQuery("select count(h), min(h.expiresAt) from BookingGroupHold h where h.expiresAt<=:now", Object[].class)
+                .setParameter("now", time).getSingleResult();
+        return new ExpiryBacklog((Long) row[0], row[1] == null ? 0 : Duration.between((LocalDateTime) row[1], time).toMillis());
+    }
+
     boolean expireLockedGroup(BookingRequestGroup group) {
         if (group.getStatus() != BookingGroupStatus.HOLDING) return false;
         var slot = em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE);

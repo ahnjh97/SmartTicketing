@@ -88,6 +88,44 @@ class BookingWaitingTests {
     static void statuses(Fixture f,QueueStatus... statuses) { assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactly(statuses); }
     static List<ShowtimeSeat> inventory(EntityManager em,Long show) { return BookingSmartTests.inventory(em,show); }
 
+    @Test void smartWaitingReadsBatchRanksAndDoNotAddQueriesForEveryGroup() {
+        var f=fixture(2,2); register(f);
+        readStatements.clear();
+        var first=readCandidates(f);
+        int singleQueries=readStatements.size();
+        assertThat(first.candidates()).hasSize(1);
+        for(int i=0;i<7;i++) register(another(f,2,true));
+        readStatements.clear();
+        var many=readCandidates(f);
+        assertThat(many.candidates()).hasSize(8);
+        assertThat(many.candidates().getFirst().waiting().items()).allMatch(q -> q.aheadCount()==0);
+        assertThat(many.candidates().getLast().waiting().items()).allMatch(q -> q.aheadCount()==7);
+        assertThat(readStatements.size()).isLessThanOrEqualTo(singleQueries+1);
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase().contains("for update"));
+        assertThat(many.candidates().getFirst().waiting().nextPollAfterMs()).isEqualTo(5000);
+    }
+
+    private SmartBookingCandidatesService.Candidates readCandidates(Fixture f) {
+        return tx(em -> new SmartBookingCandidatesService(em,null,holds(em,CLOCK),service(em,CLOCK),
+                BookingPaymentTests.service(em,CLOCK,true),new BookingIdempotency(em)).get(f.user,null));
+    }
+
+    @Test void expiryBatchCursorPassesUnremovedRowsWithTheSameTimestamp() {
+        var groups=new ArrayList<Long>();
+        var cutoff=NOW.minusYears(1);
+        for(int i=0;i<3;i++) {
+            var f=fixture(1,1); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); groups.add(f.group);
+            tx(em -> { em.find(BookingGroupHold.class,f.group).setExpiresAt(cutoff); return null; });
+        }
+        var first=tx(em -> holds(em,CLOCK).expiredBatch(cutoff,null,2));
+        assertThat(first).extracting(BookingHoldService.ExpiryCandidate::groupId).containsExactly(groups.get(0),groups.get(1));
+        var next=tx(em -> holds(em,CLOCK).expiredBatch(cutoff,first.getLast(),2));
+        assertThat(next).extracting(BookingHoldService.ExpiryCandidate::groupId).containsExactly(groups.get(2));
+        var backlog=tx(em -> holds(em,CLOCK).expiryBacklog());
+        assertThat(backlog.count()).isGreaterThanOrEqualTo(3);
+        assertThat(backlog.oldestDelayMs()).isGreaterThanOrEqualTo(Duration.ofDays(365).toMillis());
+    }
+
     @Test void allStatusReadsProjectExpiryWithoutLocksOrWritesAndWorkerStillReleasesSeats() {
         var f=fixture(2,2); register(f);
         dispatcher(CLOCK).dispatch(f.shows.getFirst());

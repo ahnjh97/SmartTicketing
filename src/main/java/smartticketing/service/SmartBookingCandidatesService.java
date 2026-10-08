@@ -253,20 +253,29 @@ public class SmartBookingCandidatesService {
                 .setParameter("selected",selectedId).setParameter("queues",List.of(QueueStatus.WAITING,QueueStatus.PAUSED))
                 .setParameter("now",holds.now()).setParameter("scheduled",ShowtimeStatus.SCHEDULED)
                 .setParameter("pending",ReservationStatus.PENDING).getResultList();
-        var children=new ArrayList<BookingRequestGroup>();
-        for(var id:ids)children.add(em.find(BookingRequestGroup.class,id));
+        var children=ids.isEmpty()?List.<BookingRequestGroup>of():em.createQuery("""
+                select g from BookingRequestGroup g join fetch g.movie left join fetch g.seatPreferences
+                left join fetch g.selectedShowtime s left join fetch s.screen c left join fetch c.theater
+                where g.id in :ids order by g.id
+                """,BookingRequestGroup.class).setParameter("ids",ids).getResultList();
         holds.requireUser(userId);
+        var queueViews=waiting.snapshots(children);
+        var latest=ids.isEmpty()?List.<Reservation>of():em.createQuery("""
+                select r from Reservation r join fetch r.showtime s join fetch s.screen c join fetch c.theater join fetch s.movie
+                where r.id in (select max(r2.id) from Reservation r2 where r2.requestGroup.id in :ids group by r2.requestGroup.id)
+                """,Reservation.class).setParameter("ids",ids).getResultList();
+        var latestByGroup=new HashMap<Long,Reservation>();
+        latest.forEach(r -> latestByGroup.put(r.getRequestGroup().getId(),r));
         var items=new ArrayList<Candidate>();
         for(var g:children) {
-            var queues=waiting.snapshot(g);
-            var reservations=em.createQuery("select r from Reservation r where r.requestGroup.id=:g order by r.id desc",Reservation.class)
-                    .setParameter("g",g.getId()).setMaxResults(1).getResultList();
-            var payment=reservations.isEmpty()?null:payments.snapshot(userId,reservations.getFirst());
+            var queues=queueViews.get(g.getId());
+            var reservation=latestByGroup.get(g.getId());
+            var payment=reservation==null?null:payments.snapshot(userId,reservation);
             boolean active=queues.items().stream().anyMatch(q->q.status()==QueueStatus.WAITING || q.status()==QueueStatus.PAUSED)
                     || payment!=null && payment.reservation().status()==ReservationStatus.PENDING;
             if(!active && !Objects.equals(selectedId,g.getId())) continue;
             var show=g.getSelectedShowtime();
-            if(show==null && !reservations.isEmpty()) show=reservations.getFirst().getShowtime();
+            if(show==null && reservation!=null) show=reservation.getShowtime();
             if(show==null && !queues.items().isEmpty()) show=em.find(Showtime.class,queues.items().getFirst().showtimeId());
             if(show==null) continue;
             items.add(new Candidate(g.getId(),g.getCandidateKind()==null?"DIRECT":g.getCandidateKind(),g.getCandidateZone(),show.getId(),show.getScreen().getTheater().getName(),
@@ -276,17 +285,22 @@ public class SmartBookingCandidatesService {
         var activeIds = new HashSet<>(items.stream().map(Candidate::groupId).toList());
         var batches = new ArrayList<List<Long>>();
         if (!activeIds.isEmpty()) {
-            var records = em.createQuery("""
-                    select o.responseBody from BookingOperation o where o.user.id=:user
-                    and o.operationType=:type and o.status=:status order by o.id desc
-                    """, String.class).setParameter("user", userId)
-                    .setParameter("type", BookingOperationType.CREATE_SMART_CANDIDATES)
-                    .setParameter("status", BookingOperationStatus.COMPLETED).getResultList();
-            var json = tools.jackson.databind.json.JsonMapper.builder().build();
-            for (var record : records) {
-                var batch = json.readTree(record).get("groupIds").valueStream().map(node->node.asLong()).filter(activeIds::contains).toList();
-                if (!batch.isEmpty()) batches.add(batch);
+            // Return only matching group IDs, never every historical response/initial view.
+            var records = em.createNativeQuery("""
+                    select o.id, member.group_id from booking_operations o
+                    join json_table(coalesce(o.response_body,'{}'), '$.groupIds[*]'
+                        columns (ordinality for ordinality, group_id bigint path '$')) member
+                    where o.user_id=:user and o.operation_type=:type and o.status=:status
+                    and member.group_id in (:ids) order by o.id desc, member.ordinality
+                    """, Object[].class).setParameter("user", userId)
+                    .setParameter("type", BookingOperationType.CREATE_SMART_CANDIDATES.name())
+                    .setParameter("status", BookingOperationStatus.COMPLETED.name()).setParameter("ids",activeIds).getResultList();
+            var byOperation = new LinkedHashMap<Long,List<Long>>();
+            for (var rawRecord : records) {
+                var record = (Object[]) rawRecord;
+                byOperation.computeIfAbsent(((Number)record[0]).longValue(),ignored -> new ArrayList<>()).add(((Number)record[1]).longValue());
             }
+            batches.addAll(byOperation.values());
         }
         return new Candidates(items, batches);
     }

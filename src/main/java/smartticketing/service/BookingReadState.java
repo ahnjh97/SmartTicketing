@@ -14,6 +14,10 @@ final class BookingReadState {
     static Group group(EntityManager em, BookingRequestGroup group, LocalDateTime now) {
         var hold = group.getStatus() == BookingGroupStatus.HOLDING
                 ? em.find(BookingGroupHold.class, group.getId()) : null;
+        return group(group, hold, now);
+    }
+
+    static Group group(BookingRequestGroup group, BookingGroupHold hold, LocalDateTime now) {
         boolean expired = hold != null && !hold.getExpiresAt().isAfter(now);
         return new Group(expired ? BookingGroupStatus.ACTIVE : group.getStatus(), expired ? null : hold, expired);
     }
