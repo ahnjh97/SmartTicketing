@@ -12,6 +12,7 @@ import java.util.UUID;
 
 /** 새 MySQL 테스트 DB만 소유한다. 생성 실패 시 기존 이름의 DB를 삭제하지 않는다. */
 public final class TemporaryMysqlDatabase implements AutoCloseable {
+    private final String jdbcBase = "jdbc:mysql://" + System.getenv().getOrDefault("BOOKING_TEST_MYSQL_HOST", "127.0.0.1") + ":3306/";
     private final String name = "booking_test_" + UUID.randomUUID().toString().replace("-", "");
     private Connection admin;
     private boolean created;
@@ -28,7 +29,7 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
         String user = System.getenv("BOOKING_TEST_MYSQL_USER"), password = System.getenv("BOOKING_TEST_MYSQL_PASSWORD");
         if (user == null || user.isBlank() || password == null) throw new IllegalStateException("Set BOOKING_TEST_MYSQL_USER and BOOKING_TEST_MYSQL_PASSWORD");
         try {
-            admin = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3306/", user, password);
+            admin = DriverManager.getConnection(jdbcBase, user, password);
             try (var stmt = admin.createStatement()) {
                 stmt.executeUpdate("CREATE DATABASE " + name + " CHARACTER SET utf8mb4");
                 created = true;
@@ -41,10 +42,13 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
             }
             var config = new Configuration().setPhysicalNamingStrategy(new PhysicalNamingStrategySnakeCaseImpl())
                     .setProperty("hibernate.connection.driver_class", "com.mysql.cj.jdbc.Driver")
-                    .setProperty("hibernate.connection.url", "jdbc:mysql://127.0.0.1:3306/" + name)
+                    .setProperty("hibernate.connection.url", jdbcBase + name)
                     .setProperty("hibernate.connection.username", user)
                     .setProperty("hibernate.connection.password", password)
                     .setProperty("hibernate.connection.rewriteBatchedStatements", "true")
+                    // Match Spring's HibernateJpaVendorAdapter: retain the connection so
+                    // HibernateJpaDialect can apply and restore per-transaction isolation.
+                    .setProperty("hibernate.connection.handling_mode", "DELAYED_ACQUISITION_AND_HOLD")
                     .setProperty("hibernate.hbm2ddl.auto", "update")
                     .setProperty("hibernate.hbm2ddl.halt_on_error", "true")
                     .setProperty("hibernate.show_sql", "false");
@@ -65,7 +69,7 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
     EntityManager open() { return factory.createEntityManager(); }
 
     SessionFactory factory() { return factory; }
-    public String jdbcUrl() { return "jdbc:mysql://127.0.0.1:3306/" + name; }
+    public String jdbcUrl() { return jdbcBase + name; }
 
     /** DB 내용은 보존하고 앱의 ORM 연결/캐시만 재시작한다. */
     void restartPersistence() {

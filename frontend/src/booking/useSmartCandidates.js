@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { bookingApi } from '../api/booking.js';
 import { requestKey, forget } from './useManualHold.js';
+import { startVisiblePolling } from './visiblePolling.js';
 
 export default function useSmartCandidates(user, body, ready) {
     const [params, setParams] = useSearchParams();
@@ -50,28 +51,21 @@ export default function useSmartCandidates(user, body, ready) {
     });
     useEffect(() => {
         if (!user || (!managing && !failed)) return;
-        let active = true, sequence = 0, running = false, again = false, timer;
-        const controller = new AbortController();
-        async function read() {
-            if (!active) return;
-            if (running) { again=true; return; }
-            clearTimeout(timer);
-            if (gate.current) { timer=setTimeout(read,3000); return; }
-            running=true;
+        let active = true, sequence = 0;
+        async function read(signal) {
+            if (!active || gate.current) return;
             const request = ++sequence, generation = epoch.current;
             try {
-                const data = await bookingApi.smartCandidates(selectedId, controller.signal);
-                if (active && request === sequence && generation === epoch.current && !gate.current) {
+                const data = await bookingApi.smartCandidates(selectedId, signal);
+                if (active && !signal.aborted && request === sequence && generation === epoch.current && !gate.current) {
                     setResult({ identity, data, receivedAt: performance.now() });
                 }
-            } catch (error) { if (active && request === sequence && generation === epoch.current) setFailure({ identity, error }); }
-            finally { running=false; if(active)timer=setTimeout(read,again?0:3000); again=false; }
+            } catch (error) { if (active && !signal.aborted && request === sequence && generation === epoch.current && !gate.current) setFailure({ identity, error }); }
         }
-        if(initialRead.current===identity) { initialRead.current=null; timer=setTimeout(read,3000); }
-        else read();
-        const focus = () => { if (document.visibilityState !== 'hidden') read(); };
-        window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus);
-        return () => { active = false; controller.abort(); clearTimeout(timer); window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); };
+        const initialDelay = initialRead.current===identity ? 3000 : 0;
+        initialRead.current=null;
+        const stop = startVisiblePolling(read,3000,initialDelay);
+        return () => { active = false; stop(); };
     }, [identity, managing, selectedId, user, revision, failed]);
 
     async function mutate(candidate, operation, fail = false) {

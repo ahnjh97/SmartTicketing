@@ -24,7 +24,7 @@ function Set-CacheMode([bool]$Enabled) {
     [IO.Directory]::CreateDirectory((Split-Path $modePath)) | Out-Null
     [IO.File]::WriteAllText($modePath, "app.cache.enabled=$value`n", (New-Object Text.UTF8Encoding($false)))
     Write-Host "Saved local cache mode: $value" -ForegroundColor Cyan
-    Write-Host 'Smart-booking summary cache mode saved. QR Redis stays ON.'
+    Write-Host 'Booking Redis mode saved: summaries, waiting ranks/repair and dispatch locks. QR Redis stays ON.'
     Write-Host 'IDE users: restart the backend with the repository root as its working directory.'
 }
 
@@ -130,7 +130,7 @@ function Invoke-Action([string]$Choice) {
             $ready = Get-RedisPing
             Write-Host "Redis localhost:6379 PONG: $ready"
             if (-not $ready) { Write-Host 'Redis is unavailable. Run local.cmd redis-start (or menu 1), then check again.' -ForegroundColor Yellow }
-            Write-Host 'Application cache: smart-booking summaries (2-second TTL).'
+            Write-Host 'Application cache: smart summaries, waiting ranks/repair, dispatch locks, and read-only query cache. QR Redis is independent.'
         }
     }
 }

@@ -278,7 +278,7 @@ class BookingHoldTests {
         assertInventory(f, 1, 1, 0);
     }
 
-    @Test void groupReadRecoversExpiryAndRatingChangeRequiresNewDeclaration() {
+    @Test void groupReadProjectsExpiryWithoutReleasingSeatsAndRatingChangeRequiresNewDeclaration() {
         var f = fixture(1, 1);
         tx(em -> { em.find(Showtime.class, f.show).getMovie().setRating("19"); return null; });
         assertThat(manual(f, f.user, f.group, key(), f.seats).status()).isEqualTo(409);
@@ -286,6 +286,8 @@ class BookingHoldTests {
         manual(f, f.user, f.group, key(), f.seats);
         var restored = tx(em -> service(em, Clock.offset(CLOCK, Duration.ofMinutes(6))).group(f.user, f.group));
         assertThat(restored.status()).isEqualTo(BookingGroupStatus.ACTIVE); assertThat(restored.activeReservationId()).isNull();
+        assertInventory(f, 1, 1, 0);
+        tx(em -> service(em, Clock.offset(CLOCK, Duration.ofMinutes(6))).expire(f.group));
         assertInventory(f, 1, 0, 1);
     }
 
@@ -306,7 +308,7 @@ class BookingHoldTests {
         assertThat(tx(em -> service(em, CLOCK).hold(f.otherUser, otherGroup, key(), BookingHoldService.Source.SMART, candidate)).status()).isEqualTo(400);
     }
 
-    @Test void repeatableReadSnapshotBeforeExpiryCannotResurrectAnOldSlot() {
+    @Test void readSnapshotCannotResurrectExpiredSlotAndNextCommandCanAcquire() {
         var f = fixture(1, 1); manual(f, f.user, f.group, key(), f.seats);
         var after = Clock.offset(CLOCK, Duration.ofMinutes(6));
         tx(em -> {
@@ -315,9 +317,12 @@ class BookingHoldTests {
             tx(other -> service(other, after).expire(f.group));
             var fresh = service(em, after).group(f.user, f.group);
             assertThat(fresh.activeReservationId()).isNull();
-            var held = service(em, after).manual(f.user, f.group, key(), new ManualHoldRequest(f.seats));
-            assertThat(held.status()).isEqualTo(201); return null;
+            return null;
         });
+        assertInventory(f, 1, 0, 1);
+        // GET and POST have separate transactions/persistence contexts in the API.
+        var held = tx(em -> service(em, after).manual(f.user, f.group, key(), new ManualHoldRequest(f.seats)));
+        assertThat(held.status()).isEqualTo(201);
         assertInventory(f, 2, 1, 0);
     }
 

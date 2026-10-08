@@ -340,6 +340,13 @@ public class AdminDataService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "데이터가 변경되었습니다. 삭제 범위를 다시 확인해주세요.");
         if (preview.hasBookings() && !request.includeBookings())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "연결된 예약·결제·대기 데이터 삭제에 동의해주세요.");
+        // Capture IDs before deletion; events deliberately have no catalog foreign key.
+        var affectedShows = ids("""
+                select id from showtimes where id in (:shows)
+                union select showtime_id from waiting_queues where request_group_id in (:affectedGroups) or request_group_id in (:preferenceGroups)
+                union select showtime_id from reservations where request_group_id in (:affectedGroups) or request_group_id in (:preferenceGroups)
+                order by 1
+                """, plan.params());
         db.update("update booking_request_groups set selected_showtime_id=null where selected_showtime_id in (:shows) and id not in (:groups)", plan.params());
         for (var entry : plan.deletes().entrySet()) db.update("delete from " + entry.getKey() + " where " + entry.getValue(), plan.params());
         // Reconcile surviving multi-showtime groups without deleting their other reservations.
@@ -363,6 +370,8 @@ public class AdminDataService {
                         Map.of("position", position, "group", group, "theater", pref.get("theater_id")));
             }
         }
+        for (Long show : affectedShows) BookingOutbox.append(db, show,
+                smartticketing.entity.BookingOutboxEvent.Type.SHOWTIME_CHANGED, "ADMIN_CATALOG_CHANGED", java.time.LocalDateTime.now());
         return preview;
     }
 

@@ -76,3 +76,22 @@ tasks.register('bookingFoundationTest', Test) {
 		includeTestsMatching 'smartticketing.booking.*'
 	}
 }
+
+// Explicit local-only k6 harness; creates and drops its own UUID MySQL schemas.
+tasks.register('bookingRedisBenchmark', JavaExec) {
+	dependsOn testClasses
+	// Do not component-scan unit-test @Configuration classes in the benchmark server.
+	def fixtureDir = layout.buildDirectory.dir('benchmark-fixture')
+	classpath = files(fixtureDir) + sourceSets.main.runtimeClasspath
+	doFirst {
+		copy {
+			from sourceSets.test.output.classesDirs
+			include 'smartticketing/booking/BookingRedisBenchmark*.class', 'smartticketing/booking/QueryRedisBenchmark*.class', 'smartticketing/booking/BenchmarkProcess.class', 'smartticketing/booking/BenchmarkBackend.class', 'smartticketing/booking/TemporaryMysqlDatabase.class'
+			into fixtureDir
+		}
+	}
+	mainClass = System.getenv('BENCH_SUITE') && System.getenv('BENCH_SUITE') != 'booking' ? 'smartticketing.booking.QueryRedisBenchmark' : 'smartticketing.booking.BookingRedisBenchmark'
+	maxHeapSize = '1536m'
+	// Optional benchmark-only runtime; project compilation and normal bootRun stay on Java 21.
+	if (System.getenv('BOOKING_LOAD_JAVA')) executable = System.getenv('BOOKING_LOAD_JAVA')
+}

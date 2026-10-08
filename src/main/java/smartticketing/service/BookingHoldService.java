@@ -156,6 +156,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
         BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
         updateAvailable(show, inventory, now);
+        BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_ACQUIRED", now);
         // 알림은 실제 대기열 승급(Dispatcher)에서만 생성한다.
         return response(reservation, now);
     }
@@ -178,33 +179,33 @@ public class BookingHoldService {
         return !SmartSeatCandidates.analyze(inventory, show.getScreen().getId(), group.getPartySize(), group.getSeatPreferences(), queue.getSeatZone()).blocks().isEmpty();
     }
 
+    @Transactional(readOnly = true)
     public ReservationResponse reservation(Long userId, Long reservationId) {
         requireUser(userId);
-        // ID만 읽고 도메인 엔티티는 잠금 순서대로 다시 읽는다. 오래된 snapshot 엔티티 재사용 금지.
-        var refs = em.createQuery("select r.requestGroup.id from Reservation r where r.id=:id and r.user.id=:user", Long.class)
-                .setParameter("id", reservationId).setParameter("user", userId).getResultList();
-        if (refs.isEmpty() || refs.getFirst() == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "예매를 찾을 수 없습니다.");
-        var group = ownedGroupForRead(userId, refs.getFirst());
-        var slot = group.getStatus() == BookingGroupStatus.HOLDING
-                ? em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE) : null;
-        // Old reservations must not acquire another active reservation's show out of order.
-        if (slot != null && slot.getReservation().getId().equals(reservationId)) expireLockedGroup(group);
-        var showId = em.createQuery("select r.showtime.id from Reservation r where r.id=:id", Long.class)
-                .setParameter("id", reservationId).getSingleResult();
-        em.find(Showtime.class, showId, LockModeType.PESSIMISTIC_WRITE);
-        return response(em.find(Reservation.class, reservationId, LockModeType.PESSIMISTIC_WRITE), now());
+        return snapshot(ownedReservationForRead(userId, reservationId), now());
     }
 
+    Reservation ownedReservationForRead(Long userId, Long reservationId) {
+        var reservation = em.find(Reservation.class, reservationId);
+        if (reservation == null || reservation.getRequestGroup() == null
+                || !reservation.getUser().getId().equals(userId)
+                || !reservation.getRequestGroup().getUser().getId().equals(userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "예매를 찾을 수 없습니다.");
+        return reservation;
+    }
+
+    @Transactional(readOnly = true)
     public BookingGroupResponse group(Long userId, Long groupId) {
         requireUser(userId);
         var group = ownedGroupForRead(userId, groupId);
-        expireLockedGroup(group);
         return groupResponse(group);
     }
 
     BookingRequestGroup ownedGroupForRead(Long userId, Long groupId) {
-        try { return lockOwnedGroup(userId, groupId); }
-        catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
+        var group = em.find(BookingRequestGroup.class, groupId);
+        if (group == null || !group.getUser().getId().equals(userId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "관람 요청을 찾을 수 없습니다.");
+        return group;
     }
 
     @Transactional(noRollbackFor = BookingRejection.class)
@@ -223,6 +224,27 @@ public class BookingHoldService {
     public List<Long> expiredGroupIds(int limit) {
         return em.createQuery("select h.id from BookingGroupHold h where h.expiresAt <= :now order by h.expiresAt, h.id", Long.class)
                 .setParameter("now", now()).setMaxResults(limit).getResultList();
+    }
+
+    public record ExpiryCandidate(Long groupId, LocalDateTime expiresAt) {}
+    public record ExpiryBacklog(long count, long oldestDelayMs) {}
+
+    @Transactional(readOnly = true)
+    public List<ExpiryCandidate> expiredBatch(LocalDateTime cutoff, ExpiryCandidate after, int limit) {
+        var query = em.createQuery("select h.id, h.expiresAt from BookingGroupHold h where h.expiresAt<=:cutoff"
+                + (after == null ? "" : " and (h.expiresAt>:afterTime or (h.expiresAt=:afterTime and h.id>:afterId))")
+                + " order by h.expiresAt,h.id", Object[].class).setParameter("cutoff", cutoff);
+        if (after != null) query.setParameter("afterTime", after.expiresAt()).setParameter("afterId", after.groupId());
+        return query.setMaxResults(limit).getResultList().stream()
+                .map(row -> new ExpiryCandidate((Long) row[0], (LocalDateTime) row[1])).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ExpiryBacklog expiryBacklog() {
+        var time = now();
+        var row = em.createQuery("select count(h), min(h.expiresAt) from BookingGroupHold h where h.expiresAt<=:now", Object[].class)
+                .setParameter("now", time).getSingleResult();
+        return new ExpiryBacklog((Long) row[0], row[1] == null ? 0 : Duration.between((LocalDateTime) row[1], time).toMillis());
     }
 
     boolean expireLockedGroup(BookingRequestGroup group) {
@@ -260,6 +282,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
         BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot); updateAvailable(show, inventory, now);
+        BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_EXPIRED", now);
         NotificationService.holdExpired(em, group.getId());
         return true;
     }
@@ -342,13 +365,13 @@ public class BookingHoldService {
     }
 
     BookingGroupResponse groupResponse(BookingRequestGroup g) {
-        var slot = g.getStatus() == BookingGroupStatus.HOLDING
-                ? em.find(BookingGroupHold.class, g.getId(), LockModeType.PESSIMISTIC_WRITE) : null;
+        var state = BookingReadState.group(em, g, now());
+        var slot = state.activeHold();
         return new BookingGroupResponse(g.getId(), g.getEntryPoint(), g.getMovie().getId(), g.getViewingDate(),
                 g.getPartySize(), g.getStartTimeFrom(), g.getStartTimeTo(),
                 g.getSelectedShowtime() == null ? null : g.getSelectedShowtime().getId(),
                 g.getTheaterPreferences().stream().map(Theater::getId).toList(), List.copyOf(g.getSeatPreferences()),
-                g.getStatus(), slot == null ? null : slot.getReservation().getId(), BookingAudiencePolicy.audience(g), g.getRatingSnapshot());
+                state.status(), slot == null ? null : slot.getReservation().getId(), BookingAudiencePolicy.audience(g), g.getRatingSnapshot());
     }
 
     ReservationResponse response(Reservation r, LocalDateTime now) {
@@ -361,7 +384,7 @@ public class BookingHoldService {
         var show = r.getShowtime(); var screen = show.getScreen();
         var seats = em.createQuery("select s from ReservationSeat s join fetch s.seat where s.reservation.id=:id order by s.seat.id", ReservationSeat.class)
                 .setParameter("id", r.getId()).getResultList();
-        var status=snapshot && r.getStatus()==ReservationStatus.PENDING && (!r.getExpiresAt().isAfter(now) || !show.getStartTime().isAfter(now))
+        var status=snapshot && r.getStatus()==ReservationStatus.PENDING && (r.getExpiresAt()!=null && !r.getExpiresAt().isAfter(now) || !show.getStartTime().isAfter(now) || show.getStatus()!=ShowtimeStatus.SCHEDULED)
                 ? ReservationStatus.EXPIRED : r.getStatus();
         return new ReservationResponse(r.getId(), r.getRequestGroup().getId(), status, r.getReservationType(),
                 show.getMovie().getId(), show.getMovie().getTitle(), show.getId(), screen.getTheater().getId(), screen.getTheater().getName(),

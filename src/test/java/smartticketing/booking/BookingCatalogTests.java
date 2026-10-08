@@ -17,7 +17,7 @@ class BookingCatalogTests {
     @BeforeAll static void database() throws Exception { database = new TemporaryMysqlDatabase(); }
     @AfterAll static void cleanup() throws Exception { if (database != null) database.close(); }
     @BeforeEach void setup() {
-        em = database.open(); em.getTransaction().begin(); service = new BookingCatalogService(em);
+        em = database.open(); em.getTransaction().begin(); service = new BookingCatalogService(em, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
     }
     @AfterEach void rollback() {
         if (em.getTransaction().isActive()) em.getTransaction().rollback(); em.close();

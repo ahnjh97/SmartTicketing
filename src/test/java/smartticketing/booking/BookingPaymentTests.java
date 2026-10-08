@@ -45,7 +45,7 @@ class BookingPaymentTests {
     static BookingPaymentService service(EntityManager em, Clock clock, boolean allow) {
         var env = new MockEnvironment(); env.setActiveProfiles("test");
         var ops = new BookingIdempotency(em);
-        return new BookingPaymentService(em, new BookingHoldService(em, ops, clock), ops, tickets(em), notifications(em), org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class), env, allow);
+        return new BookingPaymentService(em, new BookingHoldService(em, ops, clock), ops, tickets(em), notifications(em), env, allow);
     }
     static Fixture fixture() {
         return tx(em -> {
@@ -243,15 +243,18 @@ class BookingPaymentTests {
         race(() -> cancel(f,key(),CLOCK),() -> cancel(f,key(),CLOCK));
         assertState(f,ReservationStatus.CANCELLED,SeatStatus.AVAILABLE,PaymentStatus.CANCELLED,TicketStatus.CANCELLED,0);
     }
-    @Test void staleRepeatableReadSnapshotCannotReturnPendingAfterPaymentCommits() {
+    @Test void readSnapshotDoesNotOverwriteConcurrentPaymentAndNextRequestSeesCommit() {
         var f=fixture();
         try(var em=db.open()) {
             em.getTransaction().begin();
             assertThat(em.createQuery("select r.status from Reservation r where r.id=:id",ReservationStatus.class).setParameter("id",f.reservation).getSingleResult()).isEqualTo(ReservationStatus.PENDING);
             pay(f,key(),false,CLOCK);
-            assertThat(new BookingHoldService(em,new BookingIdempotency(em),CLOCK).reservation(f.user,f.reservation).status()).isEqualTo(ReservationStatus.CONFIRMED);
+            // A read-only GET keeps its consistent snapshot without taking a current-read lock.
+            assertThat(new BookingHoldService(em,new BookingIdempotency(em),CLOCK).reservation(f.user,f.reservation).status()).isEqualTo(ReservationStatus.PENDING);
             em.getTransaction().commit();
         }
+        assertThat(tx(em -> service(em,CLOCK,true).get(f.user,f.reservation)).reservation().status()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertState(f,ReservationStatus.CONFIRMED,SeatStatus.RESERVED,PaymentStatus.SUCCESS,TicketStatus.VALID,0);
     }
     @Test void cancellationPreservesInconsistentInventoryInsteadOfPartialRefund() {
         var f=fixture(); pay(f,key(),false,CLOCK);

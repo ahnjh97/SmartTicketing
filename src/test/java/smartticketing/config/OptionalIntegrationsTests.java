@@ -88,7 +88,7 @@ class OptionalIntegrationsTests {
     @Test
     void missingMapKeyForWalkingReturnsUnavailableWithoutDatabaseAccess() {
         var theaters = mock(TheaterRepository.class);
-        var service = new KakaoMapService(theaters, "", mock(NearbyTheaterPerformance.class));
+        var service = new KakaoMapService(theaters, "", mock(NearbyTheaterPerformance.class), new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
         assertThatThrownBy(() -> service.findNearbyTheaters(null, 37.5, 127.0, 10000, "WALK"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));

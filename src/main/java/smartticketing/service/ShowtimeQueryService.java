@@ -11,6 +11,7 @@ import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
 import java.time.*;
 import java.util.*;
+import tools.jackson.core.type.TypeReference;
 
 @Service
 @Transactional(readOnly = true)
@@ -19,10 +20,12 @@ public class ShowtimeQueryService {
     private final EntityManager em;
     private final BookingCatalogService catalog;
     private final Clock clock;
+    private final RedisQueryCache queryCache;
 
     public ShowtimeQueryService(EntityManager em, BookingCatalogService catalog,
-            @Qualifier("bookingQueryClock") Clock clock) {
+            @Qualifier("bookingQueryClock") Clock clock, RedisQueryCache queryCache) {
         this.em = em; this.catalog = catalog; this.clock = clock.withZone(SEOUL);
+        this.queryCache = queryCache;
     }
 
     public ScheduleAvailability availability(Long movieId, LocalDate date, List<Long> theaterIds) {
@@ -31,6 +34,9 @@ public class ShowtimeQueryService {
         if (theaterIds != null && (theaterIds.isEmpty() || theaterIds.size() > 10
                 || theaterIds.stream().anyMatch(id -> id == null || id <= 0)))
             throw new IllegalArgumentException("극장은 1~10개의 유효한 ID로 입력해주세요.");
+        String cacheKey = movieId + ":" + date + ":" + (theaterIds == null ? "" : theaterIds.stream().sorted().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")));
+        ScheduleAvailability cached = queryCache.get("showtime-availability", cacheKey, ScheduleAvailability.class);
+        if (cached != null) return cached;
         var now = LocalDateTime.now(clock);
         // Fetch both range boundaries without materializing shows or seat inventory.
         var request = em.createQuery("""
@@ -46,12 +52,17 @@ public class ShowtimeQueryService {
         var times = request.getSingleResult();
         var earliest = (LocalDateTime) times[0];
         var latest = (LocalDateTime) times[1];
-        return new ScheduleAvailability(earliest != null, earliest == null ? null : offset(earliest), latest == null ? null : offset(latest), offset(now));
+        ScheduleAvailability response = new ScheduleAvailability(earliest != null, earliest == null ? null : offset(earliest), latest == null ? null : offset(latest), offset(now));
+        queryCache.put("showtime-availability", cacheKey, response);
+        return response;
     }
 
     public Items<MovieItem> theaterMovies(Long theaterId, LocalDate date) {
         catalog.requireTheater(theaterId);
         validateDate(date);
+        String cacheKey = theaterId + ":" + date;
+        Items<MovieItem> cached = queryCache.get("theater-movies", cacheKey, new TypeReference<Items<MovieItem>>() {});
+        if (cached != null) return cached;
         var now = LocalDateTime.now(clock);
         var movies = em.createQuery("""
                 select distinct m from Showtime s join s.movie m join s.screen c
@@ -61,8 +72,10 @@ public class ShowtimeQueryService {
                 """, Movie.class).setParameter("theater", theaterId).setParameter("status", ShowtimeStatus.SCHEDULED)
                 .setParameter("from", CinemaDay.start(date)).setParameter("until", CinemaDay.start(date.plusDays(1)))
                 .setParameter("now", now).getResultList();
-        return new Items<>(movies.stream().map(m -> new MovieItem(m.getId(), m.getTitle(), m.getPosterUrl(),
+        Items<MovieItem> response = new Items<>(movies.stream().map(m -> new MovieItem(m.getId(), m.getTitle(), m.getPosterUrl(),
                 m.getRunningTime(), m.getRating())).toList(), offset(now));
+        queryCache.put("theater-movies", cacheKey, response);
+        return response;
     }
 
     public Items<ShowtimeItem> showtimes(Long movieId, Long theaterId, LocalDate date,
@@ -76,6 +89,9 @@ public class ShowtimeQueryService {
             throw new IllegalArgumentException("movieId 또는 theaterId가 필요합니다.");
         if (movieId != null) catalog.requireMovie(movieId);
         if (theaterId != null) catalog.requireTheater(theaterId);
+        String cacheKey = (movieId == null ? "" : movieId) + ":" + (theaterId == null ? "" : theaterId) + ":" + date + ":" + startFrom + ":" + startUntil;
+        Items<ShowtimeItem> cached = queryCache.get("showtimes", cacheKey, new TypeReference<Items<ShowtimeItem>>() {});
+        if (cached != null) return cached;
         var from = startFrom == null ? CinemaDay.start(date) : CinemaDay.time(date, startFrom);
         var until = startUntil == null ? CinemaDay.start(date.plusDays(1)) : CinemaDay.time(date, startUntil);
         if (!until.isAfter(from)) until = until.plusDays(1);
@@ -102,7 +118,9 @@ public class ShowtimeQueryService {
                     s.getEndTime().toLocalDate().isAfter(s.getStartTime().toLocalDate()), s.getPricePerPerson(),
                     list.size(), availability.available, availability.maxContiguous, availability.layoutComplete, s.getStatus(), availability.bookableParties);
         }).toList();
-        return new Items<>(items, offset(now));
+        Items<ShowtimeItem> response = new Items<>(items, offset(now));
+        queryCache.put("showtimes", cacheKey, response);
+        return response;
     }
 
     private static void validateDate(LocalDate date) {
@@ -112,6 +130,9 @@ public class ShowtimeQueryService {
 
     public SeatMap seats(Long showtimeId) {
         BookingCatalogService.positiveId(showtimeId);
+        String cacheKey = String.valueOf(showtimeId);
+        SeatMap cached = queryCache.get("seat-map", cacheKey, SeatMap.class);
+        if (cached != null) return cached;
         var now = LocalDateTime.now(clock);
         var result = em.createQuery("""
                 select s from Showtime s join fetch s.movie m join fetch s.screen c join fetch c.theater t
@@ -123,8 +144,10 @@ public class ShowtimeQueryService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "예매가 종료된 회차입니다.");
         var inventory = inventory(List.of(showtimeId)).getOrDefault(showtimeId, List.of());
         var summary = summarize(inventory);
-        return new SeatMap(showtimeId, inventory, inventory.size(), summary.available,
+        SeatMap response = new SeatMap(showtimeId, inventory, inventory.size(), summary.available,
                 summary.maxContiguous, summary.layoutComplete, offset(now));
+        queryCache.put("seat-map", cacheKey, response);
+        return response;
     }
 
     // 여러 회차의 좌석 정보를 한 번에 읽어 회차 수에 따른 N+1 조회를 방지한다.

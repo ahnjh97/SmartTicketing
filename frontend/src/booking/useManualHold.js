@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { bookingApi } from '../api/booking.js';
 import useAuth from '../hooks/useAuth.js';
 import { positive } from './state.js';
+import { startVisiblePolling } from './visiblePolling.js';
 
 // Persist only request identities. The server remains authoritative for ownership, money and time.
 export function requestKey(userId, operation, body) {
@@ -36,20 +37,21 @@ export default function useManualHold({ smart = false } = {}) {
     useEffect(() => { live.current = identity; return () => { live.current = null; }; }, [identity]);
     useEffect(() => {
         if (!user || (!groupId && !reservationId)) return;
-        const controller = new AbortController();
         let active = true;
         let sequence = 0;
-        async function restore() {
+        async function restore(signal) {
             if (gate.current) return;
             const readGeneration = generation.current;
             const requestSequence = ++sequence;
             try {
-                const group = groupId ? await bookingApi.group(groupId, controller.signal) : null;
+                const group = groupId ? await bookingApi.group(groupId, signal) : null;
+                if (signal.aborted || !active || generation.current !== readGeneration || gate.current) return;
                 const id = group?.activeReservationId || reservationId;
-                const payment = id ? await bookingApi.payment(id, controller.signal) : null;
+                const payment = id ? await bookingApi.payment(id, signal) : null;
+                if (signal.aborted || !active || generation.current !== readGeneration || gate.current) return;
                 const reservation = payment?.reservation;
-                const waiting = !smart && group && !reservation ? await bookingApi.waiting(group.id, controller.signal) : null;
-                if (active && sequence === requestSequence && !gate.current && generation.current === readGeneration) {
+                const waiting = !smart && group && !reservation ? await bookingApi.waiting(group.id, signal) : null;
+                if (active && !signal.aborted && sequence === requestSequence && !gate.current && generation.current === readGeneration) {
                     // Normalize the recovery URL before exposing payment controls.
                     if (reservation && String(reservation.id) !== reservationId) {
                         setFailure(null);
@@ -60,15 +62,20 @@ export default function useManualHold({ smart = false } = {}) {
                     }
                     setResult({ identity, group, waiting, reservation, payment, receivedAt: performance.now() });
                     if (reservation) setFailure(null);
+                    if (!smart) {
+                        if (['CONFIRMED', 'CANCELLED', 'EXPIRED'].includes(reservation?.status)
+                            || !reservation && ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(group?.status)) return null;
+                        if (waiting) {
+                            const suggested = Number(waiting.nextPollAfterMs);
+                            const delay = Number.isFinite(suggested) && suggested > 0 ? Math.max(3000, Math.min(10000, suggested)) : 3000;
+                            return Math.min(10000, delay * (0.8 + Math.random() * 0.4));
+                        }
+                    }
                 }
-            } catch (error) { if (active && sequence === requestSequence) setFailure({ identity, error }); }
+            } catch (error) { if (active && !signal.aborted && sequence === requestSequence && generation.current === readGeneration && !gate.current) setFailure({ identity, error }); }
         }
-        restore();
-        const timer = setInterval(restore, smart ? 10000 : 3000);
-        const refresh = () => { if (document.visibilityState !== 'hidden') restore(); };
-        window.addEventListener('focus', refresh);
-        document.addEventListener('visibilitychange', refresh);
-        return () => { active = false; clearInterval(timer); controller.abort(); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+        const stop = startVisiblePolling(restore, smart ? 10000 : 3000);
+        return () => { active = false; stop(); };
     }, [identity, user, groupId, reservationId, revision, setParams, smart]);
 
     const current = result?.identity === identity ? result : null;
