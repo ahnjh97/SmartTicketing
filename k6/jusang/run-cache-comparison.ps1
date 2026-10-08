@@ -41,7 +41,21 @@ function Set-CacheMode([bool]$Enabled) {
 
 function Get-ListeningBackendPids {
     $connections = @(Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue)
-    return @($connections | Select-Object -ExpandProperty OwningProcess -Unique)
+    $pids = @($connections | Select-Object -ExpandProperty OwningProcess -Unique)
+    $livePids = @()
+
+    foreach ($backendPid in $pids) {
+        try {
+            $process = Get-Process -Id ([int]$backendPid) -ErrorAction Stop
+            if ($process) {
+                $livePids += [int]$backendPid
+            }
+        } catch {
+            # The TCP entry can briefly outlive the process. Ignore stale PIDs.
+        }
+    }
+
+    return @($livePids | Select-Object -Unique)
 }
 
 function Wait-Backend {
