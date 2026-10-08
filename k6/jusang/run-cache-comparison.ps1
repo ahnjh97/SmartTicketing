@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("all","1-common","1-catalog","3-showtime","3-seat","5-distance","5-walk","5-transit")]
+    [ValidateSet("all","1-common","1-catalog","3-showtime","3-seat")]
     [string]$Target = "all",
     [ValidateSet("smoke","load")]
     [string]$Profile = "load",
@@ -23,7 +23,7 @@ $reportGenerator = Join-Path $PSScriptRoot "generate-cache-report.ps1"
 $resultsDir = Join-Path $PSScriptRoot "cache-comparison-results"
 $jsonPath = Join-Path $PSScriptRoot "cache-test-results.json"
 $summaryDir = $resultsDir
-$targetNames = @("1-common","1-catalog","3-showtime","3-seat","5-distance","5-walk","5-transit")
+$targetNames = @("1-common","1-catalog","3-showtime","3-seat")
 $targetsToRun = if ($Target -eq "all") { $targetNames } else { @($Target) }
 $backendProcess = $null
 $managedBackendPids = @()
@@ -168,18 +168,11 @@ function Invoke-K6Summary([string]$TestTarget, [string]$Mode, [string]$SummaryPa
     $env:LOGIN_ID = if ($env:K6_LOGIN_ID) { $env:K6_LOGIN_ID } else { $env:LOGIN_ID }
     $env:PASSWORD = if ($env:K6_PASSWORD) { $env:K6_PASSWORD } else { $env:PASSWORD }
 
-    if ($TestTarget -in @("5-distance", "5-walk", "5-transit") -and (-not $env:LOGIN_ID -or -not $env:PASSWORD)) {
-        throw "Nearby tests require K6_LOGIN_ID and K6_PASSWORD. Set them before running the all-target comparison."
-    }
-
     $scriptName = switch ($TestTarget) {
         "1-common" { "01-common-query.js" }
         "1-catalog" { "01-catalog-query.js" }
         "3-showtime" { "03-showtime-query.js" }
         "3-seat" { "03-seat-map-query.js" }
-        "5-distance" { "05-nearby-distance.js" }
-        "5-walk" { "05-nearby-walk.js" }
-        "5-transit" { "05-nearby-transit.js" }
     }
 
     $scriptPath = Join-Path $PSScriptRoot $scriptName
