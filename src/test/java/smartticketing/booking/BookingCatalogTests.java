@@ -41,6 +41,7 @@ class BookingCatalogTests {
         assertThat(page.totalElements()).isEqualTo(2);
         assertThat(page.items()).extracting(i -> i.id()).containsExactly(first.getId());
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+        assertThat(statistics.getEntityLoadCount()).isZero();
         assertThat(service.movies(1, 1).items()).extracting(i -> i.id()).containsExactly(second.getId());
         assertThat(service.movies(2, 1).items()).isEmpty();
         assertThat(service.movie(first.getId()).media().type()).isEqualTo("POSTER");
@@ -85,6 +86,26 @@ class BookingCatalogTests {
                 .extracting(i -> i.id()).containsExactly(second.getId());
         assertThat(service.theaters("", 0, 20, TheaterBrand.MEGABOX).items()).isEmpty();
         assertThat(service.theaters("", 0, 20).totalElements()).isEqualTo(3);
+    }
+
+    @Test void emptySearchKeepsStablePagesAndCoordinatesWithoutLoadingEntities() {
+        var first = theater("A 극장", true);
+        first.setLatitude(new java.math.BigDecimal("37.5665000"));
+        first.setLongitude(new java.math.BigDecimal("126.9780000"));
+        var second = theater("B 극장", true);
+        theater("C 폐점", false);
+        em.flush(); em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true); statistics.clear();
+        var page = service.theaters("  ", 0, 1, TheaterBrand.CGV);
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.items()).extracting(i -> i.id()).containsExactly(first.getId());
+        assertThat(page.items().getFirst().latitude()).isEqualByComparingTo(first.getLatitude());
+        assertThat(page.items().getFirst().longitude()).isEqualByComparingTo(first.getLongitude());
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+        assertThat(statistics.getEntityLoadCount()).isZero();
+        assertThat(service.theaters(null, 1, 1).items()).extracting(i -> i.id()).containsExactly(second.getId());
+        assertThat(service.theaters(null, 2, 1).items()).isEmpty();
     }
 
     @Test void inactiveAndMissingDetailsAreNotFoundAndInvalidInputIsRejected() {

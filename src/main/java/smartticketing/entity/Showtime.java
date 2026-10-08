@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
                 )
         },
         indexes = {
+                @Index(name = "idx_showtimes_movie_status_start", columnList = "movie_id, status, start_time"),
                 @Index(
                         name = "idx_showtimes_movie_start",
                         columnList = "movie_id, start_time"
