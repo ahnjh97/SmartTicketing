@@ -33,6 +33,33 @@ $tests = @(
     @{ Name = '05-distance-query'; File = '05-distance-query.js' }
 )
 
+function Get-DotEnvValue([string]$Name) {
+    $envFile = Join-Path $root '.env'
+    if (-not (Test-Path $envFile)) { return $null }
+    $line = Get-Content $envFile | Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=\s*" } | Select-Object -First 1
+    if (-not $line) { return $null }
+    $value = ($line -replace "^\s*$([regex]::Escape($Name))\s*=\s*", '').Trim()
+    if ($value.StartsWith('"') -and $value.EndsWith('"')) { $value = $value.Substring(1, $value.Length - 2) }
+    if ($value.StartsWith("'") -and $value.EndsWith("'")) { $value = $value.Substring(1, $value.Length - 2) }
+    return $value
+}
+
+function ConvertTo-Base64Url([byte[]]$Bytes) {
+    return [Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+}
+
+function New-LocalAccessToken([string]$Secret) {
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $header = ConvertTo-Base64Url ([Text.Encoding]::UTF8.GetBytes('{"alg":"HS256","typ":"JWT"}'))
+    $payload = ConvertTo-Base64Url ([Text.Encoding]::UTF8.GetBytes(('{"sub":"1","iss":"SmartTicketing","type":"access","iat":' + $now + ',"exp":' + ($now + 3600) + '}')))
+    $data = $header + '.' + $payload
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Secret)
+    try { $signature = ConvertTo-Base64Url ($hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($data))) }
+    finally { $hmac.Dispose() }
+    return $data + '.' + $signature
+}
+
 function Set-CacheMode([string]$Mode) {
     $action = if ($Mode -eq 'on') { 'set-on' } else { 'set-off' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts\local-dev.ps1') -Action $action
@@ -86,6 +113,9 @@ function Run-K6([string]$Mode, [hashtable]$Test) {
     $env:K6_DATE = $Date
     $env:K6_LATITUDE = [string]$Latitude
     $env:K6_LONGITUDE = [string]$Longitude
+    $jwtSecret = if ($env:JWT_SECRET) { $env:JWT_SECRET } else { Get-DotEnvValue 'JWT_SECRET' }
+    if (-not $jwtSecret) { throw 'JWT_SECRET is required for the distance benchmark. Set it in the environment or .env.' }
+    $env:K6_ACCESS_TOKEN = New-LocalAccessToken $jwtSecret
 
     if ($TheaterId -gt 0) { $env:K6_THEATER_ID = [string]$TheaterId } else { Remove-Item Env:K6_THEATER_ID -ErrorAction SilentlyContinue }
     if ($ShowtimeId -gt 0) { $env:K6_SHOWTIME_ID = [string]$ShowtimeId } else { Remove-Item Env:K6_SHOWTIME_ID -ErrorAction SilentlyContinue }
@@ -121,4 +151,5 @@ try {
     Remove-Item Env:REDIS_BENCH_DURATION -ErrorAction SilentlyContinue
     Remove-Item Env:REDIS_BENCH_PRE_VUS -ErrorAction SilentlyContinue
     Remove-Item Env:REDIS_BENCH_MAX_VUS -ErrorAction SilentlyContinue
+    Remove-Item Env:K6_ACCESS_TOKEN -ErrorAction SilentlyContinue
 }
