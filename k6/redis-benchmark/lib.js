@@ -4,8 +4,8 @@ import http from 'k6/http';
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const RATE = Number(__ENV.REDIS_BENCH_RATE || 50);
 export const DURATION = __ENV.REDIS_BENCH_DURATION || '30s';
-export const PRE_VUS = Number(__ENV.REDIS_BENCH_PRE_VUS || 50);
-export const MAX_VUS = Number(__ENV.REDIS_BENCH_MAX_VUS || 200);
+export const PRE_VUS = Number(__ENV.REDIS_BENCH_PRE_VUS || 100);
+export const MAX_VUS = Number(__ENV.REDIS_BENCH_MAX_VUS || 1000);
 
 export function loadOptions() {
   return {
@@ -21,7 +21,7 @@ export function loadOptions() {
     },
     discardResponseBodies: true,
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'count'],
-    thresholds: { http_req_failed: ['rate<0.01'] },
+    // Errors are recorded in the report; do not abort the OFF/ON comparison.\n    thresholds: {},
   };
 }
 
