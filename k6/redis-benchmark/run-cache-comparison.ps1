@@ -27,7 +27,10 @@ if ($listener) { throw 'Port 8080 is already in use. Stop the existing backend b
 New-Item -ItemType Directory -Force -Path $resultRoot, $logRoot | Out-Null
 
 $tests = @(
-    @{ Name = '01-common-query'; File = '01-common-query.js' },
+    @{ Name = '01-main-query'; File = '01-main-query.js' },
+    @{ Name = '01-movies-query'; File = '01-movies-query.js' },
+    @{ Name = '01-theaters-query'; File = '01-theaters-query.js' },
+    @{ Name = '01-common-query-integrated'; File = '01-common-query-integrated.js' },
     @{ Name = '03-showtime-query'; File = '03-showtime-query.js' },
     @{ Name = '03-seat-map-query'; File = '03-seat-map-query.js' },
     @{ Name = '05-distance-query'; File = '05-distance-query.js' }
