@@ -8,9 +8,6 @@ import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.server.ResponseStatusException;
 import smartticketing.dto.booking.*;
 import smartticketing.entity.*;
@@ -27,14 +24,13 @@ public class BookingPaymentService {
     private final BookingIdempotency operations;
     private final TicketService tickets;
     private final NotificationService notifications;
-    private final ApplicationEventPublisher eventPublisher;
     private final boolean allowFailure;
 
     public BookingPaymentService(EntityManager em, BookingHoldService holds, BookingIdempotency operations,
-            TicketService tickets, NotificationService notifications, ApplicationEventPublisher eventPublisher,
+            TicketService tickets, NotificationService notifications,
             Environment environment, @Value("${booking.mock-payment.allow-failure:false}") boolean allowFailure) {
         this.em = em; this.holds = holds; this.operations = operations; this.tickets = tickets;
-        this.notifications = notifications; this.eventPublisher = eventPublisher;
+        this.notifications = notifications;
         this.allowFailure = allowFailure && environment.acceptsProfiles(Profiles.of("dev", "test"));
     }
 
@@ -85,6 +81,7 @@ public class BookingPaymentService {
         payment.setUpdatedAt(now);
         if (request.simulateFailure()) {
             payment.setStatus(PaymentStatus.FAILED);
+            BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "PAYMENT_FAILED", now);
             return paymentResponse(r, payment, false);
         }
         payment.setStatus(PaymentStatus.SUCCESS);
@@ -94,6 +91,7 @@ public class BookingPaymentService {
         BookingQueueLifecycle.completed(em, locked.group().getId(), now);
         em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
+        BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "PAYMENT_CONFIRMED", now);
         return paymentResponse(r, payment, true);
     }
 
@@ -176,29 +174,8 @@ public class BookingPaymentService {
         if (locked.slot() != null) em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
 
-        // 취소 트랜잭션이 실제로 COMMIT된 직후 대기열 승급을 실행한다.
-        // 기존 3초 주기 Worker는 누락/실패 복구용으로 유지하고,
-        // 정상적인 취소 -> 좌석 반환 -> 대기자 선점 -> 알림 흐름은 여기서 즉시 시작한다.
-        scheduleWaitingDispatchAfterCommit(locked.show().getId());
+        BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "RESERVATION_CANCELLED", now);
         return holds.response(r, now);
-    }
-
-    private void scheduleWaitingDispatchAfterCommit(Long showId) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            eventPublisher.publishEvent(new BookingWaitingWorker.WaitingDispatchRequested(showId));
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    eventPublisher.publishEvent(new BookingWaitingWorker.WaitingDispatchRequested(showId));
-                } catch (RuntimeException failure) {
-                    // COMMIT 이후의 승급 실패는 예약 취소를 되돌릴 수 없으므로
-                    // 기존 주기 Worker가 다음 sweep에서 다시 시도할 수 있게 한다.
-                }
-            }
-        });
     }
 
     private PaymentResponse paymentResponse(Reservation reservation, Payment payment, boolean issue) {
@@ -212,14 +189,10 @@ public class BookingPaymentService {
                         : existing.isEmpty() ? null : tickets.one(reservation.getUser().getId(), existing.getFirst().getId()));
     }
 
+    @Transactional(readOnly = true)
     public PaymentResponse get(Long userId, Long reservationId) {
         holds.requireUser(userId);
-        try {
-            var locked = lock(userId, reservationId);
-            if (locked.slot() != null && locked.slot().getReservation().getId().equals(reservationId))
-                holds.expireLockedGroup(locked.group());
-            return paymentResponse(locked.reservation(), payment(reservationId), false);
-        } catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
+        return snapshot(userId, holds.ownedReservationForRead(userId, reservationId));
     }
 
     PaymentResponse snapshot(Long userId, Reservation reservation) {

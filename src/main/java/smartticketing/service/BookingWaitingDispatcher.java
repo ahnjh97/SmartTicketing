@@ -18,6 +18,8 @@ public class BookingWaitingDispatcher {
     private final BookingWaitingService waiting;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private BookingDispatchGate dispatchGate;
 
     public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting, PlatformTransactionManager manager) {
         this.em = em; this.holds = holds; this.waiting = waiting;
@@ -31,6 +33,11 @@ public class BookingWaitingDispatcher {
     }
 
     public int dispatch(Long showId) {
+        // Busy must propagate so an Outbox event is retried, not acknowledged as handled.
+        return dispatchGate==null ? dispatchInDatabase(showId) : dispatchGate.run(showId,() -> dispatchInDatabase(showId));
+    }
+
+    private int dispatchInDatabase(Long showId) {
         var groups = read.execute(s -> em.createQuery("""
                 select distinct q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
                 and q.requestGroup is not null and q.status in :statuses order by q.requestGroup.id
@@ -62,7 +69,8 @@ public class BookingWaitingDispatcher {
                 var group = locked.get(q.getRequestGroup().getId());
                 if (group.getStatus() != BookingGroupStatus.ACTIVE || q.getStatus() != QueueStatus.WAITING) continue;
                 if (!show.getStartTime().isAfter(holds.now()) || show.getStatus() != ShowtimeStatus.SCHEDULED) {
-                    q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(holds.now()); continue;
+                    q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(holds.now());
+                    BookingQueueLifecycle.changed(em, q, holds.now()); continue;
                 }
                 try { waiting.validate(group, show); }
                 catch (BookingRejection mismatch) { continue; }

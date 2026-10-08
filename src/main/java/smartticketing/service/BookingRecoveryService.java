@@ -8,7 +8,7 @@ import smartticketing.entity.enums.*;
 import java.time.LocalDate;
 import java.util.List;
 
-/** Discovery is read-only. Opening a group uses the existing locked expiry/recovery path. */
+/** Discovery and restore links use read-only projections; expiry belongs to commands/workers. */
 @Service
 @Transactional(readOnly = true)
 public class BookingRecoveryService {
@@ -26,13 +26,10 @@ public class BookingRecoveryService {
         return new Page(groups.stream().limit(20).map(this::item).toList(), groups.size() > 20);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public Item one(Long userId, Long id) {
-        // Lock before the first consistent read: a concurrent commit while we wait
-        // must be visible to the latest-reservation lookup under MySQL REPEATABLE_READ.
-        var group = holds.ownedGroupForRead(userId, id);
         holds.requireUser(userId);
-        holds.expireLockedGroup(group);
+        var group = holds.ownedGroupForRead(userId, id);
         return item(group);
     }
 
@@ -46,6 +43,6 @@ public class BookingRecoveryService {
         if (movie) path += "&from=" + g.getStartTimeFrom() + "&until=" + g.getStartTimeTo();
         if (!reservations.isEmpty()) path += "&reservation=" + reservations.getFirst();
         if (g.getEntryPoint()!=BookingEntryPoint.THEATER_NORMAL) path += "&smart=1&candidate=" + g.getId();
-        return new Item(g.getId(), g.getMovie().getTitle(), g.getViewingDate(), g.getPartySize(), g.getStatus(), path);
+        return new Item(g.getId(), g.getMovie().getTitle(), g.getViewingDate(), g.getPartySize(), BookingReadState.group(em, g, holds.now()).status(), path);
     }
 }

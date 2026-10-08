@@ -29,10 +29,11 @@ class BookingWaitingTests {
         }
     }
     static TemporaryMysqlDatabase db;
+    static final List<String> readStatements = new java.util.concurrent.CopyOnWriteArrayList<>();
     static final Clock CLOCK = BookingSmartTests.CLOCK;
     static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
     record Fixture(long user, long group, List<Long> shows) {}
-    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(); }
+    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(readStatements::add); }
     @AfterAll static void stop() throws Exception { if (db != null) db.close(); }
     static String key() { return UUID.randomUUID().toString(); }
     static <T> T tx(Function<EntityManager,T> fn) {
@@ -86,6 +87,105 @@ class BookingWaitingTests {
     static WaitingResponse state(Fixture f) { return state(f,CLOCK); }
     static void statuses(Fixture f,QueueStatus... statuses) { assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactly(statuses); }
     static List<ShowtimeSeat> inventory(EntityManager em,Long show) { return BookingSmartTests.inventory(em,show); }
+
+    @Test void smartWaitingReadsBatchRanksAndDoNotAddQueriesForEveryGroup() {
+        var f=fixture(2,2); register(f);
+        readStatements.clear();
+        var first=readCandidates(f);
+        int singleQueries=readStatements.size();
+        assertThat(first.candidates()).hasSize(1);
+        for(int i=0;i<7;i++) register(another(f,2,true));
+        readStatements.clear();
+        var many=readCandidates(f);
+        assertThat(many.candidates()).hasSize(8);
+        assertThat(many.candidates().getFirst().waiting().items()).allMatch(q -> q.aheadCount()==0);
+        assertThat(many.candidates().getLast().waiting().items()).allMatch(q -> q.aheadCount()==7);
+        assertThat(readStatements.size()).isLessThanOrEqualTo(singleQueries+1);
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase().contains("for update"));
+        assertThat(many.candidates().getFirst().waiting().nextPollAfterMs()).isEqualTo(5000);
+    }
+
+    private SmartBookingCandidatesService.Candidates readCandidates(Fixture f) {
+        return tx(em -> new SmartBookingCandidatesService(em,null,holds(em,CLOCK),service(em,CLOCK),
+                BookingPaymentTests.service(em,CLOCK,true),new BookingIdempotency(em)).get(f.user,null));
+    }
+
+    @Test void expiryBatchCursorPassesUnremovedRowsWithTheSameTimestamp() {
+        var groups=new ArrayList<Long>();
+        var cutoff=NOW.minusYears(1);
+        for(int i=0;i<3;i++) {
+            var f=fixture(1,1); register(f); dispatcher(CLOCK).dispatch(f.shows.getFirst()); groups.add(f.group);
+            tx(em -> { em.find(BookingGroupHold.class,f.group).setExpiresAt(cutoff); return null; });
+        }
+        var first=tx(em -> holds(em,CLOCK).expiredBatch(cutoff,null,2));
+        assertThat(first).extracting(BookingHoldService.ExpiryCandidate::groupId).containsExactly(groups.get(0),groups.get(1));
+        var next=tx(em -> holds(em,CLOCK).expiredBatch(cutoff,first.getLast(),2));
+        assertThat(next).extracting(BookingHoldService.ExpiryCandidate::groupId).containsExactly(groups.get(2));
+        var backlog=tx(em -> holds(em,CLOCK).expiryBacklog());
+        assertThat(backlog.count()).isGreaterThanOrEqualTo(3);
+        assertThat(backlog.oldestDelayMs()).isGreaterThanOrEqualTo(Duration.ofDays(365).toMillis());
+    }
+
+    @Test void allStatusReadsProjectExpiryWithoutLocksOrWritesAndWorkerStillReleasesSeats() {
+        var f=fixture(2,2); register(f);
+        dispatcher(CLOCK).dispatch(f.shows.getFirst());
+        long reservation=tx(em -> em.find(BookingGroupHold.class,f.group).getReservation().getId());
+        var before=Clock.offset(CLOCK,Duration.ofSeconds(299));
+        assertThat(state(f,before).groupStatus()).isEqualTo(BookingGroupStatus.HOLDING);
+        assertThat(state(f,before).activeReservationId()).isEqualTo(reservation);
+        var after=Clock.offset(CLOCK,Duration.ofMinutes(5));
+        readStatements.clear();
+        tx(em -> {
+            var hold=holds(em,after);
+            var group=hold.group(f.user,f.group);
+            assertThat(group.status()).isEqualTo(BookingGroupStatus.ACTIVE);
+            assertThat(group.activeReservationId()).isNull();
+            assertThat(hold.reservation(f.user,reservation).status()).isEqualTo(ReservationStatus.EXPIRED);
+            assertThat(BookingPaymentTests.service(em,after,true).get(f.user,reservation).reservation().status())
+                    .isEqualTo(ReservationStatus.EXPIRED);
+            var waiting=service(em,after).get(f.user,f.group);
+            assertThat(waiting.groupStatus()).isEqualTo(BookingGroupStatus.ACTIVE);
+            assertThat(waiting.activeReservationId()).isNull();
+            assertThat(waiting.items()).extracting(WaitingResponse.Item::status)
+                    .containsExactly(QueueStatus.EXPIRED,QueueStatus.WAITING);
+            assertThat(new BookingRecoveryService(em,hold).one(f.user,f.group).status()).isEqualTo(BookingGroupStatus.ACTIVE);
+            var candidates=new SmartBookingCandidatesService(em,null,hold,service(em,after),
+                    BookingPaymentTests.service(em,after,true),new BookingIdempotency(em)).get(f.user,f.group);
+            assertThat(candidates.candidates()).hasSize(1);
+            assertThat(candidates.candidates().getFirst().status()).isEqualTo(BookingGroupStatus.ACTIVE);
+            em.flush();
+            return null;
+        });
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase().contains("for update")
+                || sql.toLowerCase().matches("(?s).*\\b(insert into|update|delete from)\\b.*"));
+        tx(em -> {
+            assertThat(em.find(BookingRequestGroup.class,f.group).getStatus()).isEqualTo(BookingGroupStatus.HOLDING);
+            assertThat(em.find(Reservation.class,reservation).getStatus()).isEqualTo(ReservationStatus.PENDING);
+            assertThat(inventory(em,f.shows.getFirst())).allMatch(seat -> seat.getStatus()==SeatStatus.HOLDING);
+            return null;
+        });
+        boolean expired=tx(em -> holds(em,after).expire(f.group));
+        assertThat(expired).isTrue();
+        tx(em -> {
+            assertThat(inventory(em,f.shows.getFirst())).allMatch(seat -> seat.getStatus()==SeatStatus.AVAILABLE);
+            return null;
+        });
+    }
+
+    @Test void waitingReadKeepsAdditionalChoicesAndRejectsForeignOwnersWithoutWrites() {
+        var f=fixture(2,2); register(f,List.of(f.shows.getFirst()),key());
+        var foreign=another(f,2,false);
+        readStatements.clear();
+        assertThat(state(f).choices()).extracting(WaitingResponse.Choice::showtimeId).contains(f.shows.getLast());
+        assertThatThrownBy(() -> tx(em -> service(em,CLOCK).get(foreign.user,f.group)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(() -> tx(em -> holds(em,CLOCK).group(foreign.user,f.group)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(() -> tx(em -> new BookingRecoveryService(em,holds(em,CLOCK)).one(foreign.user,f.group)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase().contains("for update")
+                || sql.toLowerCase().matches("(?s).*\\b(insert into|update|delete from)\\b.*"));
+    }
 
     @Test void registrationReplayAndNumbersAreDistinctFromAheadCount() {
         var f=fixture(2,2); var next=another(f,2,false); String key=key();
