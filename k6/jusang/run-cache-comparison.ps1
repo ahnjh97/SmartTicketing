@@ -107,8 +107,8 @@ function Start-ManagedBackend([bool]$Enabled) {
 function Stop-ManagedBackend {
     $pids = @($script:managedBackendPids + @(Get-ListeningBackendPids) | Where-Object { $_ } | Select-Object -Unique)
 
-    foreach ($pid in $pids) {
-        try { & taskkill.exe /PID ([int]$pid) /T /F | Out-Null } catch {}
+    foreach ($backendPid in $pids) {
+        try { & taskkill.exe /PID ([int]$backendPid) /T /F | Out-Null } catch {}
     }
 
     if ($script:backendProcess) {
