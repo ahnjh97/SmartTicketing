@@ -19,14 +19,14 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 <body>
 <div class="wrap">
 <h1>SmartTicketing Redis Cache 부하테스트</h1>
-<div class="sub">Target: 1-common · VUs: 1 · Iterations: 1 · BASE_URL: http://localhost:8080</div>
+<div class="sub">Target: 1-common · VUs: 10 · Iterations: 100 · BASE_URL: http://localhost:8080</div>
 
 <div class="card">
 <h2>핵심 결과</h2>
 <div class="grid">
-<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">0.00%</div></div>
-<div class="metric"><div class="label">P95 응답시간 개선</div><div class="value">0.00%</div></div>
-<div class="metric"><div class="label">처리량 개선</div><div class="value">NaN%</div></div>
+<div class="metric"><div class="label">평균 응답시간 개선</div><div class="value">5.11%</div></div>
+<div class="metric"><div class="label">P95 응답시간 개선</div><div class="value">33.93%</div></div>
+<div class="metric"><div class="label">처리량 개선</div><div class="value">-6.56%</div></div>
 </div>
 </div>
 
@@ -34,19 +34,19 @@ table{width:100%;border-collapse:collapse}th,td{padding:12px;border-bottom:1px s
 <h2>Cache ON / OFF 비교</h2>
 <table>
 <tr><th>지표</th><th>Cache ON</th><th>Cache OFF</th><th>개선</th></tr>
-<tr><td>평균 응답시간</td><td>0 ms</td><td>0 ms</td><td>0.00%</td></tr>
-<tr><td>중앙값</td><td>0 ms</td><td>0 ms</td><td>0.00%</td></tr>
-<tr><td>P95</td><td>0 ms</td><td>0 ms</td><td>0.00%</td></tr>
-<tr><td>최대 응답시간</td><td>0 ms</td><td>0 ms</td><td>0.00%</td></tr>
-<tr><td>처리량</td><td>0 req/s</td><td>0 req/s</td><td>NaN%</td></tr>
+<tr><td>평균 응답시간</td><td>49.93 ms</td><td>52.62 ms</td><td>5.11%</td></tr>
+<tr><td>중앙값</td><td>42.32 ms</td><td>37.03 ms</td><td>-14.29%</td></tr>
+<tr><td>P95</td><td>114.64 ms</td><td>173.5 ms</td><td>33.93%</td></tr>
+<tr><td>최대 응답시간</td><td>162.13 ms</td><td>209.1 ms</td><td>22.46%</td></tr>
+<tr><td>처리량</td><td>136.996417 req/s</td><td>146.615076 req/s</td><td>-6.56%</td></tr>
 <tr><td>실패율</td><td>0%</td><td>0%</td><td>-</td></tr>
 </table>
 </div>
 
 <div class="card">
 <h2>테스트 검증</h2>
-<p>Cache ON: checks 0/0, HTTP 실패율 0%</p>
-<p>Cache OFF: checks 0/0, HTTP 실패율 0%</p>
+<p>Cache ON: checks 200/1, HTTP 실패율 0%</p>
+<p>Cache OFF: checks 200/1, HTTP 실패율 0%</p>
 <p class="note">        Cache ON/OFF                 .                                .</p>
 </div>
 </div>
