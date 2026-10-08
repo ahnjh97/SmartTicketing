@@ -1,26 +1,5 @@
 
-
-function loginForBenchmark() {
-    if (!LOGIN_ID || !PASSWORD) {
-        throw new Error('nearby k6 test requires LOGIN_ID and PASSWORD environment variables');
-    }
-
-    const login = http.post(
-        `${BASE_URL}/api/auth/login`,
-        JSON.stringify({ loginId: LOGIN_ID, password: PASSWORD }),
-        { headers: { 'Content-Type': 'application/json' } }
-    );
-
-    if (login.status !== 200) {
-        throw new Error(`nearby login failed: status=${login.status}`);
-    }
-
-    return `Bearer ${login.json().accessToken}`;
-}
-
-export function setup() {
-    return { authorization: loginForBenchmark() };
-}import http from 'k6/http';
+import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
@@ -46,6 +25,13 @@ export const options = {
         http_req_failed: ['rate<0.05'],
     },
 };
+
+export function setup() {
+    if (!LOGIN_ID || !PASSWORD) throw new Error('nearby k6 test requires LOGIN_ID and PASSWORD environment variables');
+    const login = http.post(BASE_URL + '/api/auth/login', JSON.stringify({ loginId: LOGIN_ID, password: PASSWORD }), { headers: { 'Content-Type': 'application/json' } });
+    if (login.status !== 200) throw new Error('nearby login failed: status=' + login.status);
+    return { authorization: 'Bearer ' + login.json().accessToken };
+}
 
 export default function (data) {
     // 현재 main의 TheaterController는 sort 파라미터를 받지 않는다.
