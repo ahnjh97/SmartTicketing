@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $resultRoot = Join-Path $root 'benchmark-results\redis-query'
 $logRoot = Join-Path $resultRoot 'backend'
 $k6Root = Join-Path $root 'k6\redis-benchmark'
