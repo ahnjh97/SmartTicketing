@@ -87,4 +87,4 @@ try { & (Join-Path $PSScriptRoot 'update-dashboard.ps1') -Distribution $Distribu
 catch { Write-Warning "측정 결과는 저장됐지만 통합 페이지 갱신에 실패했습니다: $_" }
 Write-Host "Results: $output"
 if (Test-Path (Join-Path $output 'index.html')) { Write-Host "HTML: $(Join-Path $output 'index.html')" }
-if ($result -ne 0) { throw "Linux benchmark returned $result. Inspect the report and logs in $output." }
+if ($result -ne 0) { throw "Linux benchmark returned $result. Inspect $(Join-Path $output 'runner.log') for the original error; also check services.log and cleanup.log in $output." }

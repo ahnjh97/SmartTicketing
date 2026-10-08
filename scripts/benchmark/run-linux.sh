@@ -19,6 +19,10 @@ export BENCHMARK_OUTPUT="$project_root/benchmark-results/$run_id"
 export BENCH_BACKEND_IMAGE="smartticketing-benchmark-backend:$run_id"
 export BENCH_DB_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 mkdir -p "$BENCHMARK_OUTPUT"
+exec > >(tee -a "$BENCHMARK_OUTPUT/runner.log") 2>&1
+stage='Docker setup'
+trap 'result=$?; printf "[ERROR] %s failed at line %s (exit %s). See %s/runner.log\n" "$stage" "$LINENO" "$result" "$BENCHMARK_OUTPUT" >&2' ERR
+echo "[1/6] Checking Docker. Log: $BENCHMARK_OUTPUT/runner.log"
 if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
     echo 'Installing official Ubuntu Docker packages in WSL (first run only)...'
     apt-get update -qq
@@ -38,24 +42,33 @@ cleanup() {
     exit "$result"
 }
 trap cleanup EXIT
-"${compose[@]}" build runner
+stage='Runner image build'
+echo '[2/6] Building runner image (Java compilation and dependencies).'
+"${compose[@]}" --progress plain build runner
 # Package the very same bootJar in the production Dockerfile's AWS prebuilt target.
 # Use a private build context so build/deploy/app.jar in the checkout is never overwritten.
 image_context="$BENCHMARK_OUTPUT/image-context"
+stage='Production image build'
+echo '[3/6] Packaging application and building production image.'
 mkdir -p "$image_context/build/deploy" "$image_context/deploy"
 cp "$project_root/Dockerfile" "$image_context/Dockerfile"
 cp "$project_root/deploy/backend-entrypoint.sh" "$image_context/deploy/"
 sed -i 's/\r$//' "$image_context/deploy/backend-entrypoint.sh"
 "${compose[@]}" run --rm -T --no-deps --entrypoint bash runner -c \
     'cp /app/build/libs/*-SNAPSHOT.jar /results/image-context/build/deploy/app.jar'
-"${compose[@]}" build backend
+"${compose[@]}" --progress plain build backend
 expected_sha=$(sha256sum "$image_context/build/deploy/app.jar" | cut -d' ' -f1)
 actual_sha=$(docker run --rm --entrypoint sha256sum "$BENCH_BACKEND_IMAGE" /app/app.jar | cut -d' ' -f1)
 [[ "$expected_sha" == "$actual_sha" ]] || { echo 'Production image JAR checksum mismatch' >&2; exit 1; }
 printf '%s  app.jar\n' "$actual_sha" > "$BENCHMARK_OUTPUT/backend-jar.sha256"
 docker run --rm --entrypoint java "$BENCH_BACKEND_IMAGE" -version > "$BENCHMARK_OUTPUT/backend-java.txt" 2>&1
+stage='Benchmark service startup'
+echo '[4/6] Preparing k6, MySQL and Redis.'
 docker pull grafana/k6:2.3.0
 "${compose[@]}" up -d --wait --wait-timeout 240 mysql redis
 docker image inspect "$BENCH_BACKEND_IMAGE" smartticketing-benchmark:java21-local grafana/k6:2.3.0 mysql:8.4 redis:7-alpine \
     --format '{{.Id}} {{json .RepoDigests}}' > "$BENCHMARK_OUTPUT/images.txt"
+stage='Benchmark execution'
+echo '[5/6] Running benchmark scenarios.'
 python3 "$project_root/scripts/benchmark/container-controller.py" "${compose[@]}"
+echo '[6/6] Benchmark scenarios finished; cleaning up temporary services.'
