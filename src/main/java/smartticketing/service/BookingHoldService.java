@@ -156,6 +156,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
         BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
         updateAvailable(show, inventory, now);
+        BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_ACQUIRED", now);
         // 알림은 실제 대기열 승급(Dispatcher)에서만 생성한다.
         return response(reservation, now);
     }
@@ -281,6 +282,7 @@ public class BookingHoldService {
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
         BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot); updateAvailable(show, inventory, now);
+        BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_EXPIRED", now);
         NotificationService.holdExpired(em, group.getId());
         return true;
     }

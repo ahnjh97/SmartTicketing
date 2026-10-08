@@ -45,6 +45,9 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
                     .setProperty("hibernate.connection.username", user)
                     .setProperty("hibernate.connection.password", password)
                     .setProperty("hibernate.connection.rewriteBatchedStatements", "true")
+                    // Match Spring's HibernateJpaVendorAdapter: retain the connection so
+                    // HibernateJpaDialect can apply and restore per-transaction isolation.
+                    .setProperty("hibernate.connection.handling_mode", "DELAYED_ACQUISITION_AND_HOLD")
                     .setProperty("hibernate.hbm2ddl.auto", "update")
                     .setProperty("hibernate.hbm2ddl.halt_on_error", "true")
                     .setProperty("hibernate.show_sql", "false");

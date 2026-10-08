@@ -68,6 +68,11 @@ public class AdminBookingService {
                 or id in (select request_group_id from waiting_queues where id in (:queues)) order by id
                 """, p);
         p.put("groups", nonempty(groups));
+        p.put("affectedShows", nonempty(ids("""
+                select showtime_id from reservations where id in (:reservations) or request_group_id in (:groups)
+                union select showtime_id from waiting_queues where id in (:queues) or request_group_id in (:groups)
+                union select id from showtimes where id=:show order by 1
+                """, p)));
         var users = ids("select user_id from reservations where id in (:reservations) union select user_id from waiting_queues where id in (:queues) union select user_id from booking_request_groups where id in (:groups) union select user_id from booking_operations where :global=true", p).stream().sorted().toList();
         p.put("users", nonempty(users));
         p.put("orphanGroups", "purge".equals(s.action()) ? nonempty(ids("""
@@ -158,7 +163,8 @@ public class AdminBookingService {
         ids("select group_id from booking_group_holds where group_id in (:groups) order by group_id for update", p);
         ids("select id from showtimes where id in (:affectedShows) order by id for update", p);
         var locked = plan(s);
-        if (!before.groups().equals(locked.groups()) || !before.users().equals(locked.users())) conflict();
+        if (!before.groups().equals(locked.groups()) || !before.users().equals(locked.users())
+                || !before.p().get("affectedShows").equals(locked.p().get("affectedShows"))) conflict();
         p = locked.p();
         ids("select id from reservations where id in (:reservations) order by id for update", p);
         ids("select id from showtime_seats where (:global=false and showtime_id=:show) or reservation_id in (:reservations) order by id for update", p);
@@ -203,6 +209,10 @@ public class AdminBookingService {
                 update showtimes set available_seats=(select count(*) from showtime_seats i join seats s on s.id=i.seat_id
                 where i.showtime_id=showtimes.id and s.is_active=true and (i.status='AVAILABLE' or (i.status='HOLDING' and i.hold_expired_at<=current_timestamp))),updated_at=current_timestamp where id in (:affectedShows)
                 """, p);
+        for (Long show : (List<Long>) p.get("affectedShows")) {
+            if (show > 0) BookingOutbox.append(db, show, smartticketing.entity.BookingOutboxEvent.Type.SHOWTIME_CHANGED,
+                    purge ? "ADMIN_BOOKING_PURGED" : "ADMIN_BOOKING_CANCELLED", java.time.LocalDateTime.now());
+        }
         return preview;
     }
 }

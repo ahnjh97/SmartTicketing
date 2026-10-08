@@ -86,6 +86,7 @@ public class BookingWaitingService {
                 q.setCreatedAt(holds.now()); q.setUpdatedAt(holds.now()); additions.add(q);
             }
             additions.forEach(em::persist);
+            additions.forEach(q -> BookingQueueLifecycle.changed(em, q, holds.now()));
             return response(group);
         });
     }
@@ -117,6 +118,7 @@ public class BookingWaitingService {
         row.getRequestedSeatIds().clear(); row.getRequestedSeatIds().addAll(ids);
         row.setStatus(QueueStatus.WAITING); row.setUpdatedAt(holds.now());
         if (row.getId() == null) em.persist(row);
+        BookingQueueLifecycle.changed(em, row, holds.now());
         return response(group);
     }
 
@@ -143,6 +145,7 @@ public class BookingWaitingService {
         row.setStatus(QueueStatus.WAITING); row.setUpdatedAt(holds.now());
         row.getRequestedSeatIds().clear();
         if(row.getId()==null) em.persist(row);
+        BookingQueueLifecycle.changed(em, row, holds.now());
         return response(group);
     }
 
@@ -253,7 +256,7 @@ public class BookingWaitingService {
             if ((status == QueueStatus.WAITING || status == QueueStatus.PAUSED)
                     && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
                 status=QueueStatus.EXPIRED;
-                if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); }
+                if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); BookingQueueLifecycle.changed(em, q, now); }
             }
             var requestedSeats = snapshot ? q.getRequestedSeatIds().stream().map(reads.seats()::get).filter(Objects::nonNull)
                     .sorted(Comparator.comparing(Seat::getSeatRow).thenComparing(Seat::getSeatNumber)).toList()

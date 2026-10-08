@@ -85,6 +85,7 @@ public class BookingPaymentService {
         payment.setUpdatedAt(now);
         if (request.simulateFailure()) {
             payment.setStatus(PaymentStatus.FAILED);
+            BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "PAYMENT_FAILED", now);
             return paymentResponse(r, payment, false);
         }
         payment.setStatus(PaymentStatus.SUCCESS);
@@ -94,6 +95,7 @@ public class BookingPaymentService {
         BookingQueueLifecycle.completed(em, locked.group().getId(), now);
         em.remove(locked.slot());
         BookingHoldService.updateAvailable(locked.show(), inventory, now);
+        BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "PAYMENT_CONFIRMED", now);
         return paymentResponse(r, payment, true);
     }
 
@@ -180,6 +182,7 @@ public class BookingPaymentService {
         // 기존 3초 주기 Worker는 누락/실패 복구용으로 유지하고,
         // 정상적인 취소 -> 좌석 반환 -> 대기자 선점 -> 알림 흐름은 여기서 즉시 시작한다.
         scheduleWaitingDispatchAfterCommit(locked.show().getId());
+        BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "RESERVATION_CANCELLED", now);
         return holds.response(r, now);
     }
 

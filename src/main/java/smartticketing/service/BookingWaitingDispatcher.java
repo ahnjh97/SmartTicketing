@@ -62,7 +62,8 @@ public class BookingWaitingDispatcher {
                 var group = locked.get(q.getRequestGroup().getId());
                 if (group.getStatus() != BookingGroupStatus.ACTIVE || q.getStatus() != QueueStatus.WAITING) continue;
                 if (!show.getStartTime().isAfter(holds.now()) || show.getStatus() != ShowtimeStatus.SCHEDULED) {
-                    q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(holds.now()); continue;
+                    q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(holds.now());
+                    BookingQueueLifecycle.changed(em, q, holds.now()); continue;
                 }
                 try { waiting.validate(group, show); }
                 catch (BookingRejection mismatch) { continue; }

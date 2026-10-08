@@ -54,6 +54,7 @@ final class BookingQueueLifecycle {
                 q.setStatus(QueueStatus.HOLDING); q.setOpportunityExpiresAt(expires);
             } else q.setStatus(QueueStatus.PAUSED);
             q.setUpdatedAt(now);
+            changed(em, q, now);
         }
     }
 
@@ -63,6 +64,7 @@ final class BookingQueueLifecycle {
             else if (q.getStatus() == QueueStatus.WAITING || q.getStatus() == QueueStatus.PAUSED) q.setStatus(QueueStatus.CANCELLED);
             else continue;
             q.setUpdatedAt(now);
+            changed(em, q, now);
         }
     }
 
@@ -76,6 +78,7 @@ final class BookingQueueLifecycle {
                         ? QueueStatus.WAITING : QueueStatus.EXPIRED);
             } else continue;
             q.setUpdatedAt(now);
+            changed(em, q, now);
         }
         return waitingHold;
     }
@@ -84,7 +87,13 @@ final class BookingQueueLifecycle {
         for (var q : rows(em, group)) {
             if (q.getStatus() == QueueStatus.WAITING || q.getStatus() == QueueStatus.PAUSED || q.getStatus() == QueueStatus.HOLDING) {
                 q.setStatus(QueueStatus.CANCELLED); q.setUpdatedAt(now);
+                changed(em, q, now);
             }
         }
+    }
+
+    static void changed(EntityManager em, WaitingQueue q, LocalDateTime now) {
+        BookingOutbox.append(em, q.getShowtime().getId(), BookingOutboxEvent.Type.WAITING_CHANGED,
+                q.getRequestGroup().getId(), "WAITING_" + q.getStatus().name(), now);
     }
 }
