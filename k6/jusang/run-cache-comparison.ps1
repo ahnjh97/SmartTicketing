@@ -36,7 +36,7 @@ New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 
 function Set-CacheMode([bool]$Enabled) {
     $mode = if ($Enabled) { "set-on" } else { "set-off" }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "local.cmd") $mode
+    & cmd.exe /c (Join-Path $root "local.cmd") $mode
     if ($LASTEXITCODE -ne 0) { throw "캐시 모드 변경 실패: $mode" }
 }
 
