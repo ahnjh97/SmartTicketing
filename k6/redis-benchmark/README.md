@@ -6,7 +6,7 @@ This benchmark is independent of the older k6 scripts in the repository.
 
 | Script | Target |
 |---|---|
-| `01-common-query.js` | `/api/main`, `/api/movies`, `/api/theaters` |
+| `01-main-query.js` | `/api/main` only |\n| `01-movies-query.js` | `/api/movies` only |\n| `01-theaters-query.js` | `/api/theaters` only |\n| `01-common-query-integrated.js` | `/api/main`, `/api/movies`, `/api/theaters` integrated workload |
 | `03-showtime-query.js` | `/api/showtimes` |
 | `03-seat-map-query.js` | `/api/showtimes/{id}/seats` |
 | `05-distance-query.js` | `/api/theaters/nearby?sort=DISTANCE` |
@@ -17,7 +17,7 @@ WALK and TRANSIT are intentionally excluded.
 
 Redis OFF uses the existing MySQL query path.
 
-Redis ON uses the same query path plus a read-only Redis cache with a default 2-second TTL.
+Redis ON uses the same query path plus a read-only Redis query cache. The TTL is controlled by `APP_CACHE_QUERY_TTL_MS` in `.env`.
 
 The cache is fail-open: when Redis is unavailable, the request falls back to the existing database/calculation path.
 
@@ -44,7 +44,7 @@ The runner:
 
 1. sets cache OFF
 2. starts the existing local backend flow
-3. runs all four k6 scripts
+3. runs the three split common-query tests, their integrated test, and the remaining feature tests
 4. stops the backend
 5. sets cache ON
 6. repeats the same four tests
@@ -79,7 +79,7 @@ Results are written to:
 
     benchmark-results/redis-query/
 
-Each feature has separate JSON files:
+The common-query item is intentionally split into three isolated endpoint tests plus one integrated test. This makes it possible to identify which endpoint causes a regression while retaining the original mixed-workload comparison.\n\nEach feature has separate JSON files:
 
     01-common-query-off.json
     01-common-query-on.json
