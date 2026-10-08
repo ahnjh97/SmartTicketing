@@ -212,14 +212,10 @@ public class BookingPaymentService {
                         : existing.isEmpty() ? null : tickets.one(reservation.getUser().getId(), existing.getFirst().getId()));
     }
 
+    @Transactional(readOnly = true)
     public PaymentResponse get(Long userId, Long reservationId) {
         holds.requireUser(userId);
-        try {
-            var locked = lock(userId, reservationId);
-            if (locked.slot() != null && locked.slot().getReservation().getId().equals(reservationId))
-                holds.expireLockedGroup(locked.group());
-            return paymentResponse(locked.reservation(), payment(reservationId), false);
-        } catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
+        return snapshot(userId, holds.ownedReservationForRead(userId, reservationId));
     }
 
     PaymentResponse snapshot(Long userId, Reservation reservation) {

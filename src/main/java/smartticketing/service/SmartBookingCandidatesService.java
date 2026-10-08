@@ -270,7 +270,7 @@ public class SmartBookingCandidatesService {
             if(show==null && !queues.items().isEmpty()) show=em.find(Showtime.class,queues.items().getFirst().showtimeId());
             if(show==null) continue;
             items.add(new Candidate(g.getId(),g.getCandidateKind()==null?"DIRECT":g.getCandidateKind(),g.getCandidateZone(),show.getId(),show.getScreen().getTheater().getName(),
-                    show.getScreen().getName(),offset(show.getStartTime()),offset(show.getEndTime()),g.getStatus(),queues,payment,
+                    show.getScreen().getName(),offset(show.getStartTime()),offset(show.getEndTime()),queues.groupStatus(),queues,payment,
                     preferenceRank(g),g.getMovie().getTitle(),g.getPartySize()));
         }
         var activeIds = new HashSet<>(items.stream().map(Candidate::groupId).toList());

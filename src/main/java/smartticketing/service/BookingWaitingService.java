@@ -1,10 +1,8 @@
 package smartticketing.service;
 
 import jakarta.persistence.*;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import smartticketing.dto.booking.*;
 import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
@@ -164,14 +162,10 @@ public class BookingWaitingService {
         return counter.getLastNumber();
     }
 
+    @Transactional(readOnly = true)
     public WaitingResponse get(Long user, Long id) {
         holds.requireUser(user);
-        try {
-            var group = holds.lockOwnedGroup(user, id);
-            holds.expireLockedGroup(group);
-            BookingQueueLifecycle.lockShows(em, id, null);
-            return response(group);
-        } catch (BookingRejection e) { throw new ResponseStatusException(HttpStatus.valueOf(e.status), e.getMessage()); }
+        return response(holds.ownedGroupForRead(user, id), true, true);
     }
 
     public BookingResult cancel(Long user, Long id, String key) {
@@ -204,21 +198,22 @@ public class BookingWaitingService {
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
     }
 
-    WaitingResponse snapshot(BookingRequestGroup group) { return response(group,true); }
-    private WaitingResponse response(BookingRequestGroup group) { return response(group,false); }
-    private WaitingResponse response(BookingRequestGroup group, boolean snapshot) {
+    WaitingResponse snapshot(BookingRequestGroup group) { return response(group,true,false); }
+    private WaitingResponse response(BookingRequestGroup group) { return response(group,false,true); }
+    private WaitingResponse response(BookingRequestGroup group, boolean snapshot, boolean includeChoices) {
         var now = holds.now();
+        var state = snapshot ? BookingReadState.group(em, group, now) : null;
+        var groupStatus = snapshot ? state.status() : group.getStatus();
         var rows = snapshot ? em.createQuery("select q from WaitingQueue q where q.requestGroup.id=:g order by q.id",WaitingQueue.class)
                 .setParameter("g",group.getId()).getResultList() : BookingQueueLifecycle.rows(em, group.getId());
         var items = new ArrayList<WaitingResponse.Item>();
         for (var q : rows) {
-            var status=q.getStatus();
+            var status=snapshot ? BookingReadState.queue(q, state, now) : q.getStatus();
             if ((status == QueueStatus.WAITING || status == QueueStatus.PAUSED)
                     && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
                 status=QueueStatus.EXPIRED;
                 if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); }
             }
-            if(snapshot && status==QueueStatus.HOLDING && q.getOpportunityExpiresAt()!=null && !q.getOpportunityExpiresAt().isAfter(now))status=QueueStatus.EXPIRED;
             var requestedSeats = q.getRequestedSeatIds().isEmpty() ? List.<Seat>of() : em.createQuery(
                     "select s from Seat s where s.id in :ids order by s.seatRow, s.seatNumber", Seat.class)
                     .setParameter("ids", q.getRequestedSeatIds()).getResultList();
@@ -236,7 +231,7 @@ public class BookingWaitingService {
                     List.copyOf(q.getRequestedSeatIds()), requestedSeats.stream().map(s -> s.getSeatRow() + s.getSeatNumber()).toList()));
         }
         var choices = new ArrayList<WaitingResponse.Choice>();
-        if (!snapshot && group.getCandidateKind()==null && group.getStatus() == BookingGroupStatus.ACTIVE) {
+        if (includeChoices && group.getCandidateKind()==null && groupStatus == BookingGroupStatus.ACTIVE) {
             var from = CinemaDay.start(group.getViewingDate()); var until = from.plusDays(1);
             if (group.getEntryPoint() == BookingEntryPoint.MOVIE_SMART) {
                 from = CinemaDay.time(group.getViewingDate(), group.getStartTimeFrom()); until = CinemaDay.time(group.getViewingDate(), group.getStartTimeTo());
@@ -252,9 +247,8 @@ public class BookingWaitingService {
                 choices.add(new WaitingResponse.Choice(show.getId(), show.getScreen().getTheater().getName(), show.getScreen().getName(), offset(show.getStartTime()), offset(show.getEndTime())));
             }
         }
-        var slot = group.getStatus() == BookingGroupStatus.HOLDING ? em.find(BookingGroupHold.class, group.getId()) : null;
-        if(snapshot && slot!=null && !slot.getExpiresAt().isAfter(now))slot=null;
-        return new WaitingResponse(group.getId(), group.getStatus(), slot == null ? null : slot.getReservation().getId(), items, choices, offset(now));
+        var slot = snapshot ? state.activeHold() : group.getStatus() == BookingGroupStatus.HOLDING ? em.find(BookingGroupHold.class, group.getId()) : null;
+        return new WaitingResponse(group.getId(), groupStatus, slot == null ? null : slot.getReservation().getId(), items, choices, offset(now));
     }
 
     private static OffsetDateTime offset(LocalDateTime t) { return t == null ? null : t.atOffset(ZoneOffset.ofHours(9)); }
