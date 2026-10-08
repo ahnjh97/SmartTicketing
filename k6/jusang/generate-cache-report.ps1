@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$InputJson = "$PSScriptRoot\cache-test-results.json",
     [string]$OutputHtml = "$PSScriptRoot\cache-test-report.html"
 )
