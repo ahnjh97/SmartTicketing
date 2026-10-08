@@ -40,5 +40,9 @@ export default function () {
         'nearby distance body exists': (r) => r.body && r.body.length > 0,
     });
 
+    if (res.status !== 200) {
+        console.log(`nearby-distance failed: status=${res.status}, body=${res.body || '<empty>'}`);
+    }
+
     sleep(Number(__ENV.SLEEP || 0.02));
 }
