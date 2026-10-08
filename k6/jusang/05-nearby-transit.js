@@ -34,8 +34,6 @@ export function setup() {
 }
 
 export default function (data) {
-    // 현재 main의 TheaterController는 sort 파라미터를 받지 않는다.
-    // TRANSIT 캐시 구현/컨트롤러 확장 후에 실행할 스크립트다.
     const url =
         `${BASE_URL}/api/theaters/nearby` +
         `?latitude=${encodeURIComponent(LAT)}` +
