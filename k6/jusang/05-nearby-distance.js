@@ -12,7 +12,7 @@ const ITERATIONS = Number(__ENV.ITERATIONS || 100);
 
 export const options = {
     scenarios: { nearby_distance: { executor: 'shared-iterations', vus: VUS, iterations: ITERATIONS, maxDuration: __ENV.MAX_DURATION || '5m' } },
-    thresholds: { http_req_failed: ['rate<0.01'] },
+    thresholds: { http_req_failed: ['rate<0.01'], checks: ['rate>0.99'] },
 };
 
 export function setup() {
@@ -23,9 +23,15 @@ export function setup() {
 }
 
 export default function (data) {
-    const url = `${BASE_URL}/api/theaters/nearby?latitude=${encodeURIComponent(LAT)}&longitude=${encodeURIComponent(LON)}${ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : ''}`;
+    const url = `${BASE_URL}/api/theaters/nearby?latitude=${encodeURIComponent(LAT)}&longitude=${encodeURIComponent(LON)}${ADDRESS ? `&address=${encodeURIComponent(ADDRESS)}` : ''}&sort=DISTANCE`;
     const res = http.get(url, { headers: { Authorization: data.authorization }, tags: { cache_test: '05-nearby', endpoint: 'nearby-distance' }, timeout: __ENV.HTTP_TIMEOUT || '60s' });
-    check(res, { 'nearby distance status 200': (r) => r.status === 200, 'nearby distance body exists': (r) => r.body && r.body.length > 0 });
+    let theaters = [];
+    try { theaters = res.status === 200 ? res.json() : []; } catch (_) {}
+    check(res, {
+        'nearby distance status 200': (r) => r.status === 200,
+        'nearby distance body exists': (r) => Array.isArray(theaters) && theaters.length > 0,
+        'nearby distance contains distance': () => theaters.length > 0 && theaters.every((t) => Number.isFinite(Number(t.distance))),
+    });
     if (res.status !== 200) console.log(`nearby-distance failed: status=${res.status}, body=${res.body || '<empty>'}`);
     sleep(Number(__ENV.SLEEP || 0.02));
 }
