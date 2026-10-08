@@ -2,6 +2,8 @@ package smartticketing.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,14 @@ import java.util.concurrent.atomic.AtomicLong;
 @Service
 @Transactional(readOnly = true)
 public class MainService {
+
+    private static final Logger log = LoggerFactory.getLogger(MainService.class);
+    private static final long SLOW_MS = 50L;
+    private final java.util.concurrent.atomic.AtomicLong requestCount = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong hitCount = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong missCount = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong loaderCount = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong joinCount = new java.util.concurrent.atomic.AtomicLong();
 
     private static final Logger log = LoggerFactory.getLogger(MainService.class);
     private static final long SLOW_REQUEST_MS = 50L;
@@ -75,6 +85,7 @@ public class MainService {
         }
 
         loaderCount.incrementAndGet();
+        loaderCount.incrementAndGet();
         try {
             // Another request may have populated Redis between the initial GET and
             // becoming the loader for this cache key.
@@ -90,6 +101,7 @@ public class MainService {
             }
 
             long dbStart = System.nanoTime();
+            long dbStart = System.nanoTime();
             long totalAudience = movieRepository.sumActiveAudienceCount();
 
             List<MovieChartResponseDto> nowShowing = toChart(
@@ -100,6 +112,7 @@ public class MainService {
                     totalAudience);
             long dbMs = elapsedMs(dbStart);
 
+            long dbMs = elapsedMs(dbStart);
             MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
 
             long putStart = System.nanoTime();
@@ -145,6 +158,20 @@ public class MainService {
             log.info("MAIN_CACHE_STATS requests={} hits={} misses={} loaders={} joins={}",
                     count, hitCount.get(), missCount.get(), loaderCount.get(), joinCount.get());
         }
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
+    }
+
+    private void logStats() {
+        long count = requestCount.incrementAndGet();
+        if (count % 100 == 0) log.info("MAIN_CACHE_STATS requests={} hits={} misses={} loaders={} joins={}", count, hitCount.get(), missCount.get(), loaderCount.get(), joinCount.get());
+    }
+
+    private void logSlow(String path, long start, long backendMs) {
+        long totalMs = elapsedMs(start);
+        if (totalMs >= SLOW_MS) log.warn("MAIN_REQUEST path={} total={}ms backend={}ms", path, totalMs, backendMs);
     }
 
     private static long elapsedMs(long startNanos) {
