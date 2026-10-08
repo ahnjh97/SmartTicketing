@@ -9,19 +9,19 @@ const latitude = Number(__ENV.K6_LATITUDE || 37.5665);
 const longitude = Number(__ENV.K6_LONGITUDE || 126.9780);
 
 export function setup() {
-  if (__ENV.K6_ACCESS_TOKEN) return { token: __ENV.K6_ACCESS_TOKEN };
-  if (!__ENV.K6_LOGIN_ID || !__ENV.K6_PASSWORD) {
-    fail('Set K6_ACCESS_TOKEN or K6_LOGIN_ID + K6_PASSWORD for /api/theaters/nearby.');
+  if (!__ENV.K6_ACCESS_TOKEN) {
+    fail('run-cache-comparison.ps1 must provide K6_ACCESS_TOKEN for /api/theaters/nearby.');
   }
-
-  const response = http.post(
-    `${BASE_URL}/api/auth/login`,
-    JSON.stringify({ loginId: __ENV.K6_LOGIN_ID, password: __ENV.K6_PASSWORD }),
-    { headers: { 'Content-Type': 'application/json' } }
-  );
-  check(response, { 'login succeeded': (r) => r.status === 200 });
-  if (response.status !== 200) fail(`Login failed: HTTP ${response.status}`);
-  return { token: response.json().accessToken };
+  const response = http.get(`${BASE_URL}/api/theaters/nearby?latitude=${latitude}&longitude=${longitude}&sort=DISTANCE`, {
+    headers: { Authorization: `Bearer ${__ENV.K6_ACCESS_TOKEN}` },
+    responseType: 'text',
+  });
+  check(response, { 'nearby setup succeeded': (r) => r.status === 200 });
+  if (response.status !== 200) {
+    const body = response.body ? String(response.body).slice(0, 500) : '<empty body>';
+    fail(`Nearby setup failed: HTTP ${response.status}, body=${body}`);
+  }
+  return { token: __ENV.K6_ACCESS_TOKEN };
 }
 
 export default function (data) {
