@@ -78,10 +78,10 @@ function Run-K6([string]$Mode, [hashtable]$Test) {
     $env:BASE_URL = $BaseUrl
     $env:CACHE_MODE = $Mode
     $env:RESULT_FILE = $resultFile
-    $env:K6_RATE = [string]$Rate
-    $env:K6_DURATION = $Duration
-    $env:K6_PRE_VUS = [string]$PreAllocatedVUs
-    $env:K6_MAX_VUS = [string]$MaxVUs
+    $env:REDIS_BENCH_RATE = [string]$Rate
+    $env:REDIS_BENCH_DURATION = $Duration
+    $env:REDIS_BENCH_PRE_VUS = [string]$PreAllocatedVUs
+    $env:REDIS_BENCH_MAX_VUS = [string]$MaxVUs
     $env:K6_MOVIE_ID = [string]$MovieId
     $env:K6_DATE = $Date
     $env:K6_LATITUDE = [string]$Latitude
@@ -117,4 +117,8 @@ try {
 } finally {
     Remove-Item Env:CACHE_MODE -ErrorAction SilentlyContinue
     Remove-Item Env:RESULT_FILE -ErrorAction SilentlyContinue
+    Remove-Item Env:REDIS_BENCH_RATE -ErrorAction SilentlyContinue
+    Remove-Item Env:REDIS_BENCH_DURATION -ErrorAction SilentlyContinue
+    Remove-Item Env:REDIS_BENCH_PRE_VUS -ErrorAction SilentlyContinue
+    Remove-Item Env:REDIS_BENCH_MAX_VUS -ErrorAction SilentlyContinue
 }
