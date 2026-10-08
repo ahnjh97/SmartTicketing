@@ -21,7 +21,7 @@ public class BookingWaitingProjectionWorker {
             long start=System.nanoTime();
             var shows=projection.activeShows(after,100);
             for(var show:shows) {
-                try { projection.refresh(show); }
+                try { projection.repairIfNeeded(show); }
                 catch(RuntimeException failure) { return; }
                 after=show;
                 if(System.nanoTime()-start>1_000_000_000L) return;

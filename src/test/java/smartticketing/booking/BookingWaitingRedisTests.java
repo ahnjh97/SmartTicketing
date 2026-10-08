@@ -64,6 +64,27 @@ class BookingWaitingRedisTests {
         readStatements.clear(); cachedState(second,ranks);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
+
+    @Test void healthyProjectionRepairSkipsQueueRowsAndRedisRewrite() {
+        var f=fixture(1,1); register(f); long show=f.shows().getFirst();
+        projection().refresh(show);
+        var versionKey=prefix+"{"+show+"}:version";
+        redis.expire(versionKey,java.time.Duration.ofSeconds(30));
+        readStatements.clear(); projection().repairIfNeeded(show);
+        assertThat(readStatements).noneMatch(sql -> sql.contains("waiting_queues"));
+        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+    }
+
+    @Test void repairDetectsEvictionEvenInAnUnrequestedZone() {
+        var f=fixture(1,1); register(f); long show=f.shows().getFirst();
+        projection().refresh(show);
+        var zoneKey=prefix+"{"+show+"}:SIDE_REAR";
+        redis.delete(zoneKey);
+        readStatements.clear(); projection().repairIfNeeded(show);
+        assertThat(readStatements).anyMatch(sql -> sql.contains("waiting_queues"));
+        assertThat(redis.opsForZSet().score(zoneKey,"_")).isEqualTo(-1d);
+        assertThat(cachedState(f,ranks).items()).isEqualTo(state(f).items());
+    }
     @Test void redisFailureFallsBackWithoutFailingRequest() {
         var f=fixture(1,1); register(f);
         var unavailable=mock(StringRedisTemplate.class);
