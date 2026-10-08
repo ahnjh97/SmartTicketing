@@ -165,6 +165,12 @@ function Invoke-K6Summary([string]$TestTarget, [string]$Mode, [string]$SummaryPa
     $env:LAT = $Lat
     $env:LON = $Lon
     $env:ADDRESS = $Address
+    $env:LOGIN_ID = if ($env:K6_LOGIN_ID) { $env:K6_LOGIN_ID } else { $env:LOGIN_ID }
+    $env:PASSWORD = if ($env:K6_PASSWORD) { $env:K6_PASSWORD } else { $env:PASSWORD }
+
+    if ($TestTarget -in @("5-distance", "5-walk", "5-transit") -and (-not $env:LOGIN_ID -or -not $env:PASSWORD)) {
+        throw "Nearby tests require K6_LOGIN_ID and K6_PASSWORD. Set them before running the all-target comparison."
+    }
 
     $scriptName = switch ($TestTarget) {
         "1-common" { "01-common-query.js" }
