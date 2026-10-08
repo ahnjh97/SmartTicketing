@@ -2,8 +2,6 @@ package smartticketing.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +22,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MainService {
 
     private static final Logger log = LoggerFactory.getLogger(MainService.class);
-    private static final long SLOW_MS = 50L;
-    private final java.util.concurrent.atomic.AtomicLong requestCount = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong hitCount = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong missCount = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong loaderCount = new java.util.concurrent.atomic.AtomicLong();
-    private final java.util.concurrent.atomic.AtomicLong joinCount = new java.util.concurrent.atomic.AtomicLong();
-
-    private static final Logger log = LoggerFactory.getLogger(MainService.class);
     private static final long SLOW_REQUEST_MS = 50L;
 
     private final MovieRepository movieRepository;
@@ -39,6 +29,7 @@ public class MainService {
     private final RedisQueryCache queryCache;
     private final ConcurrentHashMap<String, CompletableFuture<MainChartResponseDto>> loadingCache =
             new ConcurrentHashMap<>();
+
     private final AtomicLong requestCount = new AtomicLong();
     private final AtomicLong hitCount = new AtomicLong();
     private final AtomicLong missCount = new AtomicLong();
@@ -85,7 +76,6 @@ public class MainService {
         }
 
         loaderCount.incrementAndGet();
-        loaderCount.incrementAndGet();
         try {
             // Another request may have populated Redis between the initial GET and
             // becoming the loader for this cache key.
@@ -101,7 +91,6 @@ public class MainService {
             }
 
             long dbStart = System.nanoTime();
-            long dbStart = System.nanoTime();
             long totalAudience = movieRepository.sumActiveAudienceCount();
 
             List<MovieChartResponseDto> nowShowing = toChart(
@@ -112,7 +101,6 @@ public class MainService {
                     totalAudience);
             long dbMs = elapsedMs(dbStart);
 
-            long dbMs = elapsedMs(dbStart);
             MainChartResponseDto response = new MainChartResponseDto(nowShowing, comingSoon);
 
             long putStart = System.nanoTime();
@@ -135,7 +123,8 @@ public class MainService {
 
     private void logLoaderTiming(long dbMs, long putMs, long secondGetMs) {
         if (dbMs >= SLOW_REQUEST_MS || putMs >= SLOW_REQUEST_MS || secondGetMs >= SLOW_REQUEST_MS) {
-            log.warn("MAIN_CACHE_LOADER db={}ms redisSecondGet={}ms redisPut={}ms", dbMs, secondGetMs, putMs);
+            log.warn("MAIN_CACHE_LOADER db={}ms redisSecondGet={}ms redisPut={}ms",
+                    dbMs, secondGetMs, putMs);
         }
     }
 
@@ -148,7 +137,8 @@ public class MainService {
     private void logSlowRequest(String path, long requestStart, long joinMs, long backendMs) {
         long totalMs = elapsedMs(requestStart);
         if (totalMs >= SLOW_REQUEST_MS) {
-            log.warn("MAIN_REQUEST path={} total={}ms join={}ms backend={}ms", path, totalMs, joinMs, backendMs);
+            log.warn("MAIN_REQUEST path={} total={}ms join={}ms backend={}ms",
+                    path, totalMs, joinMs, backendMs);
         }
     }
 
@@ -164,20 +154,6 @@ public class MainService {
         return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 
-    private void logStats() {
-        long count = requestCount.incrementAndGet();
-        if (count % 100 == 0) log.info("MAIN_CACHE_STATS requests={} hits={} misses={} loaders={} joins={}", count, hitCount.get(), missCount.get(), loaderCount.get(), joinCount.get());
-    }
-
-    private void logSlow(String path, long start, long backendMs) {
-        long totalMs = elapsedMs(start);
-        if (totalMs >= SLOW_MS) log.warn("MAIN_REQUEST path={} total={}ms backend={}ms", path, totalMs, backendMs);
-    }
-
-    private static long elapsedMs(long startNanos) {
-        return (System.nanoTime() - startNanos) / 1_000_000L;
-    }
-
     // 설정된 기준일이 있으면 그 날짜, 없으면 오늘(한국 시간)
     private LocalDate getBaseDate() {
         return referenceDate.isBlank()
@@ -187,7 +163,8 @@ public class MainService {
 
     private List<MovieChartResponseDto> toChart(List<Movie> movies, long totalAudience) {
         return movies.stream()
-                .map(movie -> MovieChartResponseDto.from(movie, calculateBookingRate(movie.getAudienceCount(), totalAudience)))
+                .map(movie -> MovieChartResponseDto.from(movie,
+                        calculateBookingRate(movie.getAudienceCount(), totalAudience)))
                 .toList();
     }
 
