@@ -40,7 +40,7 @@ public class BookingOutboxWorker {
     private void deliver() {
         var types=EnumSet.noneOf(Type.class);
         handlers.forEach(handler -> types.addAll(handler.types()));
-        // Phase 3 does not install Redis/dispatch handlers. Unhandled events stay pending.
+        // Unhandled event types stay pending for a compatible consumer.
         if (types.isEmpty()) return;
         long start=System.nanoTime();
         for (int count=0;count<Math.max(1,maxEvents);count++) {

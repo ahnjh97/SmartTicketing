@@ -14,7 +14,6 @@ public class BookingWaitingWorker {
     private final BookingWaitingDispatcher dispatcher;
     private final AdminMaintenanceGate gate;
 
-    public record WaitingDispatchRequested(Long showId) {}
     public BookingWaitingWorker(BookingWaitingDispatcher dispatcher, AdminMaintenanceGate gate) { this.dispatcher = dispatcher; this.gate = gate; }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -23,15 +22,6 @@ public class BookingWaitingWorker {
         gate.background(this::sweepAvailable);
     }
 
-    @EventListener
-    public void dispatchImmediately(WaitingDispatchRequested event) {
-        try {
-            dispatcher.dispatch(event.showId());
-        } catch (RuntimeException failure) {
-            log.warn("Immediate waiting allocation deferred: show={}, error={}",
-                    event.showId(), failure.getClass().getSimpleName());
-        }
-    }
     private void sweepAvailable() {
         for (var show : dispatcher.pendingShows()) {
             try { dispatcher.dispatch(show); }

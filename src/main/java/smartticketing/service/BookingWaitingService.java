@@ -17,6 +17,8 @@ public class BookingWaitingService {
     private final BookingHoldService holds;
     private final BookingPaymentService payments;
     private final BookingIdempotency operations;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private BookingWaitingRanks ranks;
     private record Intent(Long groupId, List<Long> showtimeIds, SeatPosition seatZone, List<Long> seatIds) {}
 
     public BookingWaitingService(EntityManager em, BookingHoldService holds, BookingPaymentService payments, BookingIdempotency operations) {
@@ -216,14 +218,26 @@ public class BookingWaitingService {
                 """, WaitingQueue.class).setParameter("groups",groupIds).getResultList();
         rows.forEach(q -> queues.computeIfAbsent(q.getRequestGroup().getId(),ignored -> new ArrayList<>()).add(q));
         if (!rows.isEmpty()) {
+            if(ranks!=null && ranks.enabled()) {
+                var showIds=rows.stream().map(q -> q.getShowtime().getId()).distinct().toList();
+                var versions=new HashMap<Long,Long>();
+                em.createQuery("select s.showtimeId,s.revision from BookingOutboxStream s where s.showtimeId in :shows",Object[].class)
+                        .setParameter("shows",showIds).getResultList().forEach(v -> versions.put((Long)v[0],(Long)v[1]));
+                for(var show:showIds) ahead.putAll(ranks.read(show,versions.getOrDefault(show,0L),rows.stream()
+                        .filter(q -> q.getShowtime().getId().equals(show))
+                        .map(q -> new BookingWaitingRanks.Entry(q.getId(),q.getSeatZone(),q.displayNumber())).toList()));
+            }
+            var missing=rows.stream().map(WaitingQueue::getId).filter(id -> !ahead.containsKey(id)).toList();
+            if(!missing.isEmpty()) {
             var counts = em.createQuery("""
                     select q.id,count(a.id) from WaitingQueue q
                     left join WaitingQueue a on a.showtime.id=q.showtime.id and a.requestGroup is not null
                     and a.status=:waiting and coalesce(a.zoneQueueNumber,a.queueNumber)<coalesce(q.zoneQueueNumber,q.queueNumber)
                     and (a.seatZone=q.seatZone or (a.seatZone is null and q.seatZone is null))
-                    where q.requestGroup.id in :groups group by q.id
-                    """, Object[].class).setParameter("waiting",QueueStatus.WAITING).setParameter("groups",groupIds).getResultList();
+                    where q.id in :ids group by q.id
+                    """, Object[].class).setParameter("waiting",QueueStatus.WAITING).setParameter("ids",missing).getResultList();
             counts.forEach(row -> ahead.put((Long)row[0],(Long)row[1]));
+            }
             var requested = rows.stream().flatMap(q -> q.getRequestedSeatIds().stream()).distinct().toList();
             if (!requested.isEmpty()) em.createQuery("select s from Seat s where s.id in :ids",Seat.class)
                     .setParameter("ids",requested).getResultList().forEach(s -> seats.put(s.getId(),s));
