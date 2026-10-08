@@ -18,8 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
-$runner = Join-Path $PSScriptRoot "run-cache-test.ps1"
+$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $reportGenerator = Join-Path $PSScriptRoot "generate-cache-report.ps1"
 $resultsDir = Join-Path $PSScriptRoot "cache-comparison-results"
 $jsonPath = Join-Path $PSScriptRoot "cache-test-results.json"
@@ -36,7 +35,7 @@ New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 
 function Set-CacheMode([bool]$Enabled) {
     $mode = if ($Enabled) { "set-on" } else { "set-off" }
-    & cmd.exe /c (Join-Path $root "local.cmd") $mode
+    & cmd.exe /d /c "`"$root\local.cmd`" $mode"
     if ($LASTEXITCODE -ne 0) { throw "캐시 모드 변경 실패: $mode" }
 }
 
@@ -58,7 +57,7 @@ function Start-ManagedBackend([bool]$Enabled) {
     $action = if ($Enabled) { "on" } else { "off" }
     $backendProcess = Start-Process powershell.exe -ArgumentList @(
         "-NoProfile","-ExecutionPolicy","Bypass","-File",
-        (Join-Path $root "scriptslocal-dev.ps1"),"-Action",$action
+        (Join-Path $root "scripts\local-dev.ps1"),"-Action",$action
     ) -PassThru -WindowStyle Minimized
 
     Wait-Backend
