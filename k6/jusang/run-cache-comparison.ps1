@@ -122,16 +122,35 @@ function Stop-ManagedBackend {
     $pids = @($script:managedBackendPids + @(Get-ListeningBackendPids) | Where-Object { $_ } | Select-Object -Unique)
 
     foreach ($backendPid in $pids) {
-        try { & taskkill.exe /PID ([int]$backendPid) /T /F | Out-Null } catch {}
+        try { & taskkill.exe /PID ([int]$backendPid) /F /T 2>$null | Out-Null } catch {}
     }
 
     if ($script:backendProcess) {
-        try { & taskkill.exe /PID $script:backendProcess.Id /T /F | Out-Null } catch {}
+        try { & taskkill.exe /PID ([int]$script:backendProcess.Id) /F /T 2>$null | Out-Null } catch {}
         $script:backendProcess = $null
     }
 
     $script:managedBackendPids = @()
-    Wait-BackendStopped
+
+    # Gradle/Java child processes can survive a tree kill. Re-check 8080
+    # and terminate only the process actually listening on the test port.
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $deadline) {
+        $remaining = @(Get-ListeningBackendPids)
+        if ($remaining.Count -eq 0) {
+            Start-Sleep -Seconds 3
+            Write-Host "8080            " -ForegroundColor Green
+            return
+        }
+
+        foreach ($backendPid in $remaining) {
+            try { & taskkill.exe /PID ([int]$backendPid) /F 2>$null | Out-Null } catch {}
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    $remaining = @(Get-ListeningBackendPids)
+    throw ("     60               .    PID: {0}" -f ($remaining -join ', '))
 }
 
 function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
@@ -165,25 +184,31 @@ function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
 function Convert-Summary([string]$Path) {
     $s = Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
     $d = $s.metrics.http_req_duration.values
-    $failed = $s.metrics.http_req_failed.values.rate
-    $reqRate = $s.metrics.http_reqs.values.rate
+    $failed = [double]$s.metrics.http_req_failed.values.rate
+    $reqRate = [double]$s.metrics.http_reqs.values.rate
     $checks = $s.metrics.checks.values
 
-    [pscustomobject]@{
+    $result = [pscustomobject]@{
         http_req_failed_rate_percent = [math]::Round($failed * 100, 4)
         checks_total = [int]$checks.count
         checks_succeeded = [int]$checks.passes
         checks_failed = [int]$checks.fails
         http_req_duration_ms = [ordered]@{
-            avg = [math]::Round($d.avg, 2)
-            min = [math]::Round($d.min, 2)
-            median = [math]::Round($d.med, 2)
-            max = [math]::Round($d.max, 2)
-            p90 = [math]::Round($d."p(90)", 2)
-            p95 = [math]::Round($d."p(95)", 2)
+            avg = [math]::Round([double]$d.avg, 2)
+            min = [math]::Round([double]$d.min, 2)
+            median = [math]::Round([double]$d.med, 2)
+            max = [math]::Round([double]$d.max, 2)
+            p90 = [math]::Round([double]$d."p(90)", 2)
+            p95 = [math]::Round([double]$d."p(95)", 2)
         }
         throughput_req_per_sec = [math]::Round($reqRate, 6)
     }
+
+    if ($result.http_req_duration_ms.avg -le 0 -or $result.throughput_req_per_sec -le 0) {
+        throw "k6 summary conversion failed: response time or throughput is zero. Summary: $Path"
+    }
+
+    return $result
 }
 
 function Improvement([double]$on, [double]$off) {
