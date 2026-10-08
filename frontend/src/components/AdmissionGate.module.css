@@ -1,0 +1,21 @@
+.page { min-height: 100dvh; color: var(--booking-ink); background: var(--booking-surface); }
+.main { width: 100%; max-width: 440px; margin: 32px auto 0; padding: 24px; }
+.intro { text-align: center; margin: 20px 0 28px; }
+.intro h1 { margin: 0; font-size: clamp(23px, 4vw, 28px); letter-spacing: -.04em; line-height: 1.4; }
+.ticket { background: var(--booking-soft); border: 1px solid var(--booking-border); border-radius: var(--booking-radius-large); padding: 36px 24px 28px; }
+.position { text-align: center; }
+.caption { font-size: 14px; color: var(--booking-muted); }
+.number { color: var(--booking-accent); font-size: clamp(52px, 12vw, 72px); line-height: 1.3; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.04em; margin: 14px 0; }
+.number small { margin-left: 10px; font-size: 18px; font-weight: 500; color: var(--booking-muted); }
+.position p { margin: 12px 0 0; font-size: 14px; line-height: 1.7; color: var(--booking-muted); }
+.instructions { margin-top: 24px; text-align: center; font-size: 13px; line-height: 1.8; }
+.refreshNote { margin: 0 0 18px; color: var(--booking-muted); }
+.error { color: var(--booking-danger); }
+.primary, .secondary { min-height: 44px; padding: 10px 24px; border-radius: var(--booking-radius); font-size: 13px; font-weight: 600; }
+.secondary { border: 1px solid var(--booking-border-strong); background: transparent; color: var(--booking-ink); }
+.secondary:hover { background: var(--booking-muted-surface); }
+.primary { border: 1px solid var(--booking-accent); background: var(--booking-accent); color: var(--booking-on-accent); }
+.primary:hover { background: var(--color-accent-hover); }
+.primary:focus-visible, .secondary:focus-visible { outline: 2px solid var(--booking-accent); outline-offset: 4px; }
+.primary:disabled, .secondary:disabled { opacity: .5; cursor: wait; }
+@media(max-width: 520px) { .main { margin-top: 16px; padding: 16px; } .ticket { padding: 28px 20px; } }

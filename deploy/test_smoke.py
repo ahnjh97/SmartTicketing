@@ -24,6 +24,12 @@ class SmokeTests(unittest.TestCase):
         routes = self.routes
 
         class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"state":"DISABLED"}')
+
             def do_GET(self):
                 status, content_type, body = routes[self.path]
                 self.send_response(status)

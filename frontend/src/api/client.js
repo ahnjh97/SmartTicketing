@@ -63,6 +63,9 @@ export async function request(path, {
     }
 
     if (!response.ok) {
+        if (data?.code === 'ADMISSION_REQUIRED' || data?.code === 'ADMISSION_UNAVAILABLE') {
+            window.dispatchEvent(new Event('admission-required'));
+        }
         if (response.status === 401 && authenticated) expireSession(token);
         const fallback = response.status === 401
             ? "로그인이 만료되었습니다. 다시 로그인해주세요."

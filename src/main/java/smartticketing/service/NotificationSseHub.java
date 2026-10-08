@@ -14,7 +14,8 @@ public class NotificationSseHub {
     private static final Map<Long, List<SseEmitter>> CLIENTS = new ConcurrentHashMap<>();
 
     public static SseEmitter connect(Long userId) {
-        SseEmitter emitter = new SseEmitter(0L);
+        // Reconnect through the admission/auth filters instead of retaining an unlimited connection.
+        SseEmitter emitter = new SseEmitter(60_000L);
         CLIENTS.computeIfAbsent(userId, ignored -> new CopyOnWriteArrayList<>()).add(emitter);
 
         Runnable remove = () -> remove(userId, emitter);

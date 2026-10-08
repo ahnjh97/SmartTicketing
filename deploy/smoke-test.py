@@ -3,13 +3,35 @@ import json
 import sys
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPCookieProcessor
+from http.cookiejar import CookieJar
 
 
 def check(base):
+    opener = build_opener(HTTPCookieProcessor(CookieJar()))
+    def admission(action):
+        with opener.open(Request(base.rstrip('/') + '/api/admission/' + action, data=b'', method='POST'), timeout=10) as response:
+            return json.loads(response.read())
+    try:
+        deadline = time.monotonic() + 60
+        state = admission('enter')
+        while state.get('state') == 'WAITING' and time.monotonic() < deadline:
+            time.sleep(max(3, min(15, state.get('pollAfterSeconds', 5))))
+            state = admission('enter')
+        if state.get('state') not in ('ADMITTED', 'DISABLED'):
+            raise ValueError('Site admission did not grant entry within 60 seconds')
+        check_pages(base, opener)
+    finally:
+        try:
+            admission('leave')
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            pass
+
+
+def check_pages(base, opener):
     for path in ("/", "/api/health/readiness", "/api/main", "/api/movies?page=0&size=1", "/api/theaters"):
         request = Request(base.rstrip("/") + path, headers={"User-Agent": "SmartTicketing-deploy-check"})
-        with urlopen(request, timeout=10) as response:
+        with opener.open(request, timeout=10) as response:
             if response.status != 200:
                 raise ValueError(f"{path}: HTTP {response.status}")
             content_type = response.headers.get_content_type()

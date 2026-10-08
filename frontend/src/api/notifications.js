@@ -64,6 +64,11 @@ async function runStream() {
         });
 
         if (!response.ok || !response.body) {
+            if (response.status === 429 || response.status === 503) {
+                const data = await response.json().catch(() => null);
+                if (data?.code === 'ADMISSION_REQUIRED' || data?.code === 'ADMISSION_UNAVAILABLE')
+                    window.dispatchEvent(new Event('admission-required'));
+            }
             throw new Error(`notification stream failed: ${response.status}`);
         }
 
