@@ -25,6 +25,7 @@ $jsonPath = Join-Path $PSScriptRoot "cache-test-results.json"
 $onSummary = Join-Path $resultsDir "cache-on-summary.json"
 $offSummary = Join-Path $resultsDir "cache-off-summary.json"
 $backendProcess = $null
+$managedBackendPids = @()
 
 if (-not (Test-Path $reportGenerator)) { throw "generate-cache-report.ps1을 찾을 수 없습니다." }
 if (-not (Get-Command k6 -ErrorAction SilentlyContinue)) { throw "k6 명령을 찾을 수 없습니다." }
@@ -50,8 +51,10 @@ function Wait-Backend {
 }
 
 function Start-ManagedBackend([bool]$Enabled) {
-    $port = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue
-    if ($port) { throw "8080 포트가 이미 사용 중입니다. IDE의 백엔드를 종료한 뒤 -ManageBackend로 실행하세요." }
+    $port = @(Get-ListeningBackendPids)
+    if ($port.Count -gt 0) {
+        throw "8080 포트가 이미 사용 중입니다. IDE의 백엔드를 종료한 뒤 -ManageBackend로 실행하세요."
+    }
 
     $action = if ($Enabled) { "on" } else { "off" }
     $backendProcess = Start-Process powershell.exe -ArgumentList @(
@@ -63,10 +66,23 @@ function Start-ManagedBackend([bool]$Enabled) {
 }
 
 function Stop-ManagedBackend {
+    $pids = @($script:managedBackendPids + @(Get-ListeningBackendPids) | Where-Object { $_ } | Select-Object -Unique)
+
+    foreach ($pid in $pids) {
+        try {
+            & taskkill.exe /PID ([int]$pid) /T /F | Out-Null
+        } catch {}
+    }
+
     if ($backendProcess) {
-        & taskkill.exe /PID $backendProcess.Id /T /F | Out-Null
+        try {
+            & taskkill.exe /PID $backendProcess.Id /T /F | Out-Null
+        } catch {}
         $backendProcess = $null
     }
+
+    $script:managedBackendPids = @()
+    Wait-BackendStopped
 }
 
 function Invoke-K6Summary([string]$Mode, [string]$SummaryPath) {
