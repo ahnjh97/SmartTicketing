@@ -88,6 +88,17 @@ class BookingWaitingTests {
     static void statuses(Fixture f,QueueStatus... statuses) { assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactly(statuses); }
     static List<ShowtimeSeat> inventory(EntityManager em,Long show) { return BookingSmartTests.inventory(em,show); }
 
+    @Test void activeWaitingReadSkipsHoldLookupAndPreservesOwnership() {
+        var f = fixture(2,2); register(f);
+        readStatements.clear();
+        var response = state(f);
+        assertThat(response.items()).hasSize(2);
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("from booking_group_holds"));
+        var other = another(f,2,false);
+        assertThatThrownBy(() -> tx(em -> service(em,CLOCK).get(other.user(),f.group())))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    }
+
     @Test void smartWaitingReadsBatchRanksAndDoNotAddQueriesForEveryGroup() {
         var f=fixture(2,2); register(f);
         readStatements.clear();

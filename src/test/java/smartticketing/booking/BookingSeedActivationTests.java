@@ -5,6 +5,7 @@ import smartticketing.config.BookingQueryConfiguration;
 import smartticketing.service.BookingCatalogService;
 import smartticketing.service.ShowtimeQueryService;
 import smartticketing.service.BookingSeedService;
+import smartticketing.service.RedisQueryCache;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.*;
 class BookingSeedActivationTests {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(EntityManager.class, () -> mock(EntityManager.class))
+            .withBean(RedisQueryCache.class, () -> mock(RedisQueryCache.class))
             .withUserConfiguration(BookingSeedConfiguration.class, BookingSeedService.class,
                     BookingQueryConfiguration.class, BookingCatalogService.class, ShowtimeQueryService.class);
 

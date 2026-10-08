@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
+    String DETAILS = "select t from Ticket t join fetch t.reservation r join fetch r.showtime s "
+            + "join fetch s.movie join fetch s.screen c join fetch c.theater left join fetch r.requestGroup ";
     Optional<Ticket> findByReservationId(Long reservationId);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Ticket t where t.reservation.id = :id")
@@ -34,6 +36,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             @Param("expired") TicketStatus expired,
             @Param("now") LocalDateTime now
     );
-    List<Ticket> findByReservationUserIdOrderByCreatedAtDesc(Long userId);
+    @Query(DETAILS + "where r.user.id=:userId order by t.createdAt desc,t.id desc")
+    List<Ticket> findByReservationUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
+    @Query(DETAILS + "where r.user.id=:userId and (:time is null or t.createdAt<:time "
+            + "or (t.createdAt=:time and t.id<:id)) order by t.createdAt desc,t.id desc")
+    List<Ticket> findPage(@Param("userId") Long userId, @Param("time") LocalDateTime time,
+            @Param("id") Long id, org.springframework.data.domain.Pageable page);
     List<Ticket> findByStatus(TicketStatus status);
 }

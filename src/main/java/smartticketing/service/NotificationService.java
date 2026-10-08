@@ -30,15 +30,22 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<NotificationResponse> list(Long userId, boolean unreadOnly) {
-        var l = unreadOnly
-                ? notifications.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId)
-                : notifications.findByUserIdOrderByCreatedAtDesc(userId);
-        return l.stream()
-                .filter(n -> USER_NOTIFICATION_TYPES.contains(n.getType()))
-                .map(n -> new NotificationResponse(
-                        n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt(),
-                        n.getBookingGroupId(), n.getReservationId()))
-                .toList();
+        return notifications.findVisible(userId, USER_NOTIFICATION_TYPES, unreadOnly).stream().map(this::to).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public smartticketing.dto.common.CursorPage<NotificationResponse> page(Long userId, boolean unreadOnly, String cursor, int size) {
+        var before = smartticketing.util.CreatedCursor.parse(cursor, size);
+        var found = notifications.findVisiblePage(userId, USER_NOTIFICATION_TYPES, unreadOnly, before.time(), before.id(),
+                org.springframework.data.domain.PageRequest.of(0, size + 1));
+        var items = found.stream().limit(size).toList();
+        String next = found.size() > size ? smartticketing.util.CreatedCursor.encode(items.getLast().getCreatedAt(), items.getLast().getId()) : null;
+        return new smartticketing.dto.common.CursorPage<>(items.stream().map(this::to).toList(), next);
+    }
+
+    private NotificationResponse to(Notification n) {
+        return new NotificationResponse(n.getId(), n.getType(), n.getMessage(), n.isRead(), n.getCreatedAt(),
+                n.getBookingGroupId(), n.getReservationId());
     }
 
     public void read(Long userId, Long id) {
@@ -46,9 +53,7 @@ public class NotificationService {
     }
 
     public void readAll(Long userId) {
-        notifications.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId).stream()
-                .filter(n -> USER_NOTIFICATION_TYPES.contains(n.getType()))
-                .forEach(n -> n.setRead(true));
+        notifications.markVisibleRead(userId, USER_NOTIFICATION_TYPES);
     }
 
     public void delete(Long userId, Long id) {

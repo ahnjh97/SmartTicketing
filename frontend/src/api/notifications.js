@@ -177,6 +177,7 @@ function subscribe(listener) {
 
 export const notificationApi = {
     list: (unreadOnly = false, signal) => request("/api/notifications", { query: { unreadOnly }, signal }),
+    page: (cursor, size = 20, unreadOnly = false) => request("/api/notifications/page", { query: { cursor, size, unreadOnly } }),
     subscribe,
     read: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" }),
     readAll: () => request("/api/notifications/read-all", { method: "PATCH" }),

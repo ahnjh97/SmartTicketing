@@ -206,7 +206,8 @@ public class BookingWaitingService {
     private record ReadBatch(Map<Long,List<WaitingQueue>> queues, Map<Long,Long> ahead,
                              Map<Long,Seat> seats, Map<Long,BookingGroupHold> holds) {}
 
-    private ReadBatch readBatch(List<Long> groupIds) {
+    private ReadBatch readBatch(List<BookingRequestGroup> groups) {
+        var groupIds = groups.stream().map(BookingRequestGroup::getId).toList();
         var queues = new HashMap<Long,List<WaitingQueue>>();
         var ahead = new HashMap<Long,Long>();
         var seats = new HashMap<Long,Seat>();
@@ -242,13 +243,15 @@ public class BookingWaitingService {
             if (!requested.isEmpty()) em.createQuery("select s from Seat s where s.id in :ids",Seat.class)
                     .setParameter("ids",requested).getResultList().forEach(s -> seats.put(s.getId(),s));
         }
-        em.createQuery("select h from BookingGroupHold h join fetch h.reservation where h.id in :groups",BookingGroupHold.class)
-                .setParameter("groups",groupIds).getResultList().forEach(h -> slots.put(h.getId(),h));
+        var holdingIds = groups.stream().filter(g -> g.getStatus() == BookingGroupStatus.HOLDING)
+                .map(BookingRequestGroup::getId).toList();
+        if (!holdingIds.isEmpty()) em.createQuery("select h from BookingGroupHold h join fetch h.reservation where h.id in :groups",BookingGroupHold.class)
+                .setParameter("groups",holdingIds).getResultList().forEach(h -> slots.put(h.getId(),h));
         return new ReadBatch(queues,ahead,seats,slots);
     }
 
     Map<Long,WaitingResponse> snapshots(List<BookingRequestGroup> groups) {
-        var reads = readBatch(groups.stream().map(BookingRequestGroup::getId).toList());
+        var reads = readBatch(groups);
         var responses = new HashMap<Long,WaitingResponse>();
         for (var group : groups) responses.put(group.getId(),response(group,true,false,reads));
         return responses;
@@ -257,7 +260,7 @@ public class BookingWaitingService {
     WaitingResponse snapshot(BookingRequestGroup group) { return response(group,true,false); }
     private WaitingResponse response(BookingRequestGroup group) { return response(group,false,true); }
     private WaitingResponse response(BookingRequestGroup group, boolean snapshot, boolean includeChoices) {
-        return response(group,snapshot,includeChoices,snapshot ? readBatch(List.of(group.getId())) : null);
+        return response(group,snapshot,includeChoices,snapshot ? readBatch(List.of(group)) : null);
     }
     private WaitingResponse response(BookingRequestGroup group, boolean snapshot, boolean includeChoices, ReadBatch reads) {
         var now = holds.now();

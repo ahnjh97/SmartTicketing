@@ -8,8 +8,8 @@ import TicketsPage from '../src/pages/TicketsPage.jsx';
 import { notificationApi } from '../src/api/notifications.js';
 import { ticketApi } from '../src/api/tickets.js';
 
-vi.mock('../src/api/notifications.js', () => ({ notificationApi: { list: vi.fn() } }));
-vi.mock('../src/api/tickets.js', () => ({ ticketApi: { mine: vi.fn(), verifyStatus: vi.fn() } }));
+vi.mock('../src/api/notifications.js', () => ({ notificationApi: { list: vi.fn(), page: vi.fn(), subscribe: () => () => {} } }));
+vi.mock('../src/api/tickets.js', () => ({ ticketApi: { mine: vi.fn(), page: vi.fn(), verifyStatus: vi.fn() } }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 test('account changes close the panel and discard the previous account response', async () => {
@@ -29,20 +29,20 @@ test('account changes close the panel and discard the previous account response'
 
 test('notification effect ignores an older response after cleanup', async () => {
     const responses = [];
-    notificationApi.list.mockImplementation(() => new Promise(resolve => responses.push(resolve)));
+    notificationApi.page.mockImplementation(() => new Promise(resolve => responses.push(resolve)));
     render(<StrictMode><MemoryRouter><NotificationsPage /></MemoryRouter></StrictMode>);
     expect(responses).toHaveLength(2);
-    await act(async () => responses[1]([{id:2,message:'현재 알림',read:true}]));
-    await act(async () => responses[0]([{id:1,message:'이전 알림',read:true}]));
+    await act(async () => responses[1]({items:[{id:2,message:'현재 알림',read:true}],nextCursor:null}));
+    await act(async () => responses[0]({items:[{id:1,message:'이전 알림',read:true}],nextCursor:null}));
     expect(screen.getByText('현재 알림')).toBeTruthy();
     expect(screen.queryByText('이전 알림')).toBeNull();
 });
 
 test('a valid ticket does not inherit the previous used ticket verification state', async () => {
-    ticketApi.mine.mockResolvedValue([
+    ticketApi.page.mockResolvedValue({items:[
         {ticketId:1,ticketNumber:'USED-1',movieTitle:'사용한 영화',status:'USED',startTime:'2026-10-05T12:00:00+09:00'},
         {ticketId:2,ticketNumber:'VALID-2',movieTitle:'새 영화',status:'VALID',startTime:'2026-10-05T14:00:00+09:00'},
-    ]);
+    ],nextCursor:null});
     ticketApi.verifyStatus.mockImplementation(() => new Promise(() => {}));
     render(<TicketsPage />);
     fireEvent.click(await screen.findByRole('button', {name:/사용한 영화/}));
@@ -59,9 +59,9 @@ test('a valid ticket does not inherit the previous used ticket verification stat
 
 
 test.each(['CANCELLED', 'EXPIRED'])('%s tickets show a list stamp and cannot open details', async status => {
-    ticketApi.mine.mockResolvedValue([
+    ticketApi.page.mockResolvedValue({items:[
         { ticketId: 3, ticketNumber: 'INACTIVE-3', movieTitle: '비활성 티켓 영화', status, startTime: '2026-10-05T12:00:00+09:00' },
-    ]);
+    ],nextCursor:null});
     render(<TicketsPage />);
     const summary = await screen.findByRole('button', { name: /비활성 티켓 영화/ });
     expect(summary.disabled).toBe(true);
@@ -69,4 +69,30 @@ test.each(['CANCELLED', 'EXPIRED'])('%s tickets show a list stamp and cannot ope
     fireEvent.click(summary);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(ticketApi.verifyStatus).not.toHaveBeenCalled();
+});
+
+test('notification pages append older items without dropping the current page', async () => {
+    notificationApi.page.mockResolvedValueOnce({items:[{id:2,message:'최근 알림',read:true}],nextCursor:'cursor-2'})
+        .mockResolvedValueOnce({items:[{id:1,message:'이전 페이지 알림',read:true}],nextCursor:null});
+    render(<MemoryRouter><NotificationsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', {name:'이전 알림 더 보기'}));
+    await screen.findByText('이전 페이지 알림');
+    expect(screen.getByText('최근 알림')).toBeTruthy();
+    expect(notificationApi.page).toHaveBeenLastCalledWith('cursor-2');
+    expect(screen.queryByRole('button', {name:'이전 알림 더 보기'})).toBeNull();
+});
+
+test('ticket pagination can retry a failed page and retain already loaded tickets', async () => {
+    const ticket = (id,title) => ({ticketId:id,ticketNumber:`T-${id}`,movieTitle:title,status:'EXPIRED',startTime:'2026-10-05T12:00:00+09:00'});
+    ticketApi.page.mockResolvedValueOnce({items:[ticket(2,'최근 티켓')],nextCursor:'cursor-2'})
+        .mockRejectedValueOnce(new Error('일시적 통신 실패'))
+        .mockResolvedValueOnce({items:[ticket(1,'이전 티켓')],nextCursor:null});
+    render(<TicketsPage />);
+    fireEvent.click(await screen.findByRole('button', {name:'이전 티켓 더 보기'}));
+    await screen.findByText('일시적 통신 실패');
+    expect(screen.getByText('최근 티켓')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', {name:'이전 티켓 더 보기'}));
+    await screen.findByText('이전 티켓');
+    expect(ticketApi.page).toHaveBeenLastCalledWith('cursor-2');
+    expect(screen.queryByRole('button', {name:'이전 티켓 더 보기'})).toBeNull();
 });

@@ -2,6 +2,7 @@ import { request } from "./client.js";
 
 export const ticketApi = {
     mine: () => request("/api/tickets"),
+    page: (cursor, size = 20) => request("/api/tickets/page", { query: { cursor, size } }),
     one: (id) => request(`/api/tickets/${encodeURIComponent(id)}`),
     completeVerify: (qrCode) => request(`/api/tickets/verify/complete/${encodeURIComponent(qrCode)}`, { method: "POST" }),
     verify: (qrCode) => request(`/api/tickets/verify/${encodeURIComponent(qrCode)}`, { method: "POST", authenticated: false }),

@@ -202,10 +202,11 @@ public class BookingHoldService {
     }
 
     BookingRequestGroup ownedGroupForRead(Long userId, Long groupId) {
-        var group = em.find(BookingRequestGroup.class, groupId);
-        if (group == null || !group.getUser().getId().equals(userId))
+        var groups = em.createQuery("select g from BookingRequestGroup g join fetch g.user join fetch g.movie where g.id=:id and g.user.id=:user", BookingRequestGroup.class)
+                .setParameter("id", groupId).setParameter("user", userId).getResultList();
+        if (groups.isEmpty())
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "관람 요청을 찾을 수 없습니다.");
-        return group;
+        return groups.getFirst();
     }
 
     @Transactional(noRollbackFor = BookingRejection.class)

@@ -19,15 +19,29 @@ export default function NotificationsPage() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [nextCursor, setNextCursor] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     useEffect(() => {
         let active = true;
-        notificationApi.list(false)
-            .then(data => { if (active) setNotifications(Array.isArray(data) ? data : []); })
+        notificationApi.page()
+            .then(data => { if (active) { setNotifications(data.items); setNextCursor(data.nextCursor); } })
             .catch(e => { if (active) setError(e?.message ?? "알림을 불러오지 못했습니다."); })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, []);
+
+    async function loadMore() {
+        if (loadingMore || !nextCursor) return;
+        setLoadingMore(true);
+        setError("");
+        try {
+            const data = await notificationApi.page(nextCursor);
+            setNotifications(items => [...items, ...data.items.filter(n => !items.some(item => item.id === n.id))]);
+            setNextCursor(data.nextCursor);
+        } catch (e) { setError(e?.message ?? "추가 알림을 불러오지 못했습니다."); }
+        finally { setLoadingMore(false); }
+    }
 
     async function markRead(id) {
         try {
@@ -131,6 +145,9 @@ export default function NotificationsPage() {
                         ))}
                     </div>
                 )}
+                {nextCursor && <button type="button" className="notification-read-all" disabled={loadingMore} onClick={loadMore}>
+                    {loadingMore ? "불러오는 중…" : "이전 알림 더 보기"}
+                </button>}
             </div>
         </section>
     );
