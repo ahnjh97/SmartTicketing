@@ -15,7 +15,8 @@ import static org.assertj.core.api.Assertions.*;
 import static smartticketing.booking.BookingWaitingTests.*;
 
 class BookingOutboxTests {
-    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(); }
+    static final List<String> statements=new java.util.concurrent.CopyOnWriteArrayList<>();
+    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(statements::add); }
     @AfterAll static void stop() throws Exception { if (db != null) db.close(); }
     @BeforeEach void clearEvents() {
         tx(em -> { em.createQuery("delete from BookingOutboxEvent").executeUpdate(); return null; });
@@ -234,5 +235,146 @@ class BookingOutboxTests {
         assertThat(deleted).isNull();
         assertThat(events()).anyMatch(e -> e.getShowtimeId().equals(f.shows().getFirst()) && e.getReason().equals("ADMIN_CATALOG_CHANGED"));
         assertThat(events()).anyMatch(e -> e.getShowtimeId().equals(f.shows().getLast()) && e.getReason().equals("ADMIN_CATALOG_CHANGED"));
+    }
+
+    @Test void batchClaimUsesConstantStatementsAndBulkAck() {
+        for(int i=0;i<32;i++) append(90001);
+        statements.clear();
+        var store=store();
+        var batch=store.claimBatch(EnumSet.allOf(Type.class),NOW,Duration.ofSeconds(30),32);
+        assertThat(batch).hasSize(32);
+        assertThat(batch.stream().map(BookingOutboxStore.Delivery::leaseToken).distinct()).hasSize(1);
+        assertThat(store.completeBatch(batch,NOW)).isEqualTo(32);
+        assertThat(statements).hasSize(4); // expired range + ready range + bulk claim + bulk ack
+        assertThat(events()).allMatch(e -> e.getStatus()==Status.COMPLETED);
+    }
+
+    @Test void concurrentBatchWorkersAndStaleBatchAcknowledgementsAreFenced() throws Exception {
+        for(int i=0;i<24;i++) append(91000+i);
+        var store=store();
+        var batches=new ArrayList<List<BookingOutboxStore.Delivery>>();
+        try(var pool=Executors.newFixedThreadPool(3)) {
+            var futures=new ArrayList<Future<List<BookingOutboxStore.Delivery>>>();
+            for(int i=0;i<3;i++) futures.add(pool.submit(() -> store.claimBatch(EnumSet.allOf(Type.class),NOW,Duration.ofSeconds(30),8)));
+            for(var f:futures) batches.add(f.get(20,TimeUnit.SECONDS));
+        }
+        var all=batches.stream().flatMap(List::stream).toList();
+        assertThat(all).hasSize(24);
+        assertThat(all.stream().map(BookingOutboxStore.Delivery::id).distinct()).hasSize(24);
+        var recovered=store.claimBatch(EnumSet.allOf(Type.class),NOW.plusSeconds(30),Duration.ofSeconds(30),24);
+        assertThat(recovered).hasSize(24).allMatch(e -> e.attempt()==2);
+        assertThat(store.completeBatch(all,NOW.plusSeconds(31))).isZero();
+        assertThat(store.retryBatch(all,NOW.plusSeconds(31),new IllegalStateException())).isZero();
+        assertThat(store.releaseBatch(all,NOW.plusSeconds(31))).isZero();
+        assertThat(store.completeBatch(recovered,NOW.plusSeconds(31))).isEqualTo(24);
+    }
+
+    @Test void releaseAndRetryHaveDifferentAttemptAndAvailabilitySemantics() {
+        for(int i=0;i<4;i++) append(92000+i);
+        var store=store();
+        var batch=store.claimBatch(EnumSet.allOf(Type.class),NOW,Duration.ofSeconds(30),4);
+        assertThat(store.releaseBatch(batch.subList(0,2),NOW)).isEqualTo(2);
+        assertThat(store.retryBatch(batch.subList(2,4),NOW,new IllegalArgumentException("sensitive"))).isEqualTo(2);
+        var stats=store.backlog(NOW);
+        assertThat(stats.pending()).isEqualTo(4);
+        assertThat(stats.ready()).isEqualTo(2);
+        var immediate=store.claimBatch(EnumSet.allOf(Type.class),NOW,Duration.ofSeconds(30),4);
+        assertThat(immediate).hasSize(2).allMatch(e -> e.attempt()==1);
+        var delayed=store.claimBatch(EnumSet.allOf(Type.class),NOW.plusSeconds(2),Duration.ofSeconds(30),4);
+        assertThat(delayed).hasSize(2).allMatch(e -> e.attempt()==2);
+        assertThat(events()).filteredOn(e -> e.getLastError()!=null).allMatch(e -> e.getLastError().equals("IllegalArgumentException"));
+        assertThat(store.backlog(NOW.plusSeconds(32)).expired()).isEqualTo(4);
+    }
+
+    @Test void waitingHandlerCoalescesSameShowWithoutDroppingOtherHandlerEvents() {
+        for(int i=0;i<8;i++) append(90001);
+        var dispatcher=org.mockito.Mockito.mock(BookingWaitingDispatcher.class);
+        var projection=org.mockito.Mockito.mock(BookingWaitingProjection.class);
+        var delivered=new ArrayList<Long>();
+        var each=new BookingOutboxHandler() {
+            public Set<Type> types() { return EnumSet.allOf(Type.class); }
+            public void handle(BookingOutboxStore.Delivery e) { delivered.add(e.id()); }
+        };
+        var metrics=new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        var worker=new BookingOutboxWorker(store(),List.of(new BookingWaitingOutboxHandler(dispatcher,projection,true),each),new AdminMaintenanceGate(),CLOCK,metrics);
+        worker.recover();
+        assertThat(delivered).hasSize(8);
+        org.mockito.Mockito.verify(dispatcher,org.mockito.Mockito.times(1)).dispatch(90001L);
+        org.mockito.Mockito.verify(projection,org.mockito.Mockito.times(2)).update(90001L);
+        assertThat(metrics.get("booking.outbox.processed").counter().count()).isEqualTo(8);
+        assertThat(metrics.get("booking.outbox.processing").timer().count()).isEqualTo(1);
+        assertThat(metrics.get("booking.outbox.delay").timer().count()).isEqualTo(8);
+    }
+
+    @Test void budgetReleasesUnstartedBatchAndKeepsTheirAttemptsUnchanged() {
+        for(int i=0;i<8;i++) append(90001+i);
+        var handler=new BookingOutboxHandler() {
+            public Set<Type> types() { return EnumSet.allOf(Type.class); }
+            public void handle(BookingOutboxStore.Delivery e) {
+                try { Thread.sleep(15); } catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new RuntimeException(failure); }
+            }
+        };
+        var worker=new BookingOutboxWorker(store(),List.of(handler),new AdminMaintenanceGate(),CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker,"runBudgetMs",1L);
+        worker.recover();
+        assertThat(events()).filteredOn(e -> e.getStatus()==Status.COMPLETED).hasSize(1);
+        assertThat(events()).filteredOn(e -> e.getStatus()==Status.PENDING).hasSize(7).allMatch(e -> e.getAttempts()==0 && e.getLeaseToken()==null);
+    }
+
+    @Test void idlePollingBacksOffAndMaintenancePreventsClaimAndMetricsQueries() {
+        var store=store(); var gate=new AdminMaintenanceGate();
+        var handler=new BookingOutboxHandler() {
+            public Set<Type> types() { return EnumSet.allOf(Type.class); }
+            public void handle(BookingOutboxStore.Delivery e) {}
+        };
+        var worker=new BookingOutboxWorker(store,List.of(handler),gate,CLOCK);
+        worker.recover();
+        statements.clear();
+        worker.poll();
+        assertThat(statements).isEmpty();
+        gate.maintain(() -> { worker.recover(); worker.refreshBacklogMetric(); });
+        assertThat(statements).isEmpty();
+    }
+
+    @Test void failureOnOneShowDoesNotBlockAnotherAndUnacknowledgedWorkIsNotCounted() {
+        append(90001); append(90002);
+        var store=store();
+        var handler=new BookingOutboxHandler() {
+            public Set<Type> types() { return EnumSet.allOf(Type.class); }
+            public void handle(BookingOutboxStore.Delivery e) {
+                if(e.showtimeId()==90001L) throw new IllegalStateException();
+                // Reproduce lease reclamation while this handler is still running.
+                store.claimBatch(EnumSet.allOf(Type.class),NOW.plusSeconds(30),Duration.ofSeconds(30),8);
+            }
+        };
+        var metrics=new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),CLOCK,metrics).recover();
+        assertThat(metrics.get("booking.outbox.processed").counter().count()).isZero();
+        assertThat(metrics.get("booking.outbox.retry").counter().count()).isEqualTo(1);
+        assertThat(metrics.get("booking.outbox.stale.acks").counter().count()).isEqualTo(1);
+    }
+
+    @Test void unsupportedSchemaDoesNotPoisonValidEventsOfSameShow() {
+        append(90001); append(90001);
+        long bad=events().getFirst().getId();
+        tx(em -> { em.createNativeQuery("update booking_outbox_events set schema_version=2 where id=:id").setParameter("id",bad).executeUpdate(); return null; });
+        var dispatcher=org.mockito.Mockito.mock(BookingWaitingDispatcher.class);
+        var projection=org.mockito.Mockito.mock(BookingWaitingProjection.class);
+        new BookingOutboxWorker(store(),List.of(new BookingWaitingOutboxHandler(dispatcher,projection,true)),new AdminMaintenanceGate(),CLOCK).recover();
+        assertThat(events()).filteredOn(e -> e.getId().equals(bad)).singleElement().satisfies(e -> assertThat(e.getStatus()).isEqualTo(Status.PENDING));
+        assertThat(events()).filteredOn(e -> !e.getId().equals(bad)).singleElement().satisfies(e -> assertThat(e.getStatus()).isEqualTo(Status.COMPLETED));
+        org.mockito.Mockito.verify(dispatcher).dispatch(90001L);
+    }
+
+    @Test void eventsAppendedWhileHandlingAreNeverAcknowledgedByTheOldBatch() {
+        append(90001);
+        var handler=new BookingOutboxHandler() {
+            public Set<Type> types() { return EnumSet.allOf(Type.class); }
+            public void handle(BookingOutboxStore.Delivery e) { append(90001); }
+        };
+        var worker=new BookingOutboxWorker(store(),List.of(handler),new AdminMaintenanceGate(),CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(worker,"maxEvents",1);
+        worker.recover();
+        assertThat(events()).extracting(BookingOutboxEvent::getStatus).containsExactly(Status.COMPLETED,Status.PENDING);
     }
 }

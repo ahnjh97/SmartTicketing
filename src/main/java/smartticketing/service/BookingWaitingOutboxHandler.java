@@ -16,6 +16,14 @@ public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
         this.dispatcher=dispatcher; this.projection=projection; this.dispatchEnabled=dispatchEnabled;
     }
     public Set<Type> types() { return EnumSet.allOf(Type.class); }
+    @Override public void handleBatch(List<BookingOutboxStore.Delivery> events) {
+        // These are invalidations, not event payloads: one current-state reconciliation
+        // covers every claimed revision. Never absorb an event claimed after this batch.
+        if(events.isEmpty()) return;
+        if(events.stream().anyMatch(e -> e.schemaVersion()!=1 || !e.showtimeId().equals(events.getFirst().showtimeId())))
+            throw new IllegalArgumentException("Incompatible booking event batch");
+        handle(events.stream().max(Comparator.comparingLong(BookingOutboxStore.Delivery::aggregateVersion)).orElseThrow());
+    }
     public void handle(BookingOutboxStore.Delivery event) {
         if(event.schemaVersion()!=1) throw new IllegalArgumentException("Unsupported booking event schema");
         // Publish the committed queue change before potentially slow/busy allocation.

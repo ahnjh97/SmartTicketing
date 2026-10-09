@@ -1,6 +1,5 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("feature/jusang", "feature/outbox-metrics")]
   [string]$Branch
 )
 

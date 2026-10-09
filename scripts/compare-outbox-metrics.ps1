@@ -163,13 +163,14 @@ if ($BaseK6Json -and $CandidateK6Json) {
     $baseK6 = Get-Content $BaseK6Json -Raw | ConvertFrom-Json
     $candidateK6 = Get-Content $CandidateK6Json -Raw | ConvertFrom-Json
     $metrics = @(
-        [pscustomobject]@{ Metric = "http_req_duration"; Field = "avg"; Label = "평균 응답 시간 (밀리초)"; LowerBetter = $true },
-        [pscustomobject]@{ Metric = "http_req_duration"; Field = "p(95)"; Label = "95백분위 응답 시간 (밀리초)"; LowerBetter = $true },
-        [pscustomobject]@{ Metric = "http_req_duration"; Field = "p(99)"; Label = "99백분위 응답 시간 (밀리초)"; LowerBetter = $true },
-        [pscustomobject]@{ Metric = "http_req_failed"; Field = "rate"; Label = "요청 실패율"; LowerBetter = $true },
-        [pscustomobject]@{ Metric = "http_reqs"; Field = "rate"; Label = "초당 처리 요청 수 (건/초)"; LowerBetter = $false }
+        [pscustomobject]@{ Metric = "waiting_read_duration"; Field = "avg"; Label = "평균 응답 시간 (밀리초)"; LowerBetter = $true },
+        [pscustomobject]@{ Metric = "waiting_read_duration"; Field = "p(95)"; Label = "95백분위 응답 시간 (밀리초)"; LowerBetter = $true },
+        [pscustomobject]@{ Metric = "waiting_read_duration"; Field = "p(99)"; Label = "99백분위 응답 시간 (밀리초)"; LowerBetter = $true },
+        [pscustomobject]@{ Metric = "waiting_response_valid"; Field = "rate"; Label = "유효 대기순번 응답률"; LowerBetter = $false },
+        [pscustomobject]@{ Metric = "waiting_read_requests"; Field = "rate"; Label = "초당 대기순번 조회 수 (건/초, Outbox 처리량 아님)"; LowerBetter = $false }
     )
     $lines.Add("## 5. k6 부하 테스트 성능 비교")
+    $lines.Add("이 시나리오는 대기순번 조회만 수행합니다. Outbox 이벤트 처리량·처리 지연이나 구조 개선 효과를 직접 측정하지 않습니다.")
     $lines.Add("")
     $lines.Add("| 지표 | 기준 브랜치 | 비교 대상 브랜치 | 변화율 | 판정 |")
     $lines.Add("|---|---:|---:|---:|---|")
