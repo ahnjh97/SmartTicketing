@@ -45,3 +45,6 @@ out/
 **/__pycache__/
 /.deploy-operation.lock
 /.local/
+
+# Local-only benchmark credentials
+/k6/outbox-branch-benchmark/fixture.local.json
