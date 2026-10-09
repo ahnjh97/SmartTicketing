@@ -35,6 +35,12 @@ async function request(path, {token, body, method, key} = {}) {
   return data;
 }
 
+const scenarioFrom = process.env.SCENARIO_FROM;
+if (scenarioFrom) {
+  const prior = JSON.parse(await (await import('node:fs/promises')).readFile(resolve(scenarioFrom), 'utf8'));
+  showtimeId = Number(prior.showtimeId); movieId = Number(prior.movieId);
+  theaterId = Number(prior.theaterId); viewingDate = prior.viewingDate;
+}
 if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
     || !/^\\d{4}-\\d{2}-\\d{2}$/.test(viewingDate || '')) {
   const date = new Date(Date.now() + 33 * 3600000).toISOString().slice(0,10);
