@@ -1,4 +1,3 @@
-#requires -Version 7.0
 <#
 .SYNOPSIS
 Runs the booking waiting-rank benchmark on baseline and improved refs using isolated git worktrees.
@@ -78,7 +77,7 @@ function Run-Branch([string]$Label,[string]$Ref) {
     }
     return [ordered]@{
         label=$Label; ref=$Ref; commit=$sha; exitCode=$exitCode
-        status=if ($exitCode -eq 0 -and $results) {'completed'} else {'failed-or-incomplete'}
+        status=$(if ($exitCode -eq 0 -and $results) {'completed'} else {'failed-or-incomplete'})
         artifacts="waiting-rank-comparison/$runId/$Label"
         runInfo=$info; results=$results; summary=$summary
         resultDirectory=$runDir
