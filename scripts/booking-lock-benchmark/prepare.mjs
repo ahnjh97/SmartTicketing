@@ -38,7 +38,7 @@ if (scenarioFrom) {
   theaterId = Number(prior.theaterId); viewingDate = prior.viewingDate;
 }
 if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
-    || !/^\d{4}-\\d{2}-\\d{2}$/.test(viewingDate || '')) {
+    || !/^\d{4}-\d{2}-\d{2}$/.test(viewingDate || '')) {
   const date = new Date(Date.now() + 33 * 3600000).toISOString().slice(0,10);
   console.log(`Auto-discovering a bookable showtime for ${date}, party size ${partySize}...`);
   let selected = null;
@@ -61,7 +61,7 @@ if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
   viewingDate = date;
 }
 requireValue(Number.isSafeInteger(showtimeId) && showtimeId > 0 && Number.isSafeInteger(movieId) && movieId > 0
-  && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\d{4}-\\d{2}-\\d{2}$/.test(viewingDate),
+  && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\d{4}-\d{2}-\d{2}$/.test(viewingDate),
   '회차/영화/극장/날짜 설정이 올바르지 않습니다.');
 
 const users = [];
