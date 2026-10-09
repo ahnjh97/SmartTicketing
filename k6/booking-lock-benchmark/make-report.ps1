@@ -23,7 +23,8 @@ function Fmt($v, $digits=2) {
     return ([double]$v).ToString("N$digits", [Globalization.CultureInfo]::InvariantCulture)
 }
 function Improvement($before, $after, $lowerIsBetter=$true) {
-    if ($null -eq $before -or $null -eq $after -or $before -eq 0) { return "N/A" }\n    if ($null -eq $lowerIsBetter) { return "참고" }
+    if ($null -eq $before -or $null -eq $after -or $before -eq 0) { return "N/A" }
+    if ($null -eq $lowerIsBetter) { return "참고" }
     if ($lowerIsBetter) { $pct = (($before - $after) / $before) * 100 }
     else { $pct = (($after - $before) / $before) * 100 }
     return (Fmt $pct) + "%"
