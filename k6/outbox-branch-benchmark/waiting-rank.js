@@ -54,7 +54,7 @@ export function setup() {
     let body = null;
     try { body = res.json(); } catch (_) {}
     if (res.status !== 200 || !body || !body.accessToken) {
-      fail('Login failed for fixture user index ' + i + ', HTTP ' + res.status + '. Check test credentials.');
+      fail('Login failed for fixture user index ' + i + ', HTTP ' + res.status + '. Response body: ' + String(res.body).slice(0, 1000) + '. Check the fixture values and login API validation.');
     }
     return {
       groupId: Number(user.groupId),
