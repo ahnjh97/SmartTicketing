@@ -3,6 +3,7 @@ import { check } from 'k6';
 import { Counter } from 'k6/metrics';
 
 const manifest = JSON.parse(open(__ENV.MANIFEST || '../../.local/booking-lock-benchmark/manifest.json'));
+http.setResponseCallback(http.expectedStatuses(200, 201, 202, 409));
 const users = manifest.users || [];
 if (!users.length) throw new Error('Manifest에 users가 없습니다.');
 const success = new Counter('smart_hold_success');
