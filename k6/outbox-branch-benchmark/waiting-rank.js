@@ -110,8 +110,34 @@ export function setup() {
       if (data.items.length > 0) break;
     }
   }
+  // If active IDs existed but none was readable, retry against history too.
+  // This handles stale/terminal entries returned by the active projection.
   if (!candidates.length) {
-    fail('No readable booking group was found. This local account has no booking history; create one booking attempt in the local app, then rerun.');
+    const history = http.get(baseUrl + '/api/booking-groups', {
+      headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
+      tags: { name: 'benchmark_discover_history' },
+    });
+    let page = null;
+    try { page = history.json(); } catch (_) {}
+    if (history.status === 200 && page && Array.isArray(page.items)) {
+      for (const group of page.items) {
+        const groupId = Number(group.id);
+        if (!Number.isSafeInteger(groupId) || groupId <= 0) continue;
+        const probe = http.get(baseUrl + '/api/booking-groups/' + groupId + '/waiting-queues', {
+          headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
+          tags: { name: 'benchmark_discover_queue_history' },
+        });
+        let data = null;
+        try { data = probe.json(); } catch (_) {}
+        if (probe.status === 200 && data && Array.isArray(data.items)) {
+          candidates.push({ groupId, items: data.items });
+          if (data.items.length > 0) break;
+        }
+      }
+    }
+  }
+  if (!candidates.length) {
+    fail('No readable booking group was found. This local account has no accessible booking history; create one booking attempt in the local app, then rerun.');
   }
   const selected = candidates.find(c => c.items.length > 0) || candidates[0];
   return { users: authenticated, groupId: selected.groupId, discoveredItems: selected.items.length };
