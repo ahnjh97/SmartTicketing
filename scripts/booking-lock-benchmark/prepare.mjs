@@ -64,6 +64,17 @@ requireValue(Number.isSafeInteger(showtimeId) && showtimeId > 0 && Number.isSafe
   && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\d{4}-\d{2}-\d{2}$/.test(viewingDate),
   '회차/영화/극장/날짜 설정이 올바르지 않습니다.');
 
+// UserService requires 3-5 preferred theaters; include the target theater and
+// fill the remaining slots from the active theater catalog.
+const theaterCatalog = await request('/api/theaters?page=0&size=20');
+const theaterItems = theaterCatalog.items;
+requireValue(Array.isArray(theaterItems), '영화관 목록 응답 형식이 예상과 다릅니다.');
+const preferredTheaterIds = [...new Set([
+  theaterId,
+  ...theaterItems.map(t => Number(t.id)).filter(id => Number.isSafeInteger(id) && id > 0 && id !== theaterId),
+])].slice(0, 3);
+requireValue(preferredTheaterIds.length === 3, '선호 영화관 3곳을 찾지 못했습니다. 활성 영화관 데이터를 확인하세요.');
+
 const users = [];
 for (let i=0; i<vus; i++) {
   const credential = {loginId:`bench-lock-${Date.now()}-${i}-${randomUUID().slice(0,8)}@example.test`, password:`Bench-${randomUUID()}-Aa9!`};
@@ -71,7 +82,7 @@ for (let i=0; i<vus; i++) {
   const token = signup.accessToken;
   requireValue(typeof token === 'string' && token.length > 0, '회원가입 응답에 accessToken이 없습니다.');
   await request('/api/users/me', {token, method:'PATCH', body:{
-    birthDate:'1990-01-01', preferredTheaterIds:[theaterId], preferredSeatPositions:seats
+    birthDate:'1990-01-01', preferredTheaterIds, preferredSeatPositions:seats
   }});
   const group = await request('/api/booking-groups', {token, key:randomUUID(), body:{
     entryPoint:'THEATER_SMART', movieId, viewingDate, partySize, selectedShowtimeId:showtimeId,
