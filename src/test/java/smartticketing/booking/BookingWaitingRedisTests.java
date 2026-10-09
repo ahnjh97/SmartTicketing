@@ -51,6 +51,21 @@ class BookingWaitingRedisTests {
         assertThat(actual.items()).allMatch(i -> i.aheadCount()==1);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
+    @Test void registrationUsesOneGroupedCountFallbackInsteadOfOneCountPerQueueRow() {
+        var f=fixture(1,1);
+        readStatements.clear();
+        tx(em -> {
+            var service=service(em,CLOCK);
+            ReflectionTestUtils.setField(service,"ranks",ranks);
+            return service.register(f.user(),f.group(),key(),new smartticketing.dto.booking.WaitingRequest(f.shows())).status();
+        });
+        var countQueries=readStatements.stream()
+                .filter(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("count(")
+                        && sql.toLowerCase(java.util.Locale.ROOT).contains("waiting_queues"))
+                .toList();
+        assertThat(countQueries).hasSizeLessThanOrEqualTo(1);
+    }
+
     @Test void disabledRanksUseDbAndProjectionDoesNotContactRedis() {
         var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
         var unused=org.mockito.Mockito.mock(StringRedisTemplate.class);
