@@ -23,8 +23,8 @@ if (-not (Test-Path $fixture)) {
   $passwordPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
   try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPtr) }
   finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPtr) }
-  @{ users = @(@{ loginId = $loginId; password = $password }) } |
-    ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $fixture
+  $json = @{ users = @(@{ loginId = $loginId; password = $password }) } | ConvertTo-Json -Depth 5
+  [System.IO.File]::WriteAllText($fixture, $json, (New-Object System.Text.UTF8Encoding($false)))
   Write-Host "Saved local-only credentials in fixture.local.json (ignored by Git)."
 }
 
