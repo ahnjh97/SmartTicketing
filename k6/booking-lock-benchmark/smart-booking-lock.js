@@ -15,6 +15,7 @@ const success = new Counter('smart_hold_success');
 const conflict = new Counter('smart_hold_conflict');
 const other = new Counter('smart_hold_other_http');
 const transport = new Counter('smart_hold_transport_error');
+const statusCounts = new Counter('smart_hold_http_status');
 
 export const options = {
   scenarios: {
@@ -40,10 +41,17 @@ export default function () {
     { headers: { Authorization: `Bearer ${user.token}`, 'Idempotency-Key': `lock-bench-${__VU}-${__ITER}` },
       tags: { name: 'smart_hold' }, timeout: '60s' }
   );
+  statusCounts.add(1, { status: String(response.status) });
   if (response.status === 0) transport.add(1);
   else if (response.status >= 200 && response.status < 300) success.add(1);
   else if (response.status === 409) conflict.add(1);
   else other.add(1);
+
+  if (![200, 201, 202, 409].includes(response.status)) {
+    console.error(
+      `Unexpected smart-hold response: VU=${__VU} GROUP=${user.groupId} STATUS=${response.status} BODY=${String(response.body || '').slice(0, 500)}`
+    );
+  }
   check(response, {
     'HTTP response received': r => r.status > 0,
     'status is expected for a contention run': r => [200, 201, 202, 409].includes(r.status),
