@@ -33,12 +33,36 @@ export const options = {
     },
   },
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
+  setupTimeout: '5m',
   thresholds: {},
 };
 
-export default function () {
+export function setup() {
+  const tokens = new Map();
+  for (const item of cases) {
+    if (!item.loginId || !item.password) {
+      fail('fixture 케이스마다 loginId/password를 지정하세요.');
+    }
+    if (!tokens.has(item.loginId)) {
+      const login = http.post(
+        `${baseUrl}/api/auth/login`,
+        JSON.stringify({ loginId: item.loginId, password: item.password }),
+        { headers: { 'Content-Type': 'application/json' }, timeout: '30s', tags: { name: 'benchmark-login' } },
+      );
+      let data;
+      try { data = login.json(); } catch { data = null; }
+      if (login.status !== 200 || !data?.accessToken) {
+        fail(`테스트 계정 로그인 실패: loginId=${item.loginId}, status=${login.status}`);
+      }
+      tokens.set(item.loginId, data.accessToken);
+    }
+  }
+  return cases.map(item => ({ ...item, token: tokens.get(item.loginId) }));
+}
+
+export default function (authenticatedCases) {
   const index = (__VU - 1) * iterations + __ITER;
-  const item = cases[index];
+  const item = authenticatedCases[index];
   if (!item) {
     fail(`fixture 케이스 부족: 필요한 index=${index}, cases.length=${cases.length}`);
   }
