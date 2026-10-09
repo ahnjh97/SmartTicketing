@@ -86,7 +86,8 @@ export default function () {
 export function handleSummary(data) {
   const path = __ENV.SUMMARY_FILE;
   const output = {};
-  const summary = { ...data, benchmark: { baseUrl, vus, iterations, totalCases: vus * iterations } };\n  if (path) output[path] = JSON.stringify(summary, null, 2);
+  const summary = { ...data, benchmark: { baseUrl, vus, iterations, totalCases: vus * iterations } };
+  if (path) output[path] = JSON.stringify(summary, null, 2);
   output.stdout = [
     `BASE_URL=${baseUrl}`,
     `VUs=${vus} iterations/VU=${iterations} total=${vus * iterations}`,
