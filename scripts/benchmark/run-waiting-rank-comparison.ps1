@@ -88,7 +88,7 @@ function Run-Branch([string]$Label,[string]$Ref) {
 try {
     if (-not $SkipFetch) {
         Write-Host 'Fetching comparison refs from origin...' -ForegroundColor Cyan
-        Invoke-Git @('fetch','origin','feature/jusang','improve/waiting-rank-redis-v2')
+        Invoke-Git @('fetch','origin','+refs/heads/feature/jusang:refs/remotes/origin/feature/jusang','+refs/heads/improve/waiting-rank-redis-v2:refs/remotes/origin/improve/waiting-rank-redis-v2')
     }
     $baseline = Run-Branch 'baseline' $BaselineRef
     $improved = Run-Branch 'improved' $ImprovedRef
