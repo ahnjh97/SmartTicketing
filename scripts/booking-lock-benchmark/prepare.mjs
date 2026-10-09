@@ -38,22 +38,22 @@ if (scenarioFrom) {
   theaterId = Number(prior.theaterId); viewingDate = prior.viewingDate;
 }
 if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
-    || !/^\\d{4}-\\d{2}-\\d{2}$/.test(viewingDate || '')) {
+    || !/^\d{4}-\\d{2}-\\d{2}$/.test(viewingDate || '')) {
   const date = new Date(Date.now() + 33 * 3600000).toISOString().slice(0,10);
   console.log(`Auto-discovering a bookable showtime for ${date}, party size ${partySize}...`);
   let selected = null;
   for (let page=0; page<100 && !selected; page++) {
     const movies = await request(`/api/movies?page=${page}&size=20`);
-    const items = movies.data?.items;
+    const items = movies.items;
     requireValue(Array.isArray(items), '영화 목록 조회 형식이 예상과 다릅니다. SHOWTIME_ID/MOVIE_ID/THEATER_ID/VIEWING_DATE를 직접 지정하세요.');
     for (const movie of items) {
       const shows = await request(`/api/showtimes?movieId=${movie.id}&date=${date}&startFrom=08:00&startUntil=00:00`);
-      const showItems = shows.data?.items;
+      const showItems = shows.items;
       if (!Array.isArray(showItems)) continue;
       selected = showItems.find(s => s.layoutComplete && (s.bookablePartySizes?.includes(partySize) || s.maxContiguousSeats >= partySize));
       if (selected) { movieId = Number(movie.id); break; }
     }
-    if (items.length < 20 || (page+1)*20 >= (movies.data?.totalElements ?? 0)) break;
+    if (items.length < 20 || (page+1)*20 >= (movies.totalElements ?? 0)) break;
   }
   requireValue(selected, '내일 조건에 맞는 회차를 자동으로 찾지 못했습니다. SHOWTIME_ID, MOVIE_ID, THEATER_ID, VIEWING_DATE를 직접 지정하세요.');
   showtimeId = Number(selected.id);
@@ -61,7 +61,7 @@ if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
   viewingDate = date;
 }
 requireValue(Number.isSafeInteger(showtimeId) && showtimeId > 0 && Number.isSafeInteger(movieId) && movieId > 0
-  && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\\d{4}-\\d{2}-\\d{2}$/.test(viewingDate),
+  && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\d{4}-\\d{2}-\\d{2}$/.test(viewingDate),
   '회차/영화/극장/날짜 설정이 올바르지 않습니다.');
 
 const users = [];
