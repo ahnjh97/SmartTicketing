@@ -1,10 +1,8 @@
 {
   "users": [
     {
-      "loginId": "REPLACE_WITH_LOCAL_TEST_LOGIN_ID",
-      "password": "REPLACE_WITH_LOCAL_TEST_PASSWORD",
-      "groupId": 123,
-      "expectedAheadCount": 0
+      "loginId": "ENTERED_BY_RUN_PS_ON_FIRST_RUN",
+      "password": "ENTERED_BY_RUN_PS_ON_FIRST_RUN"
     }
   ]
 }
