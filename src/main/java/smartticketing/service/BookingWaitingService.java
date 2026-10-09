@@ -206,6 +206,41 @@ public class BookingWaitingService {
     private record ReadBatch(Map<Long,List<WaitingQueue>> queues, Map<Long,Long> ahead,
                              Map<Long,Seat> seats, Map<Long,BookingGroupHold> holds) {}
 
+    /**
+     * Use the revision-matched Redis projection first. Only rows that cannot be
+     * answered by Redis (disabled cache, revision mismatch, or Redis failure)
+     * are sent through the grouped MySQL COUNT fallback.
+     */
+    private Map<Long,Long> aheadCounts(List<WaitingQueue> rows) {
+        var ahead = new HashMap<Long,Long>();
+        if (rows.isEmpty()) return ahead;
+        if (ranks != null && ranks.enabled()) {
+            var showIds = rows.stream().map(q -> q.getShowtime().getId()).distinct().toList();
+            var versions = new HashMap<Long,Long>();
+            em.createQuery("select s.showtimeId,s.revision from BookingOutboxStream s where s.showtimeId in :shows",Object[].class)
+                    .setParameter("shows",showIds).getResultList()
+                    .forEach(v -> versions.put((Long)v[0],(Long)v[1]));
+            for (var show : showIds) {
+                ahead.putAll(ranks.read(show,versions.getOrDefault(show,0L),rows.stream()
+                        .filter(q -> q.getShowtime().getId().equals(show))
+                        .map(q -> new BookingWaitingRanks.Entry(q.getId(),q.getSeatZone(),q.displayNumber())).toList()));
+            }
+        }
+        var missing = rows.stream().map(WaitingQueue::getId).filter(id -> !ahead.containsKey(id)).toList();
+        if (!missing.isEmpty()) {
+            var counts = em.createQuery("""
+                    select q.id,count(a.id) from WaitingQueue q
+                    left join WaitingQueue a on a.showtime.id=q.showtime.id and a.requestGroup is not null
+                    and a.status=:waiting and coalesce(a.zoneQueueNumber,a.queueNumber)<coalesce(q.zoneQueueNumber,q.queueNumber)
+                    and (a.seatZone=q.seatZone or (a.seatZone is null and q.seatZone is null))
+                    where q.id in :ids group by q.id
+                    """, Object[].class)
+                    .setParameter("waiting",QueueStatus.WAITING).setParameter("ids",missing).getResultList();
+            counts.forEach(row -> ahead.put((Long)row[0],(Long)row[1]));
+        }
+        return ahead;
+    }
+
     private ReadBatch readBatch(List<BookingRequestGroup> groups) {
         var groupIds = groups.stream().map(BookingRequestGroup::getId).toList();
         var queues = new HashMap<Long,List<WaitingQueue>>();
@@ -219,26 +254,7 @@ public class BookingWaitingService {
                 """, WaitingQueue.class).setParameter("groups",groupIds).getResultList();
         rows.forEach(q -> queues.computeIfAbsent(q.getRequestGroup().getId(),ignored -> new ArrayList<>()).add(q));
         if (!rows.isEmpty()) {
-            if(ranks!=null && ranks.enabled()) {
-                var showIds=rows.stream().map(q -> q.getShowtime().getId()).distinct().toList();
-                var versions=new HashMap<Long,Long>();
-                em.createQuery("select s.showtimeId,s.revision from BookingOutboxStream s where s.showtimeId in :shows",Object[].class)
-                        .setParameter("shows",showIds).getResultList().forEach(v -> versions.put((Long)v[0],(Long)v[1]));
-                for(var show:showIds) ahead.putAll(ranks.read(show,versions.getOrDefault(show,0L),rows.stream()
-                        .filter(q -> q.getShowtime().getId().equals(show))
-                        .map(q -> new BookingWaitingRanks.Entry(q.getId(),q.getSeatZone(),q.displayNumber())).toList()));
-            }
-            var missing=rows.stream().map(WaitingQueue::getId).filter(id -> !ahead.containsKey(id)).toList();
-            if(!missing.isEmpty()) {
-            var counts = em.createQuery("""
-                    select q.id,count(a.id) from WaitingQueue q
-                    left join WaitingQueue a on a.showtime.id=q.showtime.id and a.requestGroup is not null
-                    and a.status=:waiting and coalesce(a.zoneQueueNumber,a.queueNumber)<coalesce(q.zoneQueueNumber,q.queueNumber)
-                    and (a.seatZone=q.seatZone or (a.seatZone is null and q.seatZone is null))
-                    where q.id in :ids group by q.id
-                    """, Object[].class).setParameter("waiting",QueueStatus.WAITING).setParameter("ids",missing).getResultList();
-            counts.forEach(row -> ahead.put((Long)row[0],(Long)row[1]));
-            }
+            ahead.putAll(aheadCounts(rows));
             var requested = rows.stream().flatMap(q -> q.getRequestedSeatIds().stream()).distinct().toList();
             if (!requested.isEmpty()) em.createQuery("select s from Seat s where s.id in :ids",Seat.class)
                     .setParameter("ids",requested).getResultList().forEach(s -> seats.put(s.getId(),s));
@@ -267,13 +283,25 @@ public class BookingWaitingService {
         var state = snapshot ? BookingReadState.group(group, reads.holds().get(group.getId()), now) : null;
         var groupStatus = snapshot ? state.status() : group.getStatus();
         var rows = snapshot ? reads.queues().getOrDefault(group.getId(),List.of()) : BookingQueueLifecycle.rows(em, group.getId());
+        // Expire stale rows before computing ahead counts so the fallback does not
+        // count a row that this same response is about to expire.
+        if (!snapshot) {
+            for (var q : rows) {
+                if ((q.getStatus() == QueueStatus.WAITING || q.getStatus() == QueueStatus.PAUSED)
+                        && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
+                    q.setStatus(QueueStatus.EXPIRED);
+                    q.setUpdatedAt(now);
+                    BookingQueueLifecycle.changed(em, q, now);
+                }
+            }
+        }
+        var aheadForRows = snapshot ? reads.ahead() : aheadCounts(rows);
         var items = new ArrayList<WaitingResponse.Item>();
         for (var q : rows) {
             var status=snapshot ? BookingReadState.queue(q, state, now) : q.getStatus();
             if ((status == QueueStatus.WAITING || status == QueueStatus.PAUSED)
                     && (!q.getShowtime().getStartTime().isAfter(now) || q.getShowtime().getStatus() != ShowtimeStatus.SCHEDULED)) {
                 status=QueueStatus.EXPIRED;
-                if(!snapshot) { q.setStatus(status); q.setUpdatedAt(now); BookingQueueLifecycle.changed(em, q, now); }
             }
             var requestedSeats = snapshot ? q.getRequestedSeatIds().stream().map(reads.seats()::get).filter(Objects::nonNull)
                     .sorted(Comparator.comparing(Seat::getSeatRow).thenComparing(Seat::getSeatNumber)).toList()
@@ -281,13 +309,7 @@ public class BookingWaitingService {
                     "select s from Seat s where s.id in :ids order by s.seatRow, s.seatNumber", Seat.class)
                     .setParameter("ids", q.getRequestedSeatIds()).getResultList();
             // Every waiting request in the same zone shares the same position count.
-            long ahead = snapshot ? reads.ahead().getOrDefault(q.getId(),0L) : em.createQuery("""
-                    select count(q) from WaitingQueue q where q.showtime.id=:s and q.requestGroup is not null
-                    and q.status=:status and coalesce(q.zoneQueueNumber,q.queueNumber)<:number
-                    and ((:zone is null and q.seatZone is null) or q.seatZone=:zone)
-                    """, Long.class).setParameter("s", q.getShowtime().getId()).setParameter("status", QueueStatus.WAITING)
-                    .setParameter("number", q.displayNumber()).setParameter("zone", q.getSeatZone())
-                    .getSingleResult();
+            long ahead = aheadForRows.getOrDefault(q.getId(),0L);
             var show = q.getShowtime();
             items.add(new WaitingResponse.Item(q.getId(), show.getId(), q.displayNumber(), ahead, status,
                     offset(q.getOpportunityExpiresAt()), show.getScreen().getTheater().getName(), show.getScreen().getName(), offset(show.getStartTime()), q.getSeatZone(),
