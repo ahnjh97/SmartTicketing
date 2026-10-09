@@ -10,9 +10,19 @@ $ErrorActionPreference = "Stop"
 
 function Invoke-GitText {
     param([string[]]$GitArgs)
-    $output = & git @GitArgs 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw ("git {0} ??:{1}{2}" -f ($GitArgs -join " "), [Environment]::NewLine, ($output -join [Environment]::NewLine))
+    # Windows PowerShell may treat native-command stderr (such as git fetch progress)
+    # as a terminating NativeCommandError when ErrorActionPreference is Stop.
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & git @GitArgs 2>&1
+        $gitExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
+    if ($gitExitCode -ne 0) {
+        throw ("git {0} failed:{1}{2}" -f ($GitArgs -join " "), [Environment]::NewLine, ($output -join [Environment]::NewLine))
     }
     return ($output -join [Environment]::NewLine)
 }
