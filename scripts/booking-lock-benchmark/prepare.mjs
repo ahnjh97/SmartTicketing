@@ -13,8 +13,6 @@ const out = resolve(process.env.OUT || '.local/booking-lock-benchmark/manifest.j
 const seats = ['MIDDLE_FRONT','MIDDLE_MIDDLE','MIDDLE_REAR','SIDE_FRONT','SIDE_MIDDLE','SIDE_REAR'];
 
 function requireValue(ok, message) { if (!ok) throw new Error(message); }
-requireValue(Number.isSafeInteger(movieId) && movieId > 0, 'MOVIE_ID를 지정하세요.');
-requireValue(Number.isSafeInteger(theaterId) && theaterId > 0, 'THEATER_ID를 지정하세요.');
 requireValue(Number.isInteger(vus) && vus >= 2 && vus <= 100, 'VUS는 2~100으로 지정하세요.');
 requireValue(Number.isInteger(partySize) && partySize >= 1 && partySize <= 6, 'PARTY_SIZE는 1~6으로 지정하세요.');
 
