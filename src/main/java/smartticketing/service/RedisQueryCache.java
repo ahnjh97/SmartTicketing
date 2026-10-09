@@ -26,7 +26,7 @@ public class RedisQueryCache {
 
     public RedisQueryCache(
             StringRedisTemplate redis,
-            @Value("${app.cache.enabled:false}") boolean enabled,
+            @Value("${app.cache.query-enabled:false}") boolean enabled,
             @Value("${app.cache.query-ttl-ms:2000}") long ttlMs,
             @Value("${spring.datasource.url}") String database) {
         this.redis = redis;
