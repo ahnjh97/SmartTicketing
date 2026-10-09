@@ -5,6 +5,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Native k6 writes its normal error summary to stderr; do not let PowerShell
+# convert that stderr stream into a terminating NativeCommandError before we
+# can print the useful k6 failure and inspect $LASTEXITCODE.
+$PSNativeCommandUseErrorActionPreference = $false
 $root = (Get-Location).Path
 $fixtureDir = Join-Path $root "k6/outbox-branch-benchmark"
 $fixture = Join-Path $fixtureDir "fixture.local.json"
