@@ -15,6 +15,8 @@ import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import static jakarta.persistence.LockModeType.PESSIMISTIC_WRITE;
+
 /** 일반/스마트/대기 호출자가 선택한 좌석을 한 번에 확보한다. 추천/대기 실행은 하지 않는다. */
 @Service
 @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -236,13 +238,13 @@ public class BookingHoldService {
 
     @Transactional(noRollbackFor = BookingRejection.class)
     BookingRequestGroup lockOwnedGroup(Long userId, Long groupId) {
-        var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
+        var group = em.find(BookingRequestGroup.class, groupId, PESSIMISTIC_WRITE);
         if (group == null || !group.getUser().getId().equals(userId)) reject(404, "관람 요청을 찾을 수 없습니다.");
         return group;
     }
 
     public boolean expire(Long groupId) {
-        var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
+        var group = em.find(BookingRequestGroup.class, groupId, PESSIMISTIC_WRITE);
         return group != null && expireLockedGroup(group);
     }
 
@@ -275,7 +277,7 @@ public class BookingHoldService {
 
     boolean expireLockedGroup(BookingRequestGroup group) {
         if (group.getStatus() != BookingGroupStatus.HOLDING) return false;
-        var slot = em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE);
+        var slot = em.find(BookingGroupHold.class, group.getId(), PESSIMISTIC_WRITE);
         if (slot == null) throw new IllegalStateException("활성 선점 슬롯이 없어 자동 복구를 중단합니다.");
         if (slot.getExpiresAt().isAfter(now())) return false;
         Long reservationId = slot.getReservation().getId();

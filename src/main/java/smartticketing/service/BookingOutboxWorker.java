@@ -30,7 +30,7 @@ public class BookingOutboxWorker {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Scheduled(fixedDelayString="${booking.outbox.delay-ms:1000}")
+    @Scheduled(fixedDelayString="${booking.outbox.delay-ms:250}")
     public void recover() {
         if (!running.compareAndSet(false,true)) return;
         try { gate.background(this::deliver); }
