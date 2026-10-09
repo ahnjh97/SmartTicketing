@@ -291,14 +291,16 @@ class BookingWaitingTests {
         assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
 
-    @Test void oneLockedInventoryServesMultipleAllocationsWithoutDuplicateSeats() {
+    @Test void oneInventorySnapshotServesMultipleAllocationsWithoutDuplicateSeats() {
         var first=fixture(2,6);
         var second=another(first,2,false); var third=another(first,2,false); var last=another(first,2,false);
         register(first); register(second); register(third); register(last);
         readStatements.clear();
         assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(3);
-        assertThat(readStatements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from showtime_seats")
-                && sql.toLowerCase(Locale.ROOT).contains("for update")).count()).isEqualTo(1);
+        // The showtime row is the common mutex. Row-level inventory FOR UPDATE is an optional
+        // benchmark setting and defaults off, so assert the inventory is fetched only once.
+        assertThat(readStatements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from showtime_seats")).count())
+                .isEqualTo(1);
         statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
         statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
         statuses(third,QueueStatus.HOLDING,QueueStatus.PAUSED);
