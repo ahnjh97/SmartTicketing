@@ -96,6 +96,6 @@ export function handleSummary(data) {
     `201=${data.metrics.booking_created?.values?.count ?? 0}`,
     `409=${data.metrics.booking_conflict?.values?.count ?? 0}`,
     `unexpected=${data.metrics.booking_unexpected?.values?.count ?? 0}`,
-  ].join(' | ') + '\\n';
+  ].join(' | ') + String.fromCharCode(10);
   return output;
 }
