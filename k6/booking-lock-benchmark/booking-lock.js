@@ -1,4 +1,4 @@
-import http from 'k6';
+import http from 'k6/http';
 import { check, fail } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
@@ -94,8 +94,6 @@ export default function (authenticatedCases) {
     validOutcome.add(true);
   } else if (response.status === 409) {
     conflict.add(1);
-    // 409 is a valid business response for occupied seats or an inactive group.
-    // Check fixture preparation and compare conflict counts alongside latency.
     validOutcome.add(true);
   } else {
     unexpected.add(1);
