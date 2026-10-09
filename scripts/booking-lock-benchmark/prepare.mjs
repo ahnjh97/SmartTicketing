@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 
 const baseUrl = (process.env.BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
-const showtimeId = Number(process.env.SHOWTIME_ID);
-const movieId = Number(process.env.MOVIE_ID);
-const theaterId = Number(process.env.THEATER_ID);
-const viewingDate = process.env.VIEWING_DATE;
+let showtimeId = Number(process.env.SHOWTIME_ID);
+let movieId = Number(process.env.MOVIE_ID);
+let theaterId = Number(process.env.THEATER_ID);
+let viewingDate = process.env.VIEWING_DATE;
 const vus = Number(process.env.VUS || 20);
 const partySize = Number(process.env.PARTY_SIZE || 1);
 const out = resolve(process.env.OUT || '.local/booking-lock-benchmark/manifest.json');
@@ -34,6 +34,33 @@ async function request(path, {token, body, method, key} = {}) {
   if (!response.ok) throw new Error(`${method || (body === undefined ? 'GET' : 'POST')} ${path} -> HTTP ${response.status}: ${JSON.stringify(data).slice(0,500)}`);
   return data;
 }
+
+if (![showtimeId,movieId,theaterId].every(n => Number.isSafeInteger(n) && n > 0)
+    || !/^\\d{4}-\\d{2}-\\d{2}$/.test(viewingDate || '')) {
+  const date = new Date(Date.now() + 33 * 3600000).toISOString().slice(0,10);
+  console.log(`Auto-discovering a bookable showtime for ${date}, party size ${partySize}...`);
+  let selected = null;
+  for (let page=0; page<100 && !selected; page++) {
+    const movies = await request(`/api/movies?page=${page}&size=20`);
+    const items = movies.data?.items;
+    requireValue(Array.isArray(items), '영화 목록 조회 형식이 예상과 다릅니다. SHOWTIME_ID/MOVIE_ID/THEATER_ID/VIEWING_DATE를 직접 지정하세요.');
+    for (const movie of items) {
+      const shows = await request(`/api/showtimes?movieId=${movie.id}&date=${date}&startFrom=08:00&startUntil=00:00`);
+      const showItems = shows.data?.items;
+      if (!Array.isArray(showItems)) continue;
+      selected = showItems.find(s => s.layoutComplete && (s.bookablePartySizes?.includes(partySize) || s.maxContiguousSeats >= partySize));
+      if (selected) { movieId = Number(movie.id); break; }
+    }
+    if (items.length < 20 || (page+1)*20 >= (movies.data?.totalElements ?? 0)) break;
+  }
+  requireValue(selected, '내일 조건에 맞는 회차를 자동으로 찾지 못했습니다. SHOWTIME_ID, MOVIE_ID, THEATER_ID, VIEWING_DATE를 직접 지정하세요.');
+  showtimeId = Number(selected.id);
+  theaterId = Number(selected.theaterId);
+  viewingDate = date;
+}
+requireValue(Number.isSafeInteger(showtimeId) && showtimeId > 0 && Number.isSafeInteger(movieId) && movieId > 0
+  && Number.isSafeInteger(theaterId) && theaterId > 0 && /^\\d{4}-\\d{2}-\\d{2}$/.test(viewingDate),
+  '회차/영화/극장/날짜 설정이 올바르지 않습니다.');
 
 const users = [];
 for (let i=0; i<vus; i++) {
