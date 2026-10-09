@@ -19,7 +19,7 @@ param(
     [string]$Distribution = 'Ubuntu'
 )
 $ErrorActionPreference = 'Stop'
-$runner = Join-Path $PSScriptRoot 'run-linux.ps1'
+$runner = Join-Path $PSScriptRoot 'run-components.ps1'
 if (-not (Test-Path $runner)) {
     throw "Waiting-rank runner not found: $runner"
 }

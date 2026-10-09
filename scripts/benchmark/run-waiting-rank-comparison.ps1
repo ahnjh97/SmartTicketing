@@ -46,7 +46,9 @@ function Run-Branch([string]$Label,[string]$Ref) {
     $exitCode = 0
     Push-Location $wt
     try {
-        & (Join-Path $wt 'scripts/benchmark/run-linux.ps1') -Suite booking -CacheMode compare -Distribution $Distribution
+        $runner = Join-Path $wt 'scripts/benchmark/run-components.ps1'
+        if (-not (Test-Path $runner)) { $runner = Join-Path $wt 'scripts/benchmark/run-linux.ps1' }
+        & $runner -Suite booking -CacheMode compare -Distribution $Distribution
         $exitCode = $LASTEXITCODE
     } catch {
         $exitCode = 1
