@@ -16,6 +16,14 @@ public class QueryRedisBenchmark {
     record Fixture(long user,long movie,long theater,long show) {}
     record Scenario(String id,String name,String script) {}
 
+    static List<Boolean> comparisonModes(boolean smoke, boolean login) {
+        var modes = BenchmarkProcess.modes(smoke, login);
+        if (smoke || login || !BenchmarkProcess.cacheMode().equals("compare")) return modes;
+        var repeated = new ArrayList<>(modes);
+        repeated.addAll(modes);
+        return repeated;
+    }
+
     static Fixture seed(TemporaryMysqlDatabase db) {
         try(var em=db.open()) {
             em.getTransaction().begin();
@@ -75,12 +83,12 @@ public class QueryRedisBenchmark {
                 "logicalProcessors",Runtime.getRuntime().availableProcessors(),"maxHeapBytes",Runtime.getRuntime().maxMemory(),
                 "fixture",Map.of("movies",200,"theaters",20,"showtimes",20,"seats",2000,"localCache",true,"localTtlMs",500,"redisTtlMs",2000,"freshJvmPerCase",true,"execution","production-prebuilt-jar"),
                 "cacheMode",BenchmarkProcess.cacheMode(),
-                "plannedExecutions",scenarios.stream().filter(s->!s.id().equals("login")).count()*BenchmarkProcess.modes(smoke,false).size()
+                "plannedExecutions",scenarios.stream().filter(s->!s.id().equals("login")).count()*comparisonModes(smoke,false).size()
                         +(scenarios.stream().anyMatch(s->s.id().equals("login"))?1:0))));
         var executions=new ArrayList<Map<String,Object>>();
         Files.writeString(output.resolve("executions.json"),"[]");
         for(var scenario:scenarios) {
-            var order=BenchmarkProcess.modes(smoke,scenario.id().equals("login"));
+            var order=comparisonModes(smoke,scenario.id().equals("login"));
             for(int i=0;i<order.size();i++) {
                 boolean enabled=order.get(i);
                 String label=String.format("%02d-%s",i+1,enabled?"on":"off");
@@ -144,7 +152,7 @@ public class QueryRedisBenchmark {
         env.put("BASE_URL",BenchmarkBackend.BASE_URL); env.put("CACHE_MODE",enabled?"on":"off");
         env.put("RESULT_FILE",summary.toAbsolutePath().toString());
         env.put("REDIS_BENCH_RATE",smoke?"2":System.getenv().getOrDefault("BENCH_RATE","50"));
-        env.put("REDIS_BENCH_DURATION",smoke?"3s":warmup?"15s":System.getenv().getOrDefault("BENCH_DURATION","30s"));
+        env.put("REDIS_BENCH_DURATION",smoke?"3s":warmup?"30s":System.getenv().getOrDefault("BENCH_DURATION","60s"));
         env.put("REDIS_BENCH_PRE_VUS",smoke?"2":System.getenv().getOrDefault("BENCH_PRE_VUS","100"));
         env.put("REDIS_BENCH_MAX_VUS",smoke?"5":System.getenv().getOrDefault("BENCH_MAX_VUS","1000"));
         env.put("K6_MOVIE_ID",Long.toString(fixture.movie())); env.put("K6_THEATER_ID",Long.toString(fixture.theater()));

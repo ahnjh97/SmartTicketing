@@ -32,9 +32,11 @@ WSL Ubuntu에 Docker Engine, Compose v2, Python 3.12 이상, OpenSSL, Git이 필
 
 서비스 구성은 배포 Compose 기준이지만 운영 `.env`는 읽지 않는다. 테스트 DB·인증 키·합성 데이터·자체 서명 인증서를 사용하며 외부 수집과 자동 시딩을 끈다. 실제 배포의 별도 환경변수 override, 외부 OAuth·지도 API, EC2 하드웨어는 재현하지 않는다. 프런트 HTML 제공은 확인하지만 브라우저 UI 자동화는 아니다. 기본 `-CacheMode branch`는 **현재 배포 Compose의 기본값**을 쓰며 브랜치의 `.env`를 읽는 옵션이 아니다. 필요하면 `-CacheMode on`을 지정한다.
 
-결과는 출력된 `benchmark-results/site-*/index.html`과 `comparison.json`, 각 실행의 로그에 남는다. 이미지 ID, JAR 체크섬, 실행 커밋과 설정을 기록한다. 실패·스모크 실행으로 성능 개선을 주장하지 않는다. p95/p99는 모든 클라이언트의 원시 표본을 합산한다. 별도 예열 없이 시작한 혼합 사용자 흐름이며 순수 API 최대 처리량과 다르다. 반복 실행에서는 브랜치 순서를 교대로 바꾼다. 임시 컨테이너와 DB 볼륨은 종료 시 정리하고 이미지·결과는 보관한다.
+결과는 출력된 `benchmark-results/site-*/index.html`과 `comparison.json`, 각 실행의 로그에 남는다. 이미지 ID, JAR 체크섬, 실행 커밋과 설정을 기록한다. 기본값은 구성별 4회, 매회 새 DB/JVM에서 30초 예열 후 120초 측정이다. 모든 클라이언트가 같은 시각에 시작하며 지연은 측정 구간에 시작한 요청을 종료까지 추적한다. 느린 요청이 구간 끝을 넘었다고 버리지 않는다. 요청률은 공통 측정 구간 안에 완료된 성공 요청 수를 구간 길이로 나눈 값이다. 실행 순서를 바꾸며 같은 반복 번호끼리 비교한다. 임시 컨테이너와 DB 볼륨은 종료 시 정리하고 이미지·결과는 보관한다.
 
-SQL 수는 [MySQL Performance Schema digest](https://dev.mysql.com/doc/refman/8.4/en/performance-schema-statement-digests.html)의 부하 전후 차이로 수집한다. 시딩은 제외하지만 백그라운드 워커 SQL은 포함된다. SQL/요청은 구간 합계 비율이며 요청별 추적값이 아니다. digest 누락·초기화가 감지되면 숫자를 표시하지 않는다. 성공 업무 요청/s는 k6 클라이언트별 성공 요청률의 합이다.
+`passed`는 기능 성공만 뜻한다. 스모크는 성능 비교에서 제외한다. 성능 비교에는 구성별 4회 이상, 예열 30초 이상, 측정 60초 이상, API별 매회 200개 이상 표본과 오류 없는 실행이 필요하다. 부족하면 시간을 늘려 다시 실행한다. API별 p95 변화의 반복별 값·중앙값·범위를 표시하며 방향이 섞이면 결론을 보류한다. 이 기준은 통계적 유의성 보장이 아니다. API별 p99는 표본 1,000개 미만이면 표시하지 않는다. 혼합 업무 p95와 워커 포함 SQL 총량은 참고값이며 개선율 근거로 사용하지 않는다. SQL 경계 수집이 2초 이상 지연되면 SQL 집계를 무효로 처리한다. 입장 대기열·Nginx를 포함한 고정 사용자 부하로, 일정 요청률/최대 처리량 실험과는 다르다.
+
+SQL 수는 [MySQL Performance Schema digest](https://dev.mysql.com/doc/refman/8.4/en/performance-schema-statement-digests.html)의 공통 측정 구간 전후 차이로 수집한다. 시딩과 예열은 제외하지만 백그라운드 워커 SQL은 포함된다. SQL/요청은 참고 비율이며 요청별 추적값이 아니다. digest 누락·초기화·경계 수집 지연이 감지되면 숫자를 표시하지 않는다. 성공 업무 요청/s는 모든 클라이언트의 성공 완료 건수를 공통 측정 시간으로 나눈다. `window.json`에 시간 경계와 WSL CPU·메모리 관측값을, `cacheDiagnostics`에 예열부터 종료까지의 업무 Redis hit/miss 증분을 남긴다. Redis 값에는 워커 조회도 포함되므로 HTTP 캐시 적중률로 해석하지 않는다.
 
 메뉴의 **단계별 부하** 또는 `-UserLevels`로 사용자 수를 늘려 측정한다. 각 단계마다 새 DB를 사용하며 지정된 반복이 모두 성공하고 업무 p95가 `-P95LimitMs` 이하인 단계만 통과한다. k6의 업무·입장 오류율 기준도 적용된다. 통과 단계의 반복 처리량 중앙값 중 가장 큰 값을 `capacity.variants.*.bestObservedPassingRate`에 기록한다. 이는 **선택 범위 내 최고 관측 통과 처리량**이며 절대 최대 처리량이 아니다. 가장 높은 사용자 단계도 통과했다면 한계를 찾지 못한 상태다. WSL·부하 생성기 병목, 입장 대기 시간도 별도로 해석해야 한다. 스모크나 단일 부하는 capacity를 `not-measured`로 표시한다.
 
@@ -48,6 +50,8 @@ SQL 수는 [MySQL Performance Schema digest](https://dev.mysql.com/doc/refman/8.
 ```
 
 이 모드는 기존 백엔드 직접 호출 테스트이므로 입장 대기열·Nginx 경로를 포함하지 않는다. 결과는 기존 `benchmark-results/index.html` 대시보드에서 확인한다. 전체 서비스 실행 결과와 섞어서 비교하지 않는다. `run-redis.ps1`, `run-waiting-rank.ps1`도 이 모드로 연결된다.
+
+조회 ON/OFF 비교는 같은 요청률로 30초 예열 후 구성별 4회 실행한다. 측정 60초 이상·매회 200건 이상·오류와 dropped iteration 없음 조건을 충족해야 반복별 p95 변화를 표시한다. 기존 2회 결과와 예매 워커 진단은 성능 확정용으로 표시하지 않는다. 스모크는 반복을 줄여 기능만 확인한다.
 
 ## 대기순위 개선 전후 브랜치 비교
 

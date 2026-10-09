@@ -30,7 +30,7 @@ param(
     [string]$Suite = '',
     [ValidateSet('compare','on','off')][string]$CacheMode = 'compare',
     [ValidateRange(1,10000)][int]$Rate = 50,
-    [ValidatePattern('^[1-9][0-9]*(s|m)$')][string]$Duration = '30s',
+    [ValidatePattern('^[1-9][0-9]*(s|m)$')][string]$Duration = '60s',
     [ValidateRange(1,10000)][int]$PreAllocatedVUs = 100,
     [ValidateRange(1,10000)][int]$MaxVUs = 1000,
     [ValidateRange(1,10000)][int]$LoginUsers = 100,
