@@ -44,6 +44,13 @@ public class BookingOutboxStore {
         });
     }
 
+    public long pendingCount(LocalDateTime now) {
+        return transaction.execute(status -> ((Number) em.createNativeQuery("""
+                select count(*) from booking_outbox_events
+                where status='PENDING' and available_at<=:now
+                """).setParameter("now", now).getSingleResult()).longValue());
+    }
+
     public boolean complete(Delivery delivery, LocalDateTime now) {
         return Boolean.TRUE.equals(transaction.execute(status -> {
             var event=owned(delivery);
