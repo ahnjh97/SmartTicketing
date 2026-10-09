@@ -322,9 +322,13 @@ public class BookingHoldService {
 
     List<ShowtimeSeat> lockInventory(Long showId) {
         invalidateSummaries(List.of(showId));
-        // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
+        // MySQL REPEATABLE_READ에서 일반 SELECT는 회차 mutex를 기다린 뒤에도
+        // 오래된 스냅샷을 읽을 수 있다. 좌석 재고는 현재 읽기 + 행 잠금으로 검증한다.
+        // PK 순서로 잠가 동일 회차의 좌석 잠금 순서를 일관되게 유지한다.
         return em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
-                .setParameter("id", showId).getResultList();
+                .setParameter("id", showId)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .getResultList();
     }
 
     static void validateShow(Showtime show, LocalDateTime now) {
