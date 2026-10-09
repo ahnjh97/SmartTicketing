@@ -220,22 +220,40 @@ public class BookingWaitingService {
 
     /**
      * Use the revision-matched Redis projection first. Only rows that cannot be
-     * answered by Redis (disabled cache, revision mismatch, or Redis failure)
-     * are sent through the grouped MySQL COUNT fallback.
+     * answered by Redis are sent through the grouped MySQL COUNT fallback.
+     * Mutation responses can read a bounded delta over the healthy base projection;
+     * this never writes pending state into Redis or advances its shared revision.
      */
     private Map<Long,Long> aheadCounts(List<WaitingQueue> rows) {
+        return aheadCounts(rows,false);
+    }
+    private Map<Long,Long> aheadCounts(List<WaitingQueue> rows,boolean pendingWrites) {
         var ahead = new HashMap<Long,Long>();
         if (rows.isEmpty()) return ahead;
         if (ranks != null && ranks.enabled()) {
+            // Include this transaction's queue changes AND outbox rows in the same response calculation.
+            if(pendingWrites) em.flush();
             var showIds = rows.stream().map(q -> q.getShowtime().getId()).distinct().toList();
             var versions = new HashMap<Long,Long>();
             em.createQuery("select s.showtimeId,s.revision from BookingOutboxStream s where s.showtimeId in :shows",Object[].class)
                     .setParameter("shows",showIds).getResultList()
                     .forEach(v -> versions.put((Long)v[0],(Long)v[1]));
             for (var show : showIds) {
-                ahead.putAll(ranks.read(show,versions.getOrDefault(show,0L),rows.stream()
+                long version=versions.getOrDefault(show,0L);
+                var entries=rows.stream()
                         .filter(q -> q.getShowtime().getId().equals(show))
-                        .map(q -> new BookingWaitingRanks.Entry(q.getId(),q.getSeatZone(),q.displayNumber())).toList()));
+                        .map(q -> new BookingWaitingRanks.Entry(q.getId(),q.getSeatZone(),q.displayNumber())).toList();
+                var cached=ranks.read(show,version,entries);
+                ahead.putAll(cached);
+                if(pendingWrites && cached.size()!=entries.size()) {
+                    Long base;
+                    try { base=ranks.version(show); } catch(RuntimeException unavailable) { base=null; }
+                    if(base!=null && base<version) {
+                        // Bound response cost. Missing history/large lag still uses one grouped DB COUNT.
+                        var delta=BookingWaitingProjection.delta(em,show,base,version,128);
+                        if(!delta.rebuild()) ahead.putAll(ranks.readAdjusted(show,base,entries,delta.upserts(),delta.removals()));
+                    }
+                }
             }
         }
         var missing = rows.stream().map(WaitingQueue::getId).filter(id -> !ahead.containsKey(id)).toList();
@@ -307,7 +325,7 @@ public class BookingWaitingService {
                 }
             }
         }
-        var aheadForRows = snapshot ? reads.ahead() : aheadCounts(rows);
+        var aheadForRows = snapshot ? reads.ahead() : aheadCounts(rows,true);
         var items = new ArrayList<WaitingResponse.Item>();
         for (var q : rows) {
             var status=snapshot ? BookingReadState.queue(q, state, now) : q.getStatus();

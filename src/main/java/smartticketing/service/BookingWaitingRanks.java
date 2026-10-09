@@ -69,6 +69,28 @@ public class BookingWaitingRanks {
             end
             return result
             """,List.class);
+    private static final DefaultRedisScript<List> READ_ADJUSTED = new DefaultRedisScript<>("""
+            if redis.call('GET',KEYS[1])~=ARGV[1] then return {} end
+            for k=2,#KEYS do
+              if not redis.call('ZSCORE',KEYS[k],'_') then return {} end
+            end
+            local n=tonumber(ARGV[2])
+            local changes=3+n*2
+            local result={}
+            for i=3,changes-1,2 do
+              local zone=tonumber(ARGV[i])
+              local number=tonumber(ARGV[i+1])
+              local count=redis.call('ZCOUNT',KEYS[zone],0,'('..ARGV[i+1])
+              for j=changes,#ARGV,3 do
+                local old=redis.call('ZSCORE',KEYS[zone],ARGV[j+2])
+                if old and tonumber(old)<number then count=count-1 end
+                if tonumber(ARGV[j])==zone and tonumber(ARGV[j+1])<number then count=count+1 end
+              end
+              if count<0 then return {} end
+              result[#result+1]=count
+            end
+            return result
+            """,List.class);
 
     public BookingWaitingRanks(StringRedisTemplate redis,
             @Value("${app.cache.enabled:false}") boolean enabled,
@@ -149,6 +171,21 @@ public class BookingWaitingRanks {
         for(var row:entries) { args.add(Integer.toString(index(row.zone()))); args.add(Integer.toString(row.number())); }
         try {
             var values=redis.execute(READ,keys(show),args.toArray());
+            if(values==null || values.size()!=entries.size()) return Map.of();
+            var result=new HashMap<Long,Long>();
+            for(int i=0;i<entries.size();i++) result.put(entries.get(i).id(),((Number)values.get(i)).longValue());
+            return result;
+        } catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000; return Map.of(); }
+    }
+    /** Read-only overlay: pending DB writes must never enter the shared Redis projection. */
+    public Map<Long,Long> readAdjusted(long show,long base,List<Entry> entries,List<Entry> upserts,List<Long> removals) {
+        if(!enabled || entries.isEmpty() || System.currentTimeMillis()<unavailableUntil) return Map.of();
+        var args=new ArrayList<String>(); args.add(Long.toString(base)); args.add(Integer.toString(entries.size()));
+        for(var row:entries) { args.add(Integer.toString(index(row.zone()))); args.add(Integer.toString(row.number())); }
+        for(var id:removals) { args.add("0"); args.add("0"); args.add(Long.toString(id)); }
+        for(var row:upserts) { args.add(Integer.toString(index(row.zone()))); args.add(Integer.toString(row.number())); args.add(Long.toString(row.id())); }
+        try {
+            var values=redis.execute(READ_ADJUSTED,keys(show),args.toArray());
             if(values==null || values.size()!=entries.size()) return Map.of();
             var result=new HashMap<Long,Long>();
             for(int i=0;i<entries.size();i++) result.put(entries.get(i).id(),((Number)values.get(i)).longValue());

@@ -79,6 +79,110 @@ class BookingWaitingRedisTests {
         assertThat(readStatements).anyMatch(sql -> sql.contains("count(") && sql.contains("waiting_queues"));
         org.mockito.Mockito.verifyNoInteractions(unused);
     }
+
+    @Test void warmRegistrationAvoidsCountWithoutPublishingUncommittedRanks() {
+        var first=fixture(1,1); register(first);
+        first.shows().forEach(show->projection().refresh(show));
+        var versions=new HashMap<Long,Long>(); first.shows().forEach(show->versions.put(show,ranks.version(show)));
+        var second=another(first,1,false);
+        readStatements.clear();
+        var result=tx(em->{
+            var service=service(em,CLOCK); ReflectionTestUtils.setField(service,"ranks",ranks);
+            return service.register(second.user(),second.group(),key(),new smartticketing.dto.booking.WaitingRequest(second.shows()));
+        });
+        assertThat(result.status()).isEqualTo(201);
+        var response=tools.jackson.databind.json.JsonMapper.builder().build().readValue(result.body(),smartticketing.dto.booking.WaitingResponse.class);
+        assertThat(response.items()).allMatch(item->item.aheadCount()==1);
+        assertThat(readStatements).noneMatch(sql->sql.contains("count(") && sql.contains("waiting_queues"));
+        first.shows().forEach(show->assertThat(ranks.version(show)).isEqualTo(versions.get(show)));
+        assertThat(response.items()).usingRecursiveComparison()
+                .withComparatorForType(Comparator.comparing(java.time.OffsetDateTime::toInstant),java.time.OffsetDateTime.class)
+                .isEqualTo(state(second).items());
+    }
+
+    @Test void pendingRankOverlayRollsBackWithoutLeakingIntoRedis() {
+        var first=fixture(1,1); register(first); first.shows().forEach(show->projection().refresh(show));
+        var second=another(first,1,false); long show=first.shows().getFirst(); long version=ranks.version(show);
+        try(var em=db.open()) {
+            em.getTransaction().begin();
+            try {
+                var service=service(em,CLOCK); ReflectionTestUtils.setField(service,"ranks",ranks);
+                readStatements.clear();
+                assertThat(service.register(second.user(),second.group(),key(),new smartticketing.dto.booking.WaitingRequest(second.shows())).status()).isEqualTo(201);
+                assertThat(readStatements).noneMatch(sql->sql.contains("count(") && sql.contains("waiting_queues"));
+            } finally { em.getTransaction().rollback(); }
+        }
+        assertThat(ranks.version(show)).isEqualTo(version);
+        assertThat(redis.opsForZSet().zCard(prefix+"{"+show+"}:MIDDLE_MIDDLE")).isEqualTo(2);
+        assertThat(state(second).items()).isEmpty();
+    }
+
+    @Test void warmZoneChangeReturnsDestinationRankWithoutCountOrSharedCacheMutation() {
+        var first=fixture(1,2); long show=first.shows().getFirst();
+        tx(em->{inventory(em,show).getLast().getSeat().setSeatPosition(SeatPosition.SIDE_FRONT);return null;});
+        register(first);
+        var second=another(first,1,false);
+        tx(em->service(em,CLOCK).register(second.user(),second.group(),key(),new smartticketing.dto.booking.WaitingRequest(List.of(show),SeatPosition.SIDE_FRONT)));
+        first.shows().forEach(id->projection().refresh(id)); long base=ranks.version(show);
+        readStatements.clear();
+        var result=tx(em->{
+            var service=service(em,CLOCK); ReflectionTestUtils.setField(service,"ranks",ranks);
+            return service.register(first.user(),first.group(),key(),new smartticketing.dto.booking.WaitingRequest(List.of(show),SeatPosition.SIDE_FRONT));
+        });
+        assertThat(result.status()).as(result.body()).isEqualTo(201);
+        assertThat(readStatements).noneMatch(sql->sql.contains("count(") && sql.contains("waiting_queues"));
+        var response=tools.jackson.databind.json.JsonMapper.builder().build().readValue(result.body(),smartticketing.dto.booking.WaitingResponse.class);
+        var changed=response.items().stream().filter(item->item.showtimeId()==show).findFirst().orElseThrow();
+        assertThat(changed.seatZone()).isEqualTo(SeatPosition.SIDE_FRONT);
+        assertThat(changed.aheadCount()).isEqualTo(1);
+        assertThat(ranks.version(show)).isEqualTo(base);
+        assertThat(response.items()).usingRecursiveComparison()
+                .withComparatorForType(Comparator.comparing(java.time.OffsetDateTime::toInstant),java.time.OffsetDateTime.class)
+                .isEqualTo(state(first).items());
+    }
+
+    @Test void rankOverlayAccountsForMovesRemovalsAndEqualNumbersWithoutChangingRedis() {
+        long show=990010; var middle=SeatPosition.MIDDLE_MIDDLE; var side=SeatPosition.SIDE_FRONT;
+        ranks.replace(show,1,List.of(new BookingWaitingRanks.Entry(1,middle,1),new BookingWaitingRanks.Entry(2,middle,3),new BookingWaitingRanks.Entry(3,side,2)));
+        var requests=List.of(new BookingWaitingRanks.Entry(90,middle,10),new BookingWaitingRanks.Entry(91,side,10),
+                new BookingWaitingRanks.Entry(92,middle,4),new BookingWaitingRanks.Entry(93,side,5));
+        var changes=List.of(new BookingWaitingRanks.Entry(1,side,5),new BookingWaitingRanks.Entry(4,middle,4));
+        assertThat(ranks.readAdjusted(show,1,requests,changes,List.of(2L))).containsExactlyInAnyOrderEntriesOf(Map.of(90L,1L,91L,2L,92L,0L,93L,1L));
+        assertThat(ranks.version(show)).isEqualTo(1);
+        assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:MIDDLE_MIDDLE","1")).isEqualTo(1d);
+        assertThat(ranks.readAdjusted(show,2,requests,changes,List.of(2L))).isEmpty();
+        redis.delete(prefix+"{"+show+"}:SIDE_REAR");
+        assertThat(ranks.readAdjusted(show,1,requests,changes,List.of(2L))).isEmpty();
+    }
+
+    @Test void registrationWithMissingDeltaHistoryUsesOneGroupedCountAndCorrectRanks() {
+        var first=fixture(1,1); register(first); first.shows().forEach(show->projection().refresh(show));
+        var second=another(first,1,false); register(second);
+        tx(em->{em.createQuery("delete from BookingOutboxEvent e where e.groupId=:g").setParameter("g",second.group()).executeUpdate();return null;});
+        var third=another(first,1,false);
+        readStatements.clear();
+        var result=tx(em->{
+            var service=service(em,CLOCK); ReflectionTestUtils.setField(service,"ranks",ranks);
+            return service.register(third.user(),third.group(),key(),new smartticketing.dto.booking.WaitingRequest(third.shows()));
+        });
+        assertThat(result.status()).isEqualTo(201);
+        assertThat(readStatements.stream().filter(sql->sql.contains("count(") && sql.contains("waiting_queues"))).hasSize(1);
+        var response=tools.jackson.databind.json.JsonMapper.builder().build().readValue(result.body(),smartticketing.dto.booking.WaitingResponse.class);
+        assertThat(response.items()).allMatch(item->item.aheadCount()==2);
+    }
+
+    @Test void projectionPublishesBeforeBusyDispatchAndAfterSuccessfulAllocation() {
+        var dispatcher=mock(BookingWaitingDispatcher.class); var projection=mock(BookingWaitingProjection.class);
+        var handler=new BookingWaitingOutboxHandler(dispatcher,projection,true);
+        var event=new BookingOutboxStore.Delivery(1L,123L,1,1,BookingOutboxEvent.Type.WAITING_CHANGED,1L,"test",NOW,1,"test");
+        handler.handle(event);
+        var order=inOrder(projection,dispatcher);
+        order.verify(projection).update(123L); order.verify(dispatcher).dispatch(123L); order.verify(projection).update(123L);
+        reset(projection,dispatcher);
+        when(dispatcher.dispatch(123L)).thenThrow(new IllegalStateException("busy"));
+        assertThatThrownBy(()->handler.handle(event)).isInstanceOf(IllegalStateException.class);
+        verify(projection).update(123L);
+    }
     @Test void versionMismatchAndRedisLossFallBackThenRebuild() {
         var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
         for(var show:first.shows()) projection().refresh(show);

@@ -18,8 +18,14 @@ public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
     public Set<Type> types() { return EnumSet.allOf(Type.class); }
     public void handle(BookingOutboxStore.Delivery event) {
         if(event.schemaVersion()!=1) throw new IllegalArgumentException("Unsupported booking event schema");
-        // Redis failure must never prevent seats from being assigned in MySQL.
-        if(dispatchEnabled) dispatcher.dispatch(event.showtimeId());
+        // Publish the committed queue change before potentially slow/busy allocation.
+        // Redis failure must never prevent seats from being assigned in MySQL;
+        // the final update below propagates failure so the durable event is retried.
+        if(dispatchEnabled) {
+            try { projection.update(event.showtimeId()); }
+            catch(RuntimeException unavailable) { /* Retry after the allocation attempt. */ }
+            dispatcher.dispatch(event.showtimeId());
+        }
         projection.update(event.showtimeId());
     }
 }

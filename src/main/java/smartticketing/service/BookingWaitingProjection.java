@@ -15,7 +15,7 @@ public class BookingWaitingProjection {
     private final BookingWaitingRanks ranks;
     private final TransactionTemplate read;
     private record Snapshot(long version,List<BookingWaitingRanks.Entry> entries) {}
-    private record Delta(long version,List<BookingWaitingRanks.Entry> upserts,List<Long> removals,boolean rebuild) {}
+    record Delta(long version,List<BookingWaitingRanks.Entry> upserts,List<Long> removals,boolean rebuild) {}
     // Bound recovery work after a long outage; normal events are coalesced by group below.
     private static final int MAX_DELTA_EVENTS = 1000;
     public BookingWaitingProjection(EntityManager em,BookingWaitingRanks ranks,PlatformTransactionManager manager) {
@@ -43,33 +43,7 @@ public class BookingWaitingProjection {
         var delta=read.execute(status -> {
             long version=em.createQuery("select s.revision from BookingOutboxStream s where s.showtimeId=:show",Long.class)
                     .setParameter("show",show).getResultStream().findFirst().orElse(0L);
-            if(version<=base) return new Delta(version,List.of(),List.of(),false);
-            if(version-base>MAX_DELTA_EVENTS) return new Delta(version,List.of(),List.of(),true);
-            // Include completed events too: out-of-order delivery/ack is not projection ordering.
-            // Version and changed rows come from one REPEATABLE_READ snapshot, never mixed commits.
-            var events=em.createQuery("select e.aggregateVersion,e.groupId,e.schemaVersion from BookingOutboxEvent e where e.showtimeId=:show and e.aggregateVersion>:base and e.aggregateVersion<=:version order by e.aggregateVersion",Object[].class)
-                    .setParameter("show",show).setParameter("base",base).setParameter("version",version)
-                    .setMaxResults(MAX_DELTA_EVENTS).getResultList();
-            long expected=base;
-            var groups=new LinkedHashSet<Long>();
-            for(var event:events) {
-                if((Long)event[0]!=++expected || event[1]==null || (Integer)event[2]!=1)
-                    return new Delta(version,List.of(),List.of(),true);
-                groups.add((Long)event[1]);
-            }
-            if(expected!=version) return new Delta(version,List.of(),List.of(),true);
-            var upserts=new ArrayList<BookingWaitingRanks.Entry>();
-            var removals=new ArrayList<Long>();
-            var ids=new ArrayList<>(groups);
-            for(int start=0;start<ids.size();start+=100) {
-                var rows=em.createQuery("select q.id,q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.status from WaitingQueue q where q.showtime.id=:show and q.requestGroup.id in :groups",Object[].class)
-                        .setParameter("show",show).setParameter("groups",ids.subList(start,Math.min(start+100,ids.size()))).getResultList();
-                for(var row:rows) {
-                    if(row[3]==QueueStatus.WAITING) upserts.add(new BookingWaitingRanks.Entry((Long)row[0],(SeatPosition)row[1],(Integer)row[2]));
-                    else removals.add((Long)row[0]);
-                }
-            }
-            return new Delta(version,upserts,removals,false);
+            return delta(em,show,base,version,MAX_DELTA_EVENTS);
         });
         // A parallel worker may already have published a newer snapshot. Never roll it back.
         if(delta.version()<=base) return;
@@ -78,6 +52,36 @@ public class BookingWaitingProjection {
             Long current=ranks.version(show);
             if(current==null || current<delta.version()) refresh(show);
         }
+    }
+    /** Caller supplies one consistent DB view, including its own pending writes when used for response counts. */
+    static Delta delta(EntityManager em,long show,long base,long version,int limit) {
+        if(version<=base) return new Delta(version,List.of(),List.of(),false);
+        if(version-base>limit) return new Delta(version,List.of(),List.of(),true);
+        // Include completed events too: out-of-order delivery/ack is not projection ordering.
+        // Projection uses REPEATABLE_READ; mutation responses hold the relevant show/zone locks.
+        var events=em.createQuery("select e.aggregateVersion,e.groupId,e.schemaVersion from BookingOutboxEvent e where e.showtimeId=:show and e.aggregateVersion>:base and e.aggregateVersion<=:version order by e.aggregateVersion",Object[].class)
+                .setParameter("show",show).setParameter("base",base).setParameter("version",version)
+                .setMaxResults(limit).getResultList();
+        long expected=base;
+        var groups=new LinkedHashSet<Long>();
+        for(var event:events) {
+            if((Long)event[0]!=++expected || event[1]==null || (Integer)event[2]!=1)
+                return new Delta(version,List.of(),List.of(),true);
+            groups.add((Long)event[1]);
+        }
+        if(expected!=version) return new Delta(version,List.of(),List.of(),true);
+        var upserts=new ArrayList<BookingWaitingRanks.Entry>();
+        var removals=new ArrayList<Long>();
+        var ids=new ArrayList<>(groups);
+        for(int start=0;start<ids.size();start+=100) {
+            var rows=em.createQuery("select q.id,q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.status from WaitingQueue q where q.showtime.id=:show and q.requestGroup.id in :groups",Object[].class)
+                    .setParameter("show",show).setParameter("groups",ids.subList(start,Math.min(start+100,ids.size()))).getResultList();
+            for(var row:rows) {
+                if(row[3]==QueueStatus.WAITING) upserts.add(new BookingWaitingRanks.Entry((Long)row[0],(SeatPosition)row[1],(Integer)row[2]));
+                else removals.add((Long)row[0]);
+            }
+        }
+        return new Delta(version,upserts,removals,false);
     }
     public void repairIfNeeded(long show) {
         // The recovery sweep can catch up a normal lag without rebuilding all WAITING rows.
