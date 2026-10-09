@@ -15,6 +15,8 @@ import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import static jakarta.persistence.LockModeType.PESSIMISTIC_WRITE;
+
 /** 일반/스마트/대기 호출자가 선택한 좌석을 한 번에 확보한다. 추천/대기 실행은 하지 않는다. */
 @Service
 @Transactional
@@ -99,7 +101,7 @@ public class BookingHoldService {
             target = group.getSelectedShowtime().getId();
         }
         BookingQueueLifecycle.lockShows(em, group.getId(), target);
-        var show = em.find(Showtime.class, target, LockModeType.PESSIMISTIC_WRITE);
+        var show = em.find(Showtime.class, target, PESSIMISTIC_WRITE);
         // 잠금 대기 후의 현재 시각을 사용한다.
         var now = now();
         validateShow(show, now);
@@ -140,7 +142,7 @@ public class BookingHoldService {
                     .map(WaitingQueue::displayNumber).orElse(null);
             var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
                     .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)
-                    .setParameter("before", before).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                    .setParameter("before", before).setLockMode(PESSIMISTIC_WRITE).getResultList();
             for (var q : earlier) {
                 var waitingSeats = BookingQueueLifecycle.currentSeatIds(em, q.getId());
                 if (BookingQueueLifecycle.competing(q.getSeatZone(), waitingSeats, ids, zones)
@@ -228,13 +230,13 @@ public class BookingHoldService {
 
     @Transactional(noRollbackFor = BookingRejection.class)
     BookingRequestGroup lockOwnedGroup(Long userId, Long groupId) {
-        var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
+        var group = em.find(BookingRequestGroup.class, groupId, PESSIMISTIC_WRITE);
         if (group == null || !group.getUser().getId().equals(userId)) reject(404, "관람 요청을 찾을 수 없습니다.");
         return group;
     }
 
     public boolean expire(Long groupId) {
-        var group = em.find(BookingRequestGroup.class, groupId, LockModeType.PESSIMISTIC_WRITE);
+        var group = em.find(BookingRequestGroup.class, groupId, PESSIMISTIC_WRITE);
         return group != null && expireLockedGroup(group);
     }
 
@@ -267,7 +269,7 @@ public class BookingHoldService {
 
     boolean expireLockedGroup(BookingRequestGroup group) {
         if (group.getStatus() != BookingGroupStatus.HOLDING) return false;
-        var slot = em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE);
+        var slot = em.find(BookingGroupHold.class, group.getId(), PESSIMISTIC_WRITE);
         if (slot == null) throw new IllegalStateException("활성 선점 슬롯이 없어 자동 복구를 중단합니다.");
         if (slot.getExpiresAt().isAfter(now())) return false;
         Long reservationId = slot.getReservation().getId();
@@ -275,8 +277,8 @@ public class BookingHoldService {
         Long showId = em.createQuery("select r.showtime.id from Reservation r where r.id=:id", Long.class)
                 .setParameter("id", reservationId).getSingleResult();
         BookingQueueLifecycle.lockShows(em, group.getId(), showId);
-        var show = em.find(Showtime.class, showId, LockModeType.PESSIMISTIC_WRITE);
-        var reservation = em.find(Reservation.class, reservationId, LockModeType.PESSIMISTIC_WRITE);
+        var show = em.find(Showtime.class, showId, PESSIMISTIC_WRITE);
+        var reservation = em.find(Reservation.class, reservationId, PESSIMISTIC_WRITE);
         var now = now();
         if (reservation.getStatus() != ReservationStatus.PENDING || reservation.getExpiresAt() == null
                 || reservation.getExpiresAt().isAfter(now)) return false;
