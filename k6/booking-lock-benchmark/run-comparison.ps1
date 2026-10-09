@@ -28,7 +28,7 @@ $baselineFixtureAbs = (Resolve-Path $BaselineFixture).Path
 $optimizedFixtureAbs = (Resolve-Path $OptimizedFixture).Path
 
 Write-Host "1/2 기존 코드 부하 테스트 시작: $BaselineUrl" -ForegroundColor Cyan
-& k6 run --summary-mode=full -e "BASE_URL=$BaselineUrl" -e "FIXTURE=$baselineFixtureAbs" -e "VUS=$Vus" -e "ITERATIONS=$Iterations" -e "SUMMARY_FILE=$baselineSummary" $script
+& k6 run -e "BASE_URL=$BaselineUrl" -e "FIXTURE=$baselineFixtureAbs" -e "VUS=$Vus" -e "ITERATIONS=$Iterations" -e "SUMMARY_FILE=$baselineSummary" $script
 if ($LASTEXITCODE -ne 0) { Write-Warning "기존 코드 실행 중 k6가 비정상 종료 코드 $LASTEXITCODE 를 반환했습니다. 결과 파일을 확인합니다." }
 if (-not (Test-Path $baselineSummary)) { throw "기존 코드 summary 생성 실패: $baselineSummary" }
 
