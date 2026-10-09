@@ -324,7 +324,7 @@ public class BookingHoldService {
         invalidateSummaries(List.of(showId));
         // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
         return em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
-                .setParameter("id", showId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                .setParameter("id", showId).getResultList();
     }
 
     static void validateShow(Showtime show, LocalDateTime now) {
