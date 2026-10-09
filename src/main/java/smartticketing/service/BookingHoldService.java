@@ -322,8 +322,11 @@ public class BookingHoldService {
         return new LockedInventory(em.getDelegate(),showId,rows);
     }
 
-    @org.springframework.beans.factory.annotation.Value("${app.booking.lock-inventory-pessimistic-write:false}")
-    private boolean lockInventoryPessimisticWrite;
+    // Direct EntityManager-based tests construct this service without Spring field injection.
+    // Keep row-level inventory locking enabled by default there as well; Spring can still opt out
+    // explicitly with app.booking.lock-inventory-pessimistic-write=false for controlled benchmarks.
+    @org.springframework.beans.factory.annotation.Value("${app.booking.lock-inventory-pessimistic-write:true}")
+    private boolean lockInventoryPessimisticWrite = true;
 
     List<ShowtimeSeat> lockInventory(Long showId) {
         System.out.println(
