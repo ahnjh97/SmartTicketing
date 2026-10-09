@@ -95,7 +95,23 @@ export function setup() {
     }
   }
 
+  // Also include the dedicated activity history. It exposes groupId (not id) and
+  // is distinct from the recovery list, which only contains recoverable records.
+  const historyActivity = http.get(baseUrl + '/api/booking-groups/history', {
+    headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
+    tags: { name: 'benchmark_discover_activity_history' },
+  });
+  let activityPage = null;
+  try { activityPage = historyActivity.json(); } catch (_) {}
+  if (historyActivity.status === 200 && activityPage && Array.isArray(activityPage.items)) {
+    for (const item of activityPage.items) {
+      const id = Number(item.groupId);
+      if (Number.isSafeInteger(id) && id > 0 && !groupIds.includes(id)) groupIds.push(id);
+    }
+  }
+
   const candidates = [];
+  const probeFailures = [];
   for (const groupId of groupIds) {
     const probe = http.get(baseUrl + '/api/booking-groups/' + groupId + '/waiting-queues', {
       headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
@@ -108,6 +124,8 @@ export function setup() {
       // Prefer a group with actual waiting rows, but an empty response is still
       // a valid endpoint target for measuring the read path.
       if (data.items.length > 0) break;
+    } else {
+      probeFailures.push({ groupId, status: probe.status, body: String(probe.body).slice(0, 180) });
     }
   }
   // If active IDs existed but none was readable, retry against history too.
@@ -137,7 +155,7 @@ export function setup() {
     }
   }
   if (!candidates.length) {
-    fail('No readable booking group was found. This local account has no accessible booking history; create one booking attempt in the local app, then rerun.');
+    fail('No readable booking group was found for the logged-in local account. active=' + groupIds.length + ', activityHistoryHTTP=' + historyActivity.status + ', activityHistoryBody=' + String(historyActivity.body).slice(0, 300) + ', queueProbeFailures=' + JSON.stringify(probeFailures.slice(0, 5)) + '. The fixture account must own at least one booking group.');
   }
   const selected = candidates.find(c => c.items.length > 0) || candidates[0];
   return { users: authenticated, groupId: selected.groupId, discoveredItems: selected.items.length };
