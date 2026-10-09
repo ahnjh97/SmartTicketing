@@ -7,7 +7,78 @@ import java.util.*;
 import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.*;
 
+@Tag("core")
 class AdmissionTests {
+    @Test void fiveThousandConcurrentArrivalsPreserveFifoCapacityAndSharedBatchBudget() throws Exception {
+        store=new AdmissionStore(redis,new AdmissionSettings(true,100,10,60,30,6000,false),prefix,()->{});
+        redis.opsForValue().set(prefix+":tick","10",java.time.Duration.ofMinutes(1));
+        try(var executor=Executors.newFixedThreadPool(32)) {
+            var arrivals=new ArrayList<Callable<AdmissionStore.State>>();
+            for(int i=0;i<5000;i++) { String id="burst-"+i;arrivals.add(() -> store.execute("enter",id)); }
+            long start=System.nanoTime();
+            for(var future:executor.invokeAll(arrivals)) assertThat(future.get().state()).isEqualTo("WAITING");
+            var ordered=new ArrayList<>(redis.opsForZSet().range(prefix+":waiting",0,-1));
+            assertThat(ordered).hasSize(5000);
+            for(int round=1;round<=10;round++) {
+                redis.delete(prefix+":tick");
+                var ticks=new ArrayList<Callable<AdmissionStore.State>>();
+                for(int i=0;i<16;i++) ticks.add(() -> store.execute("tick",""));
+                for(var future:executor.invokeAll(ticks)) future.get();
+                assertThat(redis.opsForZSet().size(prefix+":active")).isEqualTo(round*10L);
+                assertThat(redis.opsForZSet().range(prefix+":active",0,-1)).containsExactlyInAnyOrderElementsOf(ordered.subList(0,round*10));
+            }
+            tick();
+            assertThat(redis.opsForZSet().size(prefix+":active")).isEqualTo(100);
+            assertThat(redis.opsForZSet().size(prefix+":waiting")).isEqualTo(4900);
+            store.execute("leave",ordered.getFirst());tick();
+            assertThat(store.execute("status",ordered.get(100)).state()).isEqualTo("ADMITTED");
+            assertThat(redis.opsForZSet().size(prefix+":active")).isEqualTo(100);
+            System.out.printf("ADMISSION_BURST arrivals=5000 capacity=100 batch=10 elapsedMs=%.1f%n",(System.nanoTime()-start)/1_000_000d);
+        }
+    }
+    @Test void concurrentDuplicateRegistrationUsesOnePlaceAndNewArrivalsCannotJumpTheQueue() throws Exception {
+        try(var executor=Executors.newFixedThreadPool(16)) {
+            var tasks=new ArrayList<Callable<AdmissionStore.State>>();
+            for(int i=0;i<100;i++) tasks.add(() -> store.execute("enter","same-browser"));
+            for(var future:executor.invokeAll(tasks)) assertThat(future.get().ahead()).isZero();
+        }
+        assertThat(redis.opsForZSet().size(prefix+":waiting")).isEqualTo(1);
+        redis.delete(prefix+":tick");
+        assertThat(store.execute("enter","new-browser").state()).isEqualTo("WAITING");
+        assertThat(store.execute("status","same-browser").state()).isEqualTo("ADMITTED");
+    }
+    @Test void redisStateLossClosesOldAdmissionAndRequiresFreshRegistration() {
+        store.execute("enter","old");tick();
+        assertThat(store.execute("check","old").state()).isEqualTo("ADMITTED");
+        redis.delete(List.of(prefix+":waiting",prefix+":heartbeat",prefix+":active",prefix+":sequence",prefix+":tick"));
+        assertThat(store.execute("check","old").state()).isEqualTo("EXPIRED");
+        assertThat(store.execute("status","old").state()).isEqualTo("EXPIRED");
+        assertThat(store.execute("enter","old").state()).isEqualTo("ADMITTED");
+    }
+    @Test void expiredWaitingTokenRejoinsAtTheBackAndStatusNeverCreatesAPlace() {
+        store.execute("enter","old");store.execute("enter","next");
+        redis.opsForZSet().add(prefix+":heartbeat","old",0);
+        assertThat(store.execute("status","old").state()).isEqualTo("EXPIRED");
+        assertThat(store.execute("status","unknown").state()).isEqualTo("EXPIRED");
+        assertThat(store.execute("enter","old").ahead()).isEqualTo(1);
+        assertThat(store.execute("status","next").ahead()).isZero();
+    }
+    @Test void largeAbandonmentIsCleanedInBoundedPassesWithoutAdmittingDeadWaiters() {
+        store=new AdmissionStore(redis,new AdmissionSettings(true,2,1,60,30,1000,false),prefix,()->{});
+        for(int i=0;i<450;i++) {
+            redis.opsForZSet().add(prefix+":waiting","dead-"+i,i);
+            redis.opsForZSet().add(prefix+":heartbeat","dead-"+i,0);
+        }
+        redis.opsForValue().set(prefix+":sequence","450");
+        store.execute("enter","alive");
+        tick();
+        assertThat(redis.opsForZSet().size(prefix+":waiting")).isBetween(250L,251L);
+        assertThat(redis.opsForZSet().size(prefix+":active")).isZero();
+        tick();tick();
+        assertThat(store.execute("status","alive").state()).isEqualTo("ADMITTED");
+        assertThat(redis.opsForZSet().size(prefix+":waiting")).isZero();
+        assertThat(redis.opsForZSet().size(prefix+":heartbeat")).isZero();
+    }
     static LettuceConnectionFactory connection;
     static StringRedisTemplate redis;
     String prefix;

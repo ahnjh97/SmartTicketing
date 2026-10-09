@@ -9,7 +9,39 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@Tag("core")
 class AdmissionFilterTests {
+    @Test void decodedServletPathIsCheckedAndMalformedCookiesCannotReachApplication() throws Exception {
+        var encoded=new MockHttpServletRequest("GET","/%61pi/movies");encoded.setServletPath("/api/movies");
+        var response=new MockHttpServletResponse();var chain=mock(FilterChain.class);
+        filter.doFilter(encoded,response,chain);
+        assertThat(response.getStatus()).isEqualTo(429);verifyNoInteractions(chain,store);
+        for(String token:List.of("forged","../active","A".repeat(200))) {
+            var request=new MockHttpServletRequest("GET","/api/movies");request.setCookies(new Cookie(AdmissionFilter.COOKIE,token));
+            response=new MockHttpServletResponse();filter.doFilter(request,response,chain);
+            assertThat(response.getStatus()).isEqualTo(429);
+        }
+        verifyNoInteractions(chain,store);
+    }
+    @Test void redisFailureOnProtectedApiFailsClosedAndNextSuccessfulCheckRecovers() throws Exception {
+        String id=java.util.UUID.randomUUID().toString();
+        when(store.execute("check",id)).thenThrow(new org.springframework.data.redis.RedisConnectionFailureException("offline"))
+                .thenReturn(new AdmissionStore.State("ADMITTED",0,30));
+        var request=new MockHttpServletRequest("GET","/api/movies");request.setCookies(new Cookie(AdmissionFilter.COOKIE,id));
+        var response=new MockHttpServletResponse();var chain=mock(FilterChain.class);
+        filter.doFilter(request,response,chain);
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("10");verifyNoInteractions(chain);
+        filter.doFilter(request,new MockHttpServletResponse(),chain);verify(chain).doFilter(eq(request),any());
+    }
+    @Test void disabledGateBypassesRedisAndDeniedOriginsCannotRegister() throws Exception {
+        var disabled=new AdmissionFilter(store,new AdmissionSettings(false,100,10,600,90,20000,false),r -> null);
+        var request=new MockHttpServletRequest("GET","/api/movies");var response=new MockHttpServletResponse();var chain=mock(FilterChain.class);
+        disabled.doFilter(request,response,chain);verify(chain).doFilter(request,response);verifyNoInteractions(store);
+        request=new MockHttpServletRequest("POST","/api/admission/enter");request.addHeader("Origin","https://untrusted.example");
+        response=new MockHttpServletResponse();filter.doFilter(request,response,mock(FilterChain.class));
+        assertThat(response.getStatus()).isEqualTo(403);verifyNoInteractions(store);
+    }
     final AdmissionStore store = mock(AdmissionStore.class);
     final AdmissionSettings settings = new AdmissionSettings(true,100,10,600,90,20000,true);
     final AdmissionFilter filter = new AdmissionFilter(store,settings,request -> {

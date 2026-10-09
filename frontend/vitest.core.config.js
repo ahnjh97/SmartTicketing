@@ -25,7 +25,8 @@ export default defineConfig(env => mergeConfig(viteConfig(env), {
             'tests/manual-booking.integration.test.jsx',
             'tests/smart-booking.integration.test.jsx',
             'tests/waiting.integration.test.jsx',
+            'tests/admission.integration.test.jsx',
         ],
-        testNamePattern: new RegExp(`^(${coreTests.join('|')})$`),
+        testNamePattern: new RegExp(`^(${coreTests.join('|')}|site admission .*)$`),
     },
 }));

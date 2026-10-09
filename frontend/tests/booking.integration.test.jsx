@@ -597,9 +597,14 @@ test('movie details retain main metadata with spaced fields instead of middle do
 });
 
  test('theater movies follow main popularity while retaining brand selection', async () => {
-    fetch.mockImplementation(url => url.startsWith('/api/theaters/71/movies?')
+    let resolveChart;
+    const pendingChart = new Promise(resolve => { resolveChart = resolve; });
+    fetch.mockImplementation(url => url === '/api/main' ? pendingChart.then(json) : url.startsWith('/api/theaters/71/movies?')
         ? Promise.resolve(json({ items: [{ ...movie, movieId: 42, title: '두 번째 영화' }, { ...movie, movieId: 41 }] })) : baseFetch(url));
     mount('/theaters?theater=71');
+    await screen.findByText('2편');
+    expect(screen.getByRole('region', { name: '상영 회차' }).querySelectorAll('li')).toHaveLength(0);
+    await act(async () => resolveChart({ nowShowing: [movie, { ...movie, id: 42, title: '두 번째 영화' }], comingSoon: [] }));
     await screen.findByRole('region', { name: '두 번째 영화 상영 시간' });
     await waitFor(() => {
         const rows = screen.getByRole('region', { name: '상영 회차' }).querySelectorAll('li');

@@ -53,6 +53,8 @@ export default function AdmissionGate({ children }) {
         finally { setLeaving(false); }
     }
     if (!cancelled && !error && ['ADMITTED', 'DISABLED'].includes(status?.state)) return children;
+    // Keep the initial admission check invisible without mounting the application's API callers.
+    if (!cancelled && !error && !status) return null;
     const waiting = status?.state === 'WAITING';
     return <div className={`app-layout ${styles.page}`}>
         <CommonHeader user={null} disabled />
