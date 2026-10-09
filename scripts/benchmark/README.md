@@ -40,3 +40,26 @@ k6는 `http://backend:8080`으로 요청하므로 Nginx·HTTPS·외부 네트워
 DB 버퍼 풀과 OS 캐시는 강제로 비우지 않는다. 예열 후 ON/OFF 상대 비교이며, 스모크 결과로 성능 향상을 판단하지 않는다. JVM 내부 CPU·Tomcat 연결 수는 현재 컨테이너 외부에서 수집하지 않아 빈 지표로 표시한다.
 
 기존 `run-redis.ps1`은 Docker 방식의 예매 테스트로 연결한다. Windows 전용 k6/Java 경로 인자는 더 이상 지원하지 않는다.
+
+
+## 대기순위 개선 전후 브랜치 비교
+
+PowerShell에서 저장소 루트 기준으로 다음을 실행합니다.
+
+```powershell
+.scriptsenchmarkun-waiting-rank-comparison.ps1
+```
+
+스크립트가 origin의 `feature/jusang`(개선 전)과 `improve/waiting-rank-redis-v2`(개선 후)를 fetch한 다음, 각 커밋을 별도 임시 Git worktree에 체크아웃하고 같은 `booking` 부하 테스트를 실행합니다. 현재 작업 중인 브랜치를 checkout/switch하지 않으며, `main`과 `feature/jusang`에 커밋하지 않습니다. 각 worktree의 실행이 끝나면 로그와 JSON/HTML 산출물을 본 저장소의 비교 실행 폴더에 복사하고 worktree를 정리합니다.
+
+생성 파일:
+
+- `benchmark-results/waiting-rank-comparison.html` — 전용 브랜치 비교 리포트
+- `benchmark-results/waiting-rank-comparison.json` — 최신 비교 데이터
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/baseline/` — 개선 전 원본 로그/산출물
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/improved/` — 개선 후 원본 로그/산출물
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/comparison.json` — 해당 실행의 전체 비교 데이터
+
+기존 `benchmark-results/index.html` 통합 대시보드는 변경하지 않습니다. 한쪽 빌드나 테스트가 실패하면 실패 상태를 기록하고 성능 향상으로 판정하지 않습니다. DB COUNT 쿼리 수와 Outbox→Redis 전파 시간 등 현재 벤치마크가 수집하지 않는 값은 임의로 계산하지 않고 '측정 안 됨'으로 둡니다.
+
+첫 실행은 Docker 이미지와 Gradle 의존성 다운로드 때문에 시간이 걸릴 수 있습니다. 다운로드/빌드 실패 시 HTML 리포트에 성능 결과가 있는 것처럼 보지 말고 해당 실행 폴더의 `runner.log`를 확인하세요.
