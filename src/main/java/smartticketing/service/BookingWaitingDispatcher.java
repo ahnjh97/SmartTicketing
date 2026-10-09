@@ -108,7 +108,7 @@ public class BookingWaitingDispatcher {
             // than acquiring its group out of order or bypassing its potentially earlier number.
             if (queues.stream().anyMatch(q -> !locked.containsKey(q.getRequestGroup().getId()))) return 0;
             int allocated = 0;
-            BookingHoldService.LockedInventory lockedInventory = null;
+            BookingHoldService.ZoneInventory lockedInventory = null;
             for (var q : queues) {
                 var group = locked.get(q.getRequestGroup().getId());
                 if (group.getStatus() != BookingGroupStatus.ACTIVE || q.getStatus() != QueueStatus.WAITING) continue;
@@ -123,7 +123,7 @@ public class BookingWaitingDispatcher {
                 // Higher-priority waits remain eligible while another candidate is held.
                 // These managed rows retain our own allocations as the batch advances.
                 // Never reuse them outside this write transaction or across dispatch calls.
-                if (lockedInventory == null) lockedInventory = holds.lockWaitingInventory(showId,
+                if (lockedInventory == null) lockedInventory = holds.readWaitingInventory(showId,
                         zone == null ? List.of(SeatPosition.values()) : List.of(zone));
                 var inventory = lockedInventory.rows();
                 var requested = BookingQueueLifecycle.currentSeatIds(em, q.getId());

@@ -25,7 +25,7 @@ public class BookingWaitingService {
         this.em = em; this.holds = holds; this.payments = payments; this.operations = operations;
     }
 
-    // Internal smart orchestration only: caller holds inventory/queue locks and has
+    // Internal smart orchestration only: caller holds zone locks and has
     // verified immediate availability. Register and acquire in the same transaction.
     void registerAndHold(Long user, Long group, Long show, List<Long> seats) {
         // 스마트예매에서 즉시 선점되는 후보는 대기번호 자체를 발급하지 않는다.
@@ -134,7 +134,7 @@ public class BookingWaitingService {
         var row = existing.stream().filter(q -> q.getShowtime().getId().equals(showId)).findFirst().orElse(null);
         if (row != null && row.getStatus() != QueueStatus.WAITING) reject(409, "이미 종료되거나 확보된 대기입니다.");
         if (row != null && row.getSeatZone() == zone && row.getRequestedSeatIds().isEmpty()) return response(group);
-        var inventory = holds.lockZoneInventory(showId, List.of(zone));
+        var inventory = holds.readZoneInventory(showId, List.of(zone));
         var capacity = inventory.stream().filter(i -> i.getStatus()!=SeatStatus.BLOCKED).map(i -> {
             var free=new ShowtimeSeat(); free.setSeat(i.getSeat()); free.setStatus(SeatStatus.AVAILABLE); return free;
         }).toList();

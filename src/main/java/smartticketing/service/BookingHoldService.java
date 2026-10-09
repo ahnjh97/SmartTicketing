@@ -73,15 +73,15 @@ public class BookingHoldService {
         return acquire(userId, groupId, source, showtimeId, ids, null);
     }
 
-    // Dispatcher-only reuse of the managed inventory already locked in this transaction.
+    // Dispatcher-only reuse of managed inventory protected by this transaction's zone mutex.
     @Transactional(noRollbackFor = BookingRejection.class)
     ReservationResponse acquireWaiting(Long userId, Long groupId, Long showtimeId, List<Long> ids,
-                                       LockedInventory lockedInventory) {
+                                       ZoneInventory lockedInventory) {
         return acquire(userId, groupId, Source.WAITING, showtimeId, ids, Objects.requireNonNull(lockedInventory));
     }
 
     private ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids,
-                                        LockedInventory lockedInventory) {
+                                        ZoneInventory lockedInventory) {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
@@ -110,15 +110,15 @@ public class BookingHoldService {
                 && (q.getStatus() == QueueStatus.EXPIRED || q.getStatus() == QueueStatus.CANCELLED)))
             reject(409, "이 그룹에서 종료된 회차 기회입니다. 새 관람 요청으로 신청해주세요.");
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
-        var inventory = lockedInventory == null ? lockSelectedInventory(show.getId(), ids) : lockedInventory.rows();
-        // Hibernate may change its reported lock mode after flushing an updated row.
-        // Ownership comes from our locking factory and the same managed persistence context.
+        var lockedSeats = lockSelectedInventory(show.getId(), ids);
+        var inventory = lockedInventory == null ? lockedSeats : lockedInventory.rows();
+        // The zone mutex protects the reusable read; only seats being allocated get row write locks.
         if (lockedInventory != null && (lockedInventory.context != em.getDelegate()
                 || !lockedInventory.showId.equals(show.getId()) || inventory.stream().anyMatch(row -> row.getId() != null && !em.contains(row))))
-            throw new IllegalStateException("Waiting inventory must be locked in the current transaction");
+            throw new IllegalStateException("Waiting inventory must belong to the current zone transaction");
         now = now();
         validateShow(show, now);
-        var selected = inventory.stream().filter(s -> ids.contains(s.getSeat().getId())).toList();
+        var selected = lockedSeats;
         if (selected.size() != ids.size()) reject(400, "회차에 속하지 않는 좌석입니다.");
         for (var row : selected) {
             var seat = row.getSeat();
@@ -142,7 +142,7 @@ public class BookingHoldService {
             var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (q.seatZone in :zones or q.seatZone is null) and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
                     .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)
                     .setParameter("zones", zones).setParameter("before", before).getResultList();
-            var priorityInventory = earlier.isEmpty() ? inventory : lockZoneInventory(show.getId(),
+            var priorityInventory = earlier.isEmpty() ? inventory : readZoneInventory(show.getId(),
                     earlier.stream().anyMatch(q -> q.getSeatZone() == null) ? List.of(SeatPosition.values()) : zones);
             for (var q : earlier) {
                 var waitingSeats = BookingQueueLifecycle.currentSeatIds(em, q.getId());
@@ -316,28 +316,27 @@ public class BookingHoldService {
         return true;
     }
 
-    static final class LockedInventory {
+    static final class ZoneInventory {
         private final Object context;
         private final Long showId;
         private final List<ShowtimeSeat> rows;
-        private LockedInventory(Object context, Long showId, List<ShowtimeSeat> rows) {
+        private ZoneInventory(Object context, Long showId, List<ShowtimeSeat> rows) {
             this.context=context; this.showId=showId; this.rows=List.copyOf(rows);
         }
         List<ShowtimeSeat> rows() { return rows; }
     }
 
-    LockedInventory lockWaitingInventory(Long showId, Collection<SeatPosition> zones) {
-        var rows=lockZoneInventory(showId, zones);
-        return new LockedInventory(em.getDelegate(),showId,rows);
+    ZoneInventory readWaitingInventory(Long showId, Collection<SeatPosition> zones) {
+        var rows=readZoneInventory(showId, zones);
+        return new ZoneInventory(em.getDelegate(),showId,rows);
     }
 
-    List<ShowtimeSeat> lockZoneInventory(Long showId, Collection<SeatPosition> zones) {
+    List<ShowtimeSeat> readZoneInventory(Long showId, Collection<SeatPosition> zones) {
         invalidateSummaries(List.of(showId));
-        var ids = em.createQuery("select i.id from ShowtimeSeat i where i.showtime.id=:show and i.seat.seatPosition in :zones order by i.id", Long.class)
-                .setParameter("show", showId).setParameter("zones", zones).getResultList();
-        var rows = ids.isEmpty() ? new ArrayList<ShowtimeSeat>() : new ArrayList<>(em.createQuery(
-                "select i from ShowtimeSeat i where i.id in :ids order by i.id", ShowtimeSeat.class)
-                .setParameter("ids", ids).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList());
+        // Caller holds all relevant BookingZoneLocks. A zone snapshot does not need seat row locks.
+        var rows = new ArrayList<>(em.createQuery(
+                "select i from ShowtimeSeat i join fetch i.seat where i.showtime.id=:show and i.seat.seatPosition in :zones order by i.id", ShowtimeSeat.class)
+                .setParameter("show", showId).setParameter("zones", zones).getResultList());
         // Geometry from other zones preserves row centers without reading/locking their mutable inventory.
         var others = em.createQuery("select i.seat from ShowtimeSeat i where i.showtime.id=:show and i.seat.seatPosition not in :zones", Seat.class)
                 .setParameter("show", showId).setParameter("zones", zones).getResultList();
