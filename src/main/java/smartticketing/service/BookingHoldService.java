@@ -326,12 +326,21 @@ public class BookingHoldService {
     private boolean lockInventoryPessimisticWrite;
 
     List<ShowtimeSeat> lockInventory(Long showId) {
+        System.out.println(
+                "lockInventoryPessimisticWrite = " + lockInventoryPessimisticWrite
+        );
+
         invalidateSummaries(List.of(showId));
-        // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
-        var query = em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
-                .setParameter("id", showId);
-        // Benchmark toggle: false preserves current behavior; true also applies row-level locks to inventory.
-        if (lockInventoryPessimisticWrite) query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+
+        var query = em.createQuery(
+                "select s from ShowtimeSeat s where s.showtime.id=:id order by s.id",
+                ShowtimeSeat.class
+        ).setParameter("id", showId);
+
+        if (lockInventoryPessimisticWrite) {
+            query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        }
+
         return query.getResultList();
     }
 
