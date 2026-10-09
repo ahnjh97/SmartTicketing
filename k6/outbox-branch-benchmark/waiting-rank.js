@@ -57,7 +57,9 @@ export function setup() {
     return { token: body.accessToken };
   });
 
-  // Discover the user's own active booking groups; no hand-entered group ID or aheadCount.
+  // Prefer active groups, but fall back to the user's booking history. The active
+  // endpoint intentionally excludes completed/expired groups, even though their
+  // waiting-queues read endpoint remains valid for a read-only benchmark.
   const user = authenticated[0];
   const active = http.get(baseUrl + '/api/booking-groups/active', {
     headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
@@ -69,21 +71,47 @@ export function setup() {
     fail('Could not discover active booking groups (HTTP ' + active.status + '): ' +
       String(active.body).slice(0, 500));
   }
+
+  const groupIds = groups
+    .map(group => Number(group.id))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+
+  // Active list can legitimately be empty after a restart or after all requests
+  // have completed. Use the normal booking history endpoint before giving up.
+  if (groupIds.length === 0) {
+    const history = http.get(baseUrl + '/api/booking-groups', {
+      headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
+      tags: { name: 'benchmark_discover_history' },
+    });
+    let page = null;
+    try { page = history.json(); } catch (_) {}
+    if (history.status !== 200 || !page || !Array.isArray(page.items)) {
+      fail('Could not discover booking history (HTTP ' + history.status + '): ' +
+        String(history.body).slice(0, 500));
+    }
+    for (const group of page.items) {
+      const id = Number(group.id);
+      if (Number.isSafeInteger(id) && id > 0 && !groupIds.includes(id)) groupIds.push(id);
+    }
+  }
+
   const candidates = [];
-  for (const group of groups) {
-    if (!Number.isSafeInteger(Number(group.id)) || Number(group.id) <= 0) continue;
-    const probe = http.get(baseUrl + '/api/booking-groups/' + Number(group.id) + '/waiting-queues', {
+  for (const groupId of groupIds) {
+    const probe = http.get(baseUrl + '/api/booking-groups/' + groupId + '/waiting-queues', {
       headers: { Authorization: 'Bearer ' + user.token }, timeout: '15s',
       tags: { name: 'benchmark_discover_queue' },
     });
     let data = null;
     try { data = probe.json(); } catch (_) {}
     if (probe.status === 200 && data && Array.isArray(data.items)) {
-      candidates.push({ groupId: Number(group.id), items: data.items });
+      candidates.push({ groupId, items: data.items });
+      // Prefer a group with actual waiting rows, but an empty response is still
+      // a valid endpoint target for measuring the read path.
+      if (data.items.length > 0) break;
     }
   }
   if (!candidates.length) {
-    fail('No active booking group with a readable waiting-queues response was found. Create one waiting/booking entry in the local app, then rerun; no IDs need to be copied.');
+    fail('No readable booking group was found. This local account has no booking history; create one booking attempt in the local app, then rerun.');
   }
   const selected = candidates.find(c => c.items.length > 0) || candidates[0];
   return { users: authenticated, groupId: selected.groupId, discoveredItems: selected.items.length };
