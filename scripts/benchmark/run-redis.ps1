@@ -4,7 +4,7 @@ param(
     [string]$JavaBinary,
     [string]$Output,
     [switch]$Smoke,
-    [string]$Distribution = 'Ubuntu-26.04',
+    [string]$Distribution = 'Ubuntu',
     [ValidateSet('compare','on','off')][string]$CacheMode = 'compare'
 )
 $ErrorActionPreference = 'Stop'

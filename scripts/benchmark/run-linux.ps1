@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Selects isolated Linux Java 21 k6 scenarios and produces HTML reports.
 .EXAMPLE
@@ -25,7 +25,7 @@ Independent startups make full suites slower than the previous shared-JVM runner
 Temporary containers and database volumes are removed; downloaded images are cached.
 #>
 param(
-    [string]$Distribution = 'Ubuntu-26.04',
+    [string]$Distribution = 'Ubuntu',
     [switch]$Smoke,
     [string]$Suite = '',
     [ValidateSet('compare','on','off')][string]$CacheMode = 'compare',
@@ -38,7 +38,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$suites = @(Get-Content (Join-Path $PSScriptRoot 'suites.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+[array]$suites = Get-Content (Join-Path $PSScriptRoot 'suites.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $interactive = [string]::IsNullOrWhiteSpace($Suite)
 if ($List -or [string]::IsNullOrWhiteSpace($Suite)) {
     Write-Host "`nLinux Java 21 / k6" -ForegroundColor Cyan
@@ -71,6 +71,8 @@ $Suite = $Suite.ToLowerInvariant()
 $CacheMode = $CacheMode.ToLowerInvariant()
 Write-Host "Selected: $Suite / Redis: $CacheMode / Smoke: $Smoke. Temporary data; no existing backend or .env required."
 $runId = 'linux-java21-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
+. (Join-Path $PSScriptRoot 'resolve-wsl-distribution.ps1')
+$Distribution = Resolve-BenchmarkWslDistribution -Distribution $Distribution
 $linuxRoot = (& wsl -d $Distribution -u root -- wslpath -a $projectRoot.Replace('\', '/') | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $linuxRoot.StartsWith('/')) { throw "Cannot access WSL distribution $Distribution" }
 $smokeValue = $Smoke.IsPresent.ToString().ToLowerInvariant()
@@ -85,4 +87,4 @@ try { & (Join-Path $PSScriptRoot 'update-dashboard.ps1') -Distribution $Distribu
 catch { Write-Warning "측정 결과는 저장됐지만 통합 페이지 갱신에 실패했습니다: $_" }
 Write-Host "Results: $output"
 if (Test-Path (Join-Path $output 'index.html')) { Write-Host "HTML: $(Join-Path $output 'index.html')" }
-if ($result -ne 0) { throw "Linux benchmark returned $result. Inspect the report and logs in $output." }
+if ($result -ne 0) { throw "Linux benchmark returned $result. Inspect $(Join-Path $output 'runner.log') for the original error; also check services.log and cleanup.log in $output." }
