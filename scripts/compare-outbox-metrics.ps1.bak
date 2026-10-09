@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$BaseBranch = "origin/feature/jusang",
     [string]$CandidateBranch = "origin/feature/outbox-metrics",
