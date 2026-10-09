@@ -299,7 +299,9 @@ class BookingWaitingTests {
         assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(3);
         // The showtime row is the common mutex. Row-level inventory FOR UPDATE is an optional
         // benchmark setting and defaults off, so assert the inventory is fetched only once.
-        assertThat(readStatements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from showtime_seats")).count())
+        assertThat(readStatements.stream().map(sql -> sql.toLowerCase(Locale.ROOT).trim())
+                // Ignore the actionable-show EXISTS subquery; count only direct inventory SELECTs.
+                .filter(sql -> sql.matches("(?s)^select .*\\bfrom showtime_seats\\b.*")).count())
                 .isEqualTo(1);
         statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
         statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
