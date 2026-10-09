@@ -16,7 +16,10 @@ public class NotificationSseHub {
     public static SseEmitter connect(Long userId) {
         // Reconnect through the admission/auth filters instead of retaining an unlimited connection.
         SseEmitter emitter = new SseEmitter(60_000L);
-        CLIENTS.computeIfAbsent(userId, ignored -> new CopyOnWriteArrayList<>()).add(emitter);
+        CLIENTS.compute(userId,(id,clients) -> {
+            if(clients==null) clients=new CopyOnWriteArrayList<>();
+            clients.add(emitter);return clients;
+        });
 
         Runnable remove = () -> remove(userId, emitter);
         emitter.onCompletion(remove);
@@ -40,16 +43,16 @@ public class NotificationSseHub {
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name("notification").data("changed"));
-            } catch (IOException e) {
+            } catch (IOException | IllegalStateException e) {
                 remove(userId, emitter);
             }
         }
     }
 
     private static void remove(Long userId, SseEmitter emitter) {
-        var emitters = CLIENTS.get(userId);
-        if (emitters == null) return;
-        emitters.remove(emitter);
-        if (emitters.isEmpty()) CLIENTS.remove(userId, emitters);
+        CLIENTS.computeIfPresent(userId,(id,emitters) -> {
+            emitters.remove(emitter);
+            return emitters.isEmpty() ? null : emitters;
+        });
     }
 }

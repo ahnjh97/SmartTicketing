@@ -46,7 +46,10 @@ public class BookingWaitingProjection {
             return delta(em,show,base,version,MAX_DELTA_EVENTS);
         });
         // A parallel worker may already have published a newer snapshot. Never roll it back.
-        if(delta.version()<=base) return;
+        if(delta.version()<=base) {
+            if(delta.version()==base && !ranks.isCurrent(show,base)) refresh(show);
+            return;
+        }
         if(delta.rebuild()) { refresh(show); return; }
         if(!ranks.patch(show,base,delta.version(),delta.upserts(),delta.removals())) {
             Long current=ranks.version(show);
@@ -84,8 +87,8 @@ public class BookingWaitingProjection {
         return new Delta(version,upserts,removals,false);
     }
     public void repairIfNeeded(long show) {
-        // The recovery sweep can catch up a normal lag without rebuilding all WAITING rows.
-        update(show);
+        // A 30-minute audit heals silent corruption independently of the renewable idle TTL.
+        if(ranks.auditDue(show)) refresh(show); else update(show);
     }
     public List<Long> activeShows(long after,int limit) {
         return read.execute(status -> em.createQuery("select distinct q.showtime.id from WaitingQueue q where q.requestGroup is not null and q.showtime.id>:after and q.status in :states order by q.showtime.id",Long.class)

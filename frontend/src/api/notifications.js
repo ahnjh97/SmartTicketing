@@ -18,7 +18,8 @@ function describeEvent(event) {
         normalized,
         eventName,
         data: dataLines.join("\n"),
-        isNotification: eventName === "notification",
+        // Reconcile DB state after reconnect too: Pub/Sub invalidations are not durable.
+        isNotification: eventName === "notification" || eventName === "connected",
     };
 }
 

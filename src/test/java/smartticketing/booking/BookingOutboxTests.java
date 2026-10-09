@@ -14,6 +14,7 @@ import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.*;
 import static smartticketing.booking.BookingWaitingTests.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingOutboxTests {
     static final List<String> statements=new java.util.concurrent.CopyOnWriteArrayList<>();
     @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(statements::add); }

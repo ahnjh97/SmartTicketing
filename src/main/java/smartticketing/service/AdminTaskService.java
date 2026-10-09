@@ -29,16 +29,16 @@ public class AdminTaskService {
         if ("RUNNING".equals(status.state())) throw new ResponseStatusException(HttpStatus.CONFLICT, "진행 중인 관리자 작업이 있습니다.");
         status = new Status(UUID.randomUUID().toString(), label, "RUNNING", 0, 0, "기존 요청 종료를 기다리는 중", null);
         Status accepted = status;
-        executor.submit(() -> gate.maintain(() -> {
+        executor.submit(() -> {
             try {
-                work.accept(this);
+                gate.maintain(() -> work.accept(this));
                 finish(new Status(status.id(), label, "COMPLETED", status.completed(), status.total(), "완료", status.result()));
             } catch (Exception failure) {
                 org.slf4j.LoggerFactory.getLogger(getClass()).warn("관리자 작업 실패 id={}", status.id(), failure);
                 String detail = failure instanceof ResponseStatusException e ? e.getReason() : "작업이 중단되었습니다. 완료한 부분은 유지됩니다. 남은 데이터를 확인한 뒤 다시 실행해주세요.";
                 finish(new Status(status.id(), label, "FAILED", status.completed(), status.total(), detail, null));
             }
-        }));
+        });
         return accepted;
     }
     private synchronized void finish(Status completed) {

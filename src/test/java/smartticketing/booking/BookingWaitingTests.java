@@ -13,6 +13,34 @@ import java.util.function.Function;
 import static org.assertj.core.api.Assertions.*;
 
 class BookingWaitingTests {
+    @Test void pageIdOrderCannotBypassAnEarlierQueueNumberOnAnotherPage() {
+        var first=fixture(1,1);register(first);
+        var second=another(first,1,false);register(second);
+        tx(em -> {
+            em.createQuery("select q from WaitingQueue q where q.requestGroup.id=:group",WaitingQueue.class)
+                    .setParameter("group",first.group()).getResultList().forEach(q -> q.setZoneQueueNumber(3));
+            return null;
+        });
+        var dispatcher=dispatcher(CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(dispatcher,"dispatchBatchSize",1);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isEqualTo(1);
+        assertThat(state(second).items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(state(first).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+    }
+    @Test void boundedDispatchContinuesPastAnUnallocatableHeadAndPreservesEligiblePriority() {
+        var first=fixture(3,2);register(first);
+        var second=another(first,2,false);register(second);
+        var third=another(first,2,false);register(third);
+        var dispatcher=dispatcher(CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(dispatcher,"dispatchBatchSize",1);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isEqualTo(1);
+        assertThat(state(second).items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(state(first).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(state(third).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+    }
     @Test void dispatcherAllocatesAllPermittedSplitPatternsAtomically() {
         for (int[] parts : List.of(new int[]{2,2}, new int[]{2,3}, new int[]{2,2,2}, new int[]{3,3}, new int[]{2,4})) {
             int party = Arrays.stream(parts).sum(); var f = fixture(party,party);

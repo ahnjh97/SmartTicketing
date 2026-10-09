@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @Component
 @ConditionalOnProperty(name="app.cache.enabled",havingValue="true")
 public class BookingWaitingProjectionWorker {
+    private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(BookingWaitingProjectionWorker.class);
     private final BookingWaitingProjection projection;
     private final AdminMaintenanceGate gate;
     private long after;
@@ -22,7 +23,10 @@ public class BookingWaitingProjectionWorker {
             var shows=projection.activeShows(after,100);
             for(var show:shows) {
                 try { projection.repairIfNeeded(show); }
-                catch(RuntimeException failure) { return; }
+                catch(RuntimeException failure) {
+                    // Advance even on failure: retry on the next cycle without starving later shows.
+                    log.warn("Waiting projection repair deferred: show={}, error={}",show,failure.getClass().getSimpleName());
+                }
                 after=show;
                 if(System.nanoTime()-start>1_000_000_000L) return;
             }

@@ -13,7 +13,22 @@ import static smartticketing.booking.BookingWaitingTests.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingWaitingRedisTests {
+    @Test void periodicAuditRepairsSilentMemberCorruptionWithoutForcingEveryRefreshToRebuild() {
+        var f=fixture(1,1);register(f);long show=f.shows().getFirst();
+        projection().refresh(show);
+        String zone=prefix+"{"+show+"}:MIDDLE_MIDDLE";
+        redis.opsForZSet().add(zone,"999999999",0);
+        assertThat(ranks.auditDue(show)).isFalse();
+        projection().repairIfNeeded(show);
+        assertThat(redis.opsForZSet().score(zone,"999999999")).isNotNull();
+        redis.delete(prefix+"{"+show+"}:version:audit");
+        assertThat(ranks.auditDue(show)).isTrue();
+        projection().repairIfNeeded(show);
+        assertThat(redis.opsForZSet().score(zone,"999999999")).isNull();
+        assertThat(cachedState(f,ranks).items()).isEqualTo(state(f).items());
+    }
     @Test
     @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named="BOOKING_OUTBOX_BENCHMARK",matches="true")
     void compareOutboxBurstDrainWithRealProjectionAndDispatcher() {
@@ -242,7 +257,7 @@ class BookingWaitingRedisTests {
         redis.expire(versionKey,java.time.Duration.ofSeconds(30));
         readStatements.clear(); projection().repairIfNeeded(show);
         assertThat(readStatements).noneMatch(sql -> sql.contains("waiting_queues"));
-        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+        assertThat(redis.getExpire(versionKey)).isBetween(100L,120L);
     }
 
     @Test void incrementalCatchupReadsOnlyChangedGroupsAndReplayReadsNoQueueRows() {
@@ -290,7 +305,7 @@ class BookingWaitingRedisTests {
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+middle.name(),"1")).isNull();
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+middle.name(),"2")).isNull();
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+side.name(),"1")).isEqualTo(5d);
-        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+        assertThat(redis.getExpire(versionKey)).isBetween(100L,120L);
         assertThat(ranks.patch(show,1,2,List.of(a,b),List.of())).isFalse();
         assertThat(ranks.version(show)).isEqualTo(3L);
         redis.delete(prefix+"{"+show+"}:SIDE_REAR");

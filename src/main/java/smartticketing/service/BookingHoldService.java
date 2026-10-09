@@ -138,8 +138,9 @@ public class BookingHoldService {
         var exact = ownQueue.filter(q -> !requested.isEmpty());
         if (source == Source.WAITING && exact.isPresent() && !requested.equals(ids.stream().sorted().toList()))
             reject(409, "직접 대기한 좌석만 확보할 수 있습니다.");
-        if (source != Source.WAITING) {
-            Integer before = exact.filter(q -> q.getStatus() == QueueStatus.WAITING && requested.equals(ids.stream().sorted().toList()))
+        {
+            Integer before = (source == Source.WAITING ? ownQueue : exact.filter(q -> requested.equals(ids.stream().sorted().toList())))
+                    .filter(q -> q.getStatus() == QueueStatus.WAITING)
                     .map(WaitingQueue::displayNumber).orElse(null);
             var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (q.seatZone in :zones or q.seatZone is null) and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
                     .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)

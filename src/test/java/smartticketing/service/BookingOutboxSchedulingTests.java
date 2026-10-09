@@ -9,6 +9,7 @@ import java.time.Clock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingOutboxSchedulingTests {
     @Test void workerStartsWithTheQualifiedSchedulerAndApplicationMeterRegistry() {
         var store=mock(BookingOutboxStore.class);
