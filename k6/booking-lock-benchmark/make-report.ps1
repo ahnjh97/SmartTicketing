@@ -23,7 +23,7 @@ function Fmt($v, $digits=2) {
     return ([double]$v).ToString("N$digits", [Globalization.CultureInfo]::InvariantCulture)
 }
 function Improvement($before, $after, $lowerIsBetter=$true) {
-    if ($null -eq $before -or $null -eq $after -or $before -eq 0) { return "N/A" }
+    if ($null -eq $before -or $null -eq $after -or $before -eq 0) { return "N/A" }\n    if ($null -eq $lowerIsBetter) { return "참고" }
     if ($lowerIsBetter) { $pct = (($before - $after) / $before) * 100 }
     else { $pct = (($after - $before) / $before) * 100 }
     return (Fmt $pct) + "%"
@@ -34,9 +34,9 @@ $rows = @(
     @{ Label="요청 지연시간 p99 (ms)"; B=(Metric $b "http_req_duration" "p(99)"); O=(Metric $o "http_req_duration" "p(99)"); Lower=$true },
     @{ Label="요청 지연시간 최대 (ms)"; B=(Metric $b "http_req_duration" "max"); O=(Metric $o "http_req_duration" "max"); Lower=$true },
     @{ Label="요청 처리량 (요청/초)"; B=(Metric $b "http_reqs" "rate"); O=(Metric $o "http_reqs" "rate"); Lower=$false },
-    @{ Label="HTTP 요청 수"; B=(CountMetric $b "http_reqs"); O=(CountMetric $o "http_reqs"); Lower=$false },
-    @{ Label="예매 성공 (201)"; B=(CountMetric $b "booking_created"); O=(CountMetric $o "booking_created"); Lower=$false },
-    @{ Label="좌석 충돌 (409)"; B=(CountMetric $b "booking_conflict"); O=(CountMetric $o "booking_conflict"); Lower=$false },
+    @{ Label="HTTP 요청 수"; B=(CountMetric $b "http_reqs"); O=(CountMetric $o "http_reqs"); Lower=$null },
+    @{ Label="예매 성공 (201)"; B=(CountMetric $b "booking_created"); O=(CountMetric $o "booking_created"); Lower=$null },
+    @{ Label="좌석 충돌 (409)"; B=(CountMetric $b "booking_conflict"); O=(CountMetric $o "booking_conflict"); Lower=$null },
     @{ Label="예상 외 응답"; B=(CountMetric $b "booking_unexpected"); O=(CountMetric $o "booking_unexpected"); Lower=$true }
 )
 $tbody = foreach ($r in $rows) {
