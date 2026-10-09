@@ -12,7 +12,7 @@ import java.util.function.IntSupplier;
 @Component
 public class BookingDispatchGate {
     public static final class Busy extends org.springframework.dao.TransientDataAccessException {
-        public Busy() { super("Waiting allocation is already running for this show"); }
+        public Busy() { super("Waiting allocation is already running for this show/zone"); }
     }
     private static final DefaultRedisScript<Long> RELEASE=new DefaultRedisScript<>("""
             if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end
@@ -49,8 +49,12 @@ public class BookingDispatchGate {
     void close() { if(dedicated!=null) dedicated.destroy(); }
 
     public int run(long show,IntSupplier allocation) {
+        return run(show, null, allocation);
+    }
+
+    public int run(long show, smartticketing.entity.enums.SeatPosition zone, IntSupplier allocation) {
         if(!enabled || System.currentTimeMillis()<unavailableUntil) return allocation.getAsInt();
-        String key=prefix+"{"+show+"}", token=UUID.randomUUID().toString();
+        String key=prefix+"{"+show+"}"+(zone==null ? "" : ":"+zone.name()), token=UUID.randomUUID().toString();
         Boolean acquired;
         try { acquired=redis.opsForValue().setIfAbsent(key,token,lease); }
         catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000; return allocation.getAsInt(); }

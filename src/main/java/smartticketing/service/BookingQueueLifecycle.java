@@ -19,8 +19,7 @@ final class BookingQueueLifecycle {
         return zone == null || zones.contains(zone);
     }
 
-    // The show mutex is held by callers. Use a current read for the element collection
-    // as well as the queue row: lazy collection reads otherwise use an older RR snapshot.
+    // The owning group and competing zones are held by callers.
     static List<Long> currentSeatIds(EntityManager em, Long queueId) {
         return em.createNativeQuery("select seat_id from waiting_queue_seats where waiting_queue_id=:id order by seat_order for update", Long.class)
                 .setParameter("id", queueId).getResultList();
@@ -29,17 +28,6 @@ final class BookingQueueLifecycle {
     static SortedSet<Long> showIds(EntityManager em, Long group) {
         return new TreeSet<>(em.createQuery("select q.showtime.id from WaitingQueue q where q.requestGroup.id=:g", Long.class)
                 .setParameter("g", group).getResultList());
-    }
-
-    static void lockShows(EntityManager em, Long group, Long extra) {
-        var ids = showIds(em, group);
-        if (extra != null) ids.add(extra);
-        ids.forEach(id -> em.find(Showtime.class, id, LockModeType.PESSIMISTIC_WRITE));
-        // Under REPEATABLE_READ, an earlier ID lookup may predate the group lock.
-        // Never mutate a queue on a show omitted by that snapshot. Roll back and retry
-        // in a fresh transaction rather than acquiring a newly discovered lower show ID.
-        if (rows(em, group).stream().anyMatch(q -> !ids.contains(q.getShowtime().getId())))
-            throw new org.springframework.dao.TransientDataAccessResourceException("대기 회차가 변경되었습니다. 같은 요청으로 재시도해주세요.");
     }
 
     static List<WaitingQueue> rows(EntityManager em, Long group) {

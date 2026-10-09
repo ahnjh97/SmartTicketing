@@ -49,7 +49,7 @@ class BookingWaitingTests {
     }
     static BookingWaitingDispatcher dispatcher(Clock clock) {
         var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
-        return new BookingWaitingDispatcher(em,holds(em,clock),service(em,clock),new JpaTransactionManager(db.factory()));
+        return new BookingWaitingDispatcher(em,holds(em,clock),service(em,clock),db.transactions());
     }
     static Fixture fixture(int party, int seats) {
         return tx(em -> {
@@ -424,16 +424,30 @@ class BookingWaitingTests {
         statuses(f,QueueStatus.COMPLETED,QueueStatus.CANCELLED);
     }
 
-    @Test void snapshotOlderThanRegistrationRollsBackRatherThanLockingShowsOutOfOrder() {
+    @Test void registrationCommittedBeforeGroupLockIsIncludedInZoneScopes() {
         var f=fixture(2,2);
-        assertThatThrownBy(() -> tx(em -> {
+        var result = tx(em -> {
             em.createQuery("select count(q) from WaitingQueue q",Long.class).getSingleResult();
             register(f);
             var ids=inventory(em,f.shows.getFirst()).stream().map(i -> i.getSeat().getId()).toList();
             return holds(em,CLOCK).hold(f.user,f.group,key(),BookingHoldService.Source.SMART,new BookingHoldService.Candidate(f.shows.getFirst(),ids));
-        })).isInstanceOf(org.springframework.dao.TransientDataAccessResourceException.class);
-        assertThat(state(f).activeReservationId()).isNull();
-        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+        });
+        assertThat(result.status()).isEqualTo(201);
+        statuses(f, QueueStatus.HOLDING, QueueStatus.PAUSED);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
+    }
+
+    @Test void concurrentRegistrationsInDifferentZonesKeepIndependentNumbers() throws Exception {
+        var first = fixture(1, 2); var second = another(first, 1, false);
+        tx(em -> { inventory(em, first.shows.getFirst()).getLast().getSeat().setSeatPosition(SeatPosition.SIDE_FRONT); return null; });
+        var results = BookingPaymentTests.race(
+                () -> tx(em -> service(em, CLOCK).register(first.user, first.group, key(), new WaitingRequest(List.of(first.shows.getFirst()), SeatPosition.MIDDLE_MIDDLE))),
+                () -> tx(em -> service(em, CLOCK).register(second.user, second.group, key(), new WaitingRequest(List.of(second.shows.getFirst()), SeatPosition.SIDE_FRONT))));
+        assertThat(results).allSatisfy(result -> assertThat(((BookingResult) result).status()).isEqualTo(201));
+        assertThat(state(first).items().getFirst().queueNumber()).isEqualTo(1);
+        assertThat(state(second).items().getFirst().queueNumber()).isEqualTo(1);
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(2);
+        tx(em -> { assertThat(em.find(Showtime.class, first.shows.getFirst()).getAvailableSeats()).isZero(); return null; });
     }
 
     @Test void theaterScopeAndChangedAudienceAreRecheckedWithoutPartialRegistration() {

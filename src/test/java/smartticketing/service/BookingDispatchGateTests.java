@@ -54,6 +54,16 @@ class BookingDispatchGateTests {
         });
         assertThat(redis.opsForValue().get(key)).isEqualTo("successor");
     }
+
+    @Test void anotherZoneInTheSameShowUsesAnIndependentLease() {
+        var first = gate(); var second = gate();
+        first.run(1, smartticketing.entity.enums.SeatPosition.MIDDLE_FRONT, () -> {
+            assertThatThrownBy(() -> second.run(1, smartticketing.entity.enums.SeatPosition.MIDDLE_FRONT, () -> 0))
+                    .isInstanceOf(BookingDispatchGate.Busy.class);
+            assertThat(second.run(1, smartticketing.entity.enums.SeatPosition.SIDE_FRONT, () -> 2)).isEqualTo(2);
+            return 1;
+        });
+    }
     @Test void businessFailureReleasesLeaseAndIsNotRetriedInsideGate() {
         var count=new AtomicInteger(); var gate=gate();
         assertThatThrownBy(() -> gate.run(1,() -> { count.incrementAndGet(); throw new IllegalArgumentException("business"); }))

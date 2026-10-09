@@ -20,11 +20,12 @@ import static org.assertj.core.api.Assertions.*;
 
 class BookingSmartTests {
     static TemporaryMysqlDatabase db;
+    static final List<String> statements = new CopyOnWriteArrayList<>();
     static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-02T00:00:00Z"), ZoneId.of("Asia/Seoul"));
     static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
     static final JsonMapper JSON = JsonMapper.builder().build();
     record Fixture(long user, long other, long group, long otherGroup, long movie, List<Long> shows, List<Long> theaters) {}
-    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(); }
+    @BeforeAll static void start() throws Exception { db = new TemporaryMysqlDatabase(statements::add); }
     @AfterAll static void stop() throws Exception { if (db != null) db.close(); }
     static String key() { return UUID.randomUUID().toString(); }
     static <T> T tx(Function<EntityManager,T> fn) {
@@ -38,6 +39,7 @@ class BookingSmartTests {
         var em = SharedEntityManagerCreator.createSharedEntityManager(db.factory());
         var ops = new BookingIdempotency(em); var holds = new BookingHoldService(em, ops, CLOCK);
         var delegate = new JpaTransactionManager(db.factory());
+        delegate.setJpaDialect(new org.springframework.orm.jpa.vendor.HibernateJpaDialect());
         PlatformTransactionManager manager = new PlatformTransactionManager() {
             public TransactionStatus getTransaction(TransactionDefinition d) { return delegate.getTransaction(d); }
             public void commit(TransactionStatus s) {
@@ -122,6 +124,89 @@ class BookingSmartTests {
         tx(em -> { inventory(em,f.shows.getFirst()).forEach(i -> i.getSeat().setSeatPosition(SeatPosition.MIDDLE_MIDDLE)); return null; });
         var r=hold(f); assertThat(value(r,"showtimeId")).isEqualTo(f.shows.getFirst());
         assertThat(JSON.readTree(r.body()).get("seatLabels").toString()).isEqualTo("[\"A2\",\"A3\"]");
+    }
+    @Test void smartHoldLocksOnlySelectedInventoryAndKeepsAccurateAvailability() {
+        var f = fixture(true, 2, 20);
+        statements.clear();
+        var result = hold(f);
+        assertThat(result.status()).isEqualTo(201);
+        var inventoryLocks = statements.stream().map(sql -> sql.toLowerCase(Locale.ROOT))
+                .filter(sql -> sql.contains("from showtime_seats") && sql.contains("for update")).toList();
+        assertThat(inventoryLocks).hasSize(1);
+        assertThat(inventoryLocks.getFirst()).containsPattern("where \\w+\\.id in \\(\\?,\\?\\)");
+        assertThat(statements).noneMatch(sql -> sql.contains("from showtimes") && sql.contains("for update"));
+        assertThat(statements.stream().filter(sql -> sql.contains("case when") && sql.contains("from showtime_seats")))
+                .hasSize(1);
+        tx(em -> {
+            assertThat(em.find(Showtime.class, value(result, "showtimeId")).getAvailableSeats()).isEqualTo(18);
+            return null;
+        });
+    }
+
+    private static Fixture twoZones() {
+        var f = fixture(false, 1, 2);
+        tx(em -> {
+            var rows = inventory(em, f.shows.getFirst());
+            rows.getFirst().getSeat().setSeatPosition(SeatPosition.MIDDLE_FRONT);
+            rows.getLast().getSeat().setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
+            em.find(BookingRequestGroup.class, f.group).setCandidateZone(SeatPosition.MIDDLE_FRONT);
+            em.find(BookingRequestGroup.class, f.otherGroup).setCandidateZone(SeatPosition.MIDDLE_MIDDLE);
+            for (var zone : List.of(SeatPosition.MIDDLE_FRONT, SeatPosition.MIDDLE_MIDDLE)) {
+                var sequence = new WaitingZoneSequence(); sequence.setId(f.shows.getFirst() + "_" + zone.name()); em.persist(sequence);
+            }
+            return null;
+        });
+        return f;
+    }
+
+    @Test void blockedZoneDoesNotBlockAnotherZoneAndSameZoneWaits() throws Exception {
+        var f = twoZones();
+        var pool = Executors.newFixedThreadPool(2);
+        try (var blocker = db.open()) {
+            blocker.getTransaction().begin();
+            blocker.createNativeQuery("update waiting_zone_sequences set last_number=last_number where id=:id")
+                    .setParameter("id", f.shows.getFirst() + "_MIDDLE_FRONT").executeUpdate();
+            try {
+                var same = pool.submit(() -> service(null).hold(f.user, f.group, key()));
+                var other = pool.submit(() -> service(null).hold(f.other, f.otherGroup, key()));
+                assertThat(other.get(10, TimeUnit.SECONDS).status()).isEqualTo(201);
+                assertThatThrownBy(() -> same.get(200, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+                blocker.getTransaction().commit();
+                assertThat(same.get(10, TimeUnit.SECONDS).status()).isEqualTo(201);
+            } finally {
+                if (blocker.getTransaction().isActive()) blocker.getTransaction().rollback();
+            }
+        } finally { pool.shutdownNow(); pool.awaitTermination(15, TimeUnit.SECONDS); }
+        tx(em -> { assertThat(em.find(Showtime.class, f.shows.getFirst()).getAvailableSeats()).isZero(); return null; });
+    }
+
+    @Test void twoZonesCanHoldConcurrentlyWithoutLosingAvailabilityUpdates() throws Exception {
+        var f = twoZones(); var smart = service(firstSearchBarrier());
+        var results = race(() -> smart.hold(f.user, f.group, key()), () -> smart.hold(f.other, f.otherGroup, key()));
+        assertThat(results).extracting(BookingResult::status).containsOnly(201);
+        tx(em -> { assertThat(em.find(Showtime.class, f.shows.getFirst()).getAvailableSeats()).isZero(); return null; });
+    }
+
+    @Test void smartHoldHonorsAnAllocatableEarlierZoneWait() {
+        var f = fixture(false, 1, 2);
+        tx(em -> {
+            var ops = new BookingIdempotency(em); var holds = new BookingHoldService(em, ops, CLOCK);
+            var waiting = new BookingWaitingService(em, holds, BookingPaymentTests.service(em, CLOCK, true), ops);
+            assertThat(waiting.register(f.user, f.group, key(), new WaitingRequest(List.of(f.shows.getFirst()), SeatPosition.MIDDLE_FRONT)).status()).isEqualTo(201);
+            return null;
+        });
+        code(service(null).hold(f.other, f.otherGroup, key()), "WAITING_PRIORITY");
+    }
+
+    @Test void layoutChangesAfterSearchAreRevalidatedAgainstUnselectedSeats() {
+        var f = fixture(false, 2, 4);
+        var service = service(() -> tx(em -> {
+            // A4 now duplicates selected A2's position after the candidate snapshot was read.
+            inventory(em, f.shows.getFirst()).getLast().getSeat().setPositionInSegment(2);
+            return null;
+        }));
+        assertThat(service.hold(f.user, f.group, key()).status()).isEqualTo(409);
+        noBooking(f);
     }
     @Test void theaterModeStaysInSelectedShowAndFallsBackToUnpreferredSeats() {
         var f=fixture(false,2,4);
@@ -245,6 +330,10 @@ class BookingSmartTests {
         var results=race(() -> s.hold(f.user,f.group,key()),()->s.hold(f.other,f.otherGroup,key()));
         assertThat(results).extracting(BookingResult::status).containsOnly(201);
         assertThat(seatIds(results.getFirst())).doesNotContainAnyElementsOf(seatIds(results.getLast()));
+        tx(em -> {
+            assertThat(em.find(Showtime.class, f.shows.getFirst()).getAvailableSeats()).isEqualTo(2);
+            return null;
+        });
     }
     @Test void sameKeyReplaysExactlyAndDifferentKeysCannotCreateTwoReservations() throws Exception {
         var f=fixture(false,2,4); var s=service(firstSearchBarrier()); String key=key();
@@ -256,12 +345,18 @@ class BookingSmartTests {
     }
     @Test void retriesAreBoundedAtThreeAndDoNotLeaveProcessingOperations() {
         var f=fixture(false,1,5); var attempts=new AtomicInteger();
+        statements.clear();
         var s=service(() -> { attempts.incrementAndGet(); tx(em -> { inventory(em,f.shows.getFirst()).stream()
                 .filter(i->i.getStatus()==SeatStatus.AVAILABLE)
                 .min(Comparator.comparingInt((ShowtimeSeat i) -> Math.abs(i.getSeat().getSeatNumber() - 3))
                         .thenComparingInt(i -> i.getSeat().getSeatNumber()))
                 .orElseThrow().setStatus(SeatStatus.BLOCKED); return null; }); });
         code(s.hold(f.user,f.group,key()),"RETRY_EXHAUSTED"); assertThat(attempts.get()).isEqualTo(3); noBooking(f);
+        // Layout columns are transferred once, even though every attempt sees fresh availability.
+        assertThat(statements.stream().filter(sql -> sql.contains("case when") && sql.contains("from showtime_seats")))
+                .hasSize(1);
+        assertThat(statements.stream().filter(sql -> sql.matches("(?s)select \\w+\\.showtime_id,\\w+\\.seat_id from showtime_seats.*")))
+                .hasSize(2);
         tx(em -> { assertThat(em.createQuery("select count(o) from BookingOperation o where o.user.id=:user and o.status=:status",Long.class)
                 .setParameter("user",f.user).setParameter("status",BookingOperationStatus.PROCESSING).getSingleResult()).isZero(); return null; });
     }

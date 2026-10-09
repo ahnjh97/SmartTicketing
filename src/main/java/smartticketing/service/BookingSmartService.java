@@ -38,13 +38,16 @@ public class BookingSmartService {
         read.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         write = new TransactionTemplate(transactions);
         write.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // Zone locks protect writes; scope discovery after a group lock must see committed queue changes.
+        write.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public BookingResult hold(Long userId, Long groupId, String key) {
         BookingIdempotency.key(key);
         if (groupId == null || groupId < 1) throw new IllegalArgumentException("유효한 그룹 ID가 필요합니다.");
+        var layouts = new HashMap<Long, List<SmartSeatCandidates.SeatData>>();
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            var search = read.execute(status -> search(userId, groupId));
+            var search = read.execute(status -> search(userId, groupId, layouts));
             try { return attempt(userId, groupId, key, search); }
             catch (Contention retry) { /* Entire transaction rolled back, including request record. */ }
         }
@@ -76,7 +79,7 @@ public class BookingSmartService {
         });
     }
 
-    private Search search(Long userId, Long groupId) {
+    private Search search(Long userId, Long groupId, Map<Long, List<SmartSeatCandidates.SeatData>> layouts) {
         em.clear();
         holds.requireUser(userId);
         var group = em.find(BookingRequestGroup.class, groupId);
@@ -109,19 +112,17 @@ public class BookingSmartService {
                 .setParameter("g", groupId).setParameter("states", List.of(QueueStatus.EXPIRED, QueueStatus.CANCELLED)).getResultList();
         shows = shows.stream().filter(s -> !ended.contains(s.getId())).toList();
         if (shows.isEmpty()) return Search.failure("NO_SHOWTIMES", "선택 조건에 맞는 예매 가능한 회차가 없습니다.");
-        var inventory = em.createQuery("""
-                select i from ShowtimeSeat i join fetch i.seat where i.showtime.id in :ids order by i.id
-                """, ShowtimeSeat.class).setParameter("ids", shows.stream().map(Showtime::getId).toList()).getResultList();
-        var byShow = new HashMap<Long, List<ShowtimeSeat>>();
-        for (var row : inventory) byShow.computeIfAbsent(row.getShowtime().getId(), ignored -> new ArrayList<>()).add(row);
+        var pricedShows = shows.stream().filter(s -> Integer.valueOf(10000).equals(s.getPricePerPerson()))
+                .map(Showtime::getId).toList();
+        var byShow = candidateSeats(pricedShows, layouts);
         var candidates = new ArrayList<Ranked>();
         boolean knownLayout = false, unknownLayout = false, priced = false;
         int available = 0;
         for (var show : shows) {
             if (!Integer.valueOf(10000).equals(show.getPricePerPerson())) continue;
             priced = true;
-            var seats = SmartSeatCandidates.analyze(byShow.getOrDefault(show.getId(), List.of()),
-                    show.getScreen().getId(), group.getPartySize(), preferences, group.getCandidateZone());
+            var seats = SmartSeatCandidates.analyze(SmartSeatCandidates.prepareSeats(byShow.getOrDefault(show.getId(), List.of())),
+                    group.getPartySize(), preferences, group.getCandidateZone());
             unknownLayout |= !seats.layoutComplete(); knownLayout |= seats.layoutComplete();
             available = Math.max(available, seats.available());
             for (var block : seats.blocks()) candidates.add(new Ranked(show.getId(),
@@ -139,5 +140,41 @@ public class BookingSmartService {
         if (unknownLayout) return Search.failure("LAYOUT_UNVERIFIED", "일부 회차의 좌석 배치를 확인할 수 없고, 확인된 회차에도 허용된 좌석 조합이 없습니다.");
         if (knownLayout && available == 0) return Search.failure("SOLD_OUT", "조건에 맞는 회차의 좌석이 모두 매진되었습니다.");
         return Search.failure("NO_CONTIGUOUS_SEATS", "잔여석은 있지만 전체 연석 또는 인원별 허용된 분할 연석 조합이 없습니다.");
+    }
+
+    // Request-local layout reuse only. Each retry reads availability in its new read transaction.
+    // Keep occupied seats in the layout: they define row centers and duplicate-position validation.
+    private Map<Long, List<SmartSeatCandidates.SeatData>> candidateSeats(List<Long> shows,
+            Map<Long, List<SmartSeatCandidates.SeatData>> layouts) {
+        var missing = shows.stream().filter(id -> !layouts.containsKey(id)).toList();
+        var result = new HashMap<Long, List<SmartSeatCandidates.SeatData>>();
+        if (!missing.isEmpty()) {
+            missing.forEach(id -> result.put(id, new ArrayList<>()));
+            var rows = em.createQuery("""
+                    select i.showtime.id, s.id, s.seatRow, s.seatNumber, s.seatPosition,
+                           s.adjacencySegment, s.positionInSegment,
+                           case when i.status=:available and i.reservation is null and i.holdExpiredAt is null then true else false end
+                    from ShowtimeSeat i join i.seat s
+                    where i.showtime.id in :shows and s.active=true and s.screen.id=i.showtime.screen.id
+                    """, Object[].class).setParameter("shows", missing).setParameter("available", SeatStatus.AVAILABLE).getResultList();
+            for (var row : rows) result.get((Long) row[0]).add(new SmartSeatCandidates.SeatData(
+                    (Long) row[1], (String) row[2], (Integer) row[3], (SeatPosition) row[4],
+                    (String) row[5], (Integer) row[6], (Boolean) row[7]));
+            result.forEach((id, seats) -> layouts.put(id, List.copyOf(seats)));
+        }
+        var cached = shows.stream().filter(id -> !result.containsKey(id)).toList();
+        if (!cached.isEmpty()) {
+            var available = new HashMap<Long, Set<Long>>();
+            var rows = em.createQuery("""
+                    select i.showtime.id, i.seat.id from ShowtimeSeat i
+                    where i.showtime.id in :shows and i.status=:available
+                    and i.reservation is null and i.holdExpiredAt is null
+                    and i.seat.active=true and i.seat.screen.id=i.showtime.screen.id
+                    """, Object[].class).setParameter("shows", cached).setParameter("available", SeatStatus.AVAILABLE).getResultList();
+            for (var row : rows) available.computeIfAbsent((Long) row[0], ignored -> new HashSet<>()).add((Long) row[1]);
+            for (var show : cached) result.put(show, layouts.get(show).stream()
+                    .map(seat -> seat.withAvailability(available.getOrDefault(show, Set.of()).contains(seat.id()))).toList());
+        }
+        return result;
     }
 }

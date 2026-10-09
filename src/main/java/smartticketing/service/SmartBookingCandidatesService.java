@@ -13,7 +13,7 @@ import java.util.*;
 
 /** Independent smart bookings. Recommendation batches have no persisted parent. */
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class SmartBookingCandidatesService {
     private final EntityManager em;
     private final BookingGroupService groups;
@@ -28,6 +28,7 @@ public class SmartBookingCandidatesService {
         this.summaries=summaries;
         creationTransaction=new org.springframework.transaction.support.TransactionTemplate(transactions);
         creationTransaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        creationTransaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public static class CandidateChanged extends RuntimeException {}
 
@@ -86,14 +87,21 @@ public class SmartBookingCandidatesService {
             if (!selected.getLast().option().available()) {
                 choose(selected, remaining, "FAST", fast);
             }
-            // Only the chosen shows are locked. A changed snapshot rolls back the entire
+            // Only the chosen zones are locked. A changed snapshot rolls back the entire
             // attempt before any drafts or queue numbers are written, then retries fresh.
             var selectedShows=selected.stream().map(s->s.option().show()).distinct().sorted(Comparator.comparing(Showtime::getId)).toList();
-            for(var show:selectedShows) em.refresh(show,LockModeType.PESSIMISTIC_WRITE);
+            var scopes = new TreeSet<BookingZoneLocks.Scope>();
+            selected.forEach(choice -> BookingZoneLocks.add(scopes, choice.option().show().getId(), choice.option().zone()));
+            for (var show : selectedShows) if (!em.createQuery("select q.id from WaitingQueue q where q.showtime.id=:show and q.seatZone is null and q.status=:waiting", Long.class)
+                    .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setMaxResults(1).getResultList().isEmpty())
+                BookingZoneLocks.add(scopes, show.getId(), null);
+            BookingZoneLocks.lock(em, scopes);
+            for(var show:selectedShows) em.refresh(show);
             for(var show:selectedShows) {
-                var inventory=holds.lockInventory(show.getId());
-                var queues=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.status=:state order by q.id",WaitingQueue.class)
-                        .setParameter("s",show.getId()).setParameter("state",QueueStatus.WAITING).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                var zones = scopes.stream().filter(scope -> scope.show().equals(show.getId())).map(BookingZoneLocks.Scope::zone).toList();
+                var inventory=holds.lockZoneInventory(show.getId(), zones);
+                var queues=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.status=:state and (q.seatZone in :zones or q.seatZone is null) order by q.id",WaitingQueue.class)
+                        .setParameter("s",show.getId()).setParameter("state",QueueStatus.WAITING).setParameter("zones", zones).getResultList();
                 var counts=new EnumMap<SeatPosition,Long>(SeatPosition.class);
                 for(var zone:SeatPosition.values())counts.put(zone,queues.stream().filter(q->q.getSeatZone()==null || q.getSeatZone()==zone).count());
                 var checked=summarize(show,inventory,counts,template.getPartySize());
@@ -120,6 +128,7 @@ public class SmartBookingCandidatesService {
                 draft.setCreatedAt(template.getCreatedAt()); draft.setUpdatedAt(template.getUpdatedAt());
                 drafts.add(draft);
             }
+            BookingZoneLocks.finish(em, selectedShows.stream().map(Showtime::getId).toList());
             drafts.forEach(em::persist);
             for (int index = 0; index < drafts.size(); index++) {
                 var draft = drafts.get(index);

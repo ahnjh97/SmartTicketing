@@ -294,7 +294,7 @@ class SmartBookingCandidatesTests {
     static SmartBookingCandidatesService retryPlans(SmartBookingSummaryCache cache) {
         var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
         var service=plans(em);
-        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"configure",new JpaTransactionManager(db.factory()),
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"configure",db.transactions(),
                 cache);
         return service;
     }
@@ -468,6 +468,30 @@ class SmartBookingCandidatesTests {
         var all = new ArrayList<>(a); all.addAll(b);
         assertThat(all.stream().filter(c -> c.payment() != null)).hasSize(2);
         assertThat(all.stream().filter(c -> c.zone() == SeatPosition.MIDDLE_MIDDLE && c.payment() == null)).hasSize(1);
+    }
+
+    @Test void candidateCreationDoesNotLockUnselectedZoneOrItsInventory() throws Exception {
+        var f = zoned();
+        long rowId = tx(em -> {
+            var counter = new WaitingZoneSequence(); counter.setId(f.shows().getFirst() + "_SIDE_MIDDLE"); em.persist(counter);
+            return inventory(em, f.shows().getFirst()).stream()
+                    .filter(i -> i.getSeat().getSeatPosition() == SeatPosition.SIDE_MIDDLE).findFirst().orElseThrow().getId();
+        });
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (var blocker = db.open()) {
+            blocker.getTransaction().begin();
+            blocker.find(WaitingZoneSequence.class, f.shows().getFirst() + "_SIDE_MIDDLE", LockModeType.PESSIMISTIC_WRITE);
+            blocker.find(ShowtimeSeat.class, rowId, LockModeType.PESSIMISTIC_WRITE);
+            try {
+                var result = pool.submit(() -> retryPlans().create(f.user(), key(), request(f)))
+                        .get(10, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(result.status()).as(result.body()).isEqualTo(201);
+                var candidates = plan(f, createdId(result)).candidates();
+                assertThat(candidates).hasSize(1);
+                assertThat(candidates.getFirst().zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
+                assertThat(candidates.getFirst().payment()).isNotNull();
+            } finally { blocker.getTransaction().rollback(); }
+        } finally { pool.shutdownNow(); pool.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS); }
     }
 
     @Test void waitingInOneZoneDoesNotAllocateFreeSeatsInOtherZones() throws Exception {

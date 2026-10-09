@@ -163,7 +163,7 @@ class BookingWaitingRedisTests {
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
 
-    @Test void busyShowDoesNotReadDbOrAcknowledgeEventAndRetriesAfterRelease() {
+    @Test void busyZoneSkipsDomainLocksAndDoesNotAcknowledgeEventUntilRetried() {
         tx(em -> { em.createQuery("delete from BookingOutboxEvent").executeUpdate(); return null; });
         var f=fixture(1,1);
         register(f,List.of(f.shows().getFirst()),key());
@@ -173,10 +173,11 @@ class BookingWaitingRedisTests {
         var store=new BookingOutboxStore(SharedEntityManagerCreator.createSharedEntityManager(db.factory()),manager());
         var handler=new BookingWaitingOutboxHandler(dispatcher,projection(),true);
         var worker=new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),CLOCK);
-        gate.run(f.shows().getFirst(),() -> {
+        gate.run(f.shows().getFirst(),SeatPosition.MIDDLE_MIDDLE,() -> {
             readStatements.clear();
             assertThatThrownBy(() -> dispatcher.dispatch(f.shows().getFirst())).isInstanceOf(BookingDispatchGate.Busy.class);
-            assertThat(readStatements).isEmpty();
+            // Discovery reads identify active zones before checking their independent Redis leases.
+            assertThat(readStatements).noneMatch(sql -> sql.contains("for update") || sql.startsWith("insert ") || sql.startsWith("update "));
             new BookingWaitingWorker(dispatcher,new AdminMaintenanceGate()).sweep();
             worker.recover();
             return 0;
@@ -190,5 +191,24 @@ class BookingWaitingRedisTests {
         var retry=new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),java.time.Clock.offset(CLOCK,java.time.Duration.ofSeconds(3)));
         for(int i=0;i<3;i++) retry.recover();
         statuses(f,QueueStatus.HOLDING);
+    }
+
+    @Test void busyZoneDoesNotPreventDispatchingAnotherZoneOfTheSameShow() {
+        var first = fixture(1, 2); var second = another(first, 1, false);
+        tx(em -> { inventory(em, first.shows().getFirst()).getLast().getSeat().setSeatPosition(SeatPosition.SIDE_FRONT); return null; });
+        register(first, List.of(first.shows().getFirst()), key());
+        tx(em -> service(em, CLOCK).register(second.user(), second.group(), key(),
+                new smartticketing.dto.booking.WaitingRequest(List.of(second.shows().getFirst()), SeatPosition.SIDE_FRONT)));
+        var dispatcher = dispatcher(CLOCK);
+        var gate = new BookingDispatchGate(redis, true, 30000, db.jdbcUrl());
+        ReflectionTestUtils.setField(dispatcher, "dispatchGate", gate);
+        gate.run(first.shows().getFirst(), SeatPosition.MIDDLE_MIDDLE, () -> {
+            assertThatThrownBy(() -> dispatcher.dispatch(first.shows().getFirst())).isInstanceOf(BookingDispatchGate.Busy.class);
+            statuses(first, QueueStatus.WAITING);
+            statuses(second, QueueStatus.HOLDING);
+            return 0;
+        });
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isEqualTo(1);
+        statuses(first, QueueStatus.HOLDING);
     }
 }

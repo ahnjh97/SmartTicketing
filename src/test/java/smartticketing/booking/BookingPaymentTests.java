@@ -246,6 +246,10 @@ class BookingPaymentTests {
     @Test void readSnapshotDoesNotOverwriteConcurrentPaymentAndNextRequestSeesCommit() {
         var f=fixture();
         try(var em=db.open()) {
+            // Read-only GETs may retain RR; booking writers now explicitly use READ_COMMITTED.
+            em.unwrap(org.hibernate.Session.class).doWork(connection -> {
+                try (var statement = connection.createStatement()) { statement.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"); }
+            });
             em.getTransaction().begin();
             assertThat(em.createQuery("select r.status from Reservation r where r.id=:id",ReservationStatus.class).setParameter("id",f.reservation).getSingleResult()).isEqualTo(ReservationStatus.PENDING);
             pay(f,key(),false,CLOCK);

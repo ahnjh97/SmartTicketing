@@ -33,6 +33,7 @@ public class BookingWaitingDispatcher {
         this.em = em; this.holds = holds; this.waiting = waiting;
         read = new TransactionTemplate(manager); read.setReadOnly(true);
         write = new TransactionTemplate(manager);
+        write.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public List<Long> pendingShows() {
@@ -46,33 +47,50 @@ public class BookingWaitingDispatcher {
     }
 
     public int dispatch(Long showId) {
-        // Busy must propagate so an Outbox event is retried, not acknowledged as handled.
-        return dispatchGate==null ? dispatchInDatabase(showId) : dispatchGate.run(showId,() -> dispatchInDatabase(showId));
-    }
-
-    private int dispatchInDatabase(Long showId) {
-        // Skip group write locks when no seat can possibly be assigned. Keep this after
-        // the Redis gate so a busy show does not add DB work. A racing release is retried.
+        // Skip group write locks when no seat can possibly be assigned. A racing release is retried.
         if (Boolean.TRUE.equals(read.execute(s -> actionable("select s.id from Showtime s where s.id=:show and " + ACTIONABLE)
                 .setParameter("show",showId).getResultList().isEmpty()))) return 0;
+        var zones = read.execute(s -> em.createQuery("select distinct q.seatZone from WaitingQueue q where q.showtime.id=:show and q.requestGroup is not null and q.status=:status", SeatPosition.class)
+                .setParameter("show", showId).setParameter("status", QueueStatus.WAITING).getResultList());
+        if (zones.contains(null)) return gatedZone(showId, null); // Legacy waits still take all DB zone locks.
+        int allocated = 0;
+        BookingDispatchGate.Busy busy = null;
+        for (var zone : zones.stream().sorted(Comparator.comparing(Enum::name)).toList()) {
+            try { allocated += gatedZone(showId, zone); }
+            catch (BookingDispatchGate.Busy occupied) { busy = occupied; }
+        }
+        // Process other zones first, but retry the event until every busy zone has been visited.
+        if (busy != null) throw busy;
+        return allocated;
+    }
+
+    private int gatedZone(Long showId, SeatPosition zone) {
+        return dispatchGate == null ? dispatchZone(showId, zone)
+                : dispatchGate.run(showId, zone, () -> dispatchZone(showId, zone));
+    }
+
+    private int dispatchZone(Long showId, SeatPosition zone) {
         var groups = read.execute(s -> em.createQuery("""
                 select distinct q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
-                and q.requestGroup is not null and q.status=:status order by q.requestGroup.id
+                and q.requestGroup is not null and q.status=:status and (:zone is null or q.seatZone=:zone) order by q.requestGroup.id
                 """, Long.class).setParameter("show", showId)
-                .setParameter("status", QueueStatus.WAITING).getResultList());
+                .setParameter("zone", zone).setParameter("status", QueueStatus.WAITING).getResultList());
         if (groups.isEmpty()) return 0;
         return write.execute(s -> {
             em.clear();
-            // Multiple-group transactions acquire EVERY group before ANY show, in ID order.
+            // Multiple-group transactions acquire EVERY group before ANY zone, in ID order.
             var locked = new HashMap<Long, BookingRequestGroup>();
             for (var id : groups) locked.put(id, em.find(BookingRequestGroup.class, id, LockModeType.PESSIMISTIC_WRITE));
             var shows = new TreeSet<Long>(); shows.add(showId);
+            var scopes = new TreeSet<BookingZoneLocks.Scope>();
+            BookingZoneLocks.add(scopes, showId, zone);
+            for (var groupId : groups) scopes.addAll(BookingZoneLocks.groupScopes(em, groupId));
             for (int start=0; start<groups.size(); start+=GROUP_QUERY_BATCH_SIZE) {
                 var batch=groups.subList(start,Math.min(start+GROUP_QUERY_BATCH_SIZE,groups.size()));
                 shows.addAll(em.createQuery("select distinct q.showtime.id from WaitingQueue q where q.requestGroup.id in :groups",Long.class)
                         .setParameter("groups",batch).getResultList());
             }
-            shows.forEach(id -> em.find(Showtime.class, id, LockModeType.PESSIMISTIC_WRITE));
+            BookingZoneLocks.lock(em, scopes);
             for (int start=0; start<groups.size(); start+=GROUP_QUERY_BATCH_SIZE) {
                 var batch=groups.subList(start,Math.min(start+GROUP_QUERY_BATCH_SIZE,groups.size()));
                 var current=em.createQuery("select q from WaitingQueue q where q.requestGroup.id in :groups order by q.id",WaitingQueue.class)
@@ -82,8 +100,9 @@ public class BookingWaitingDispatcher {
             var show = em.find(Showtime.class, showId);
             var queues = em.createQuery("""
                     select q from WaitingQueue q where q.showtime.id=:show and q.requestGroup is not null
-                    and q.status=:status order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.id
-                    """, WaitingQueue.class).setParameter("show", showId).setParameter("status", QueueStatus.WAITING)
+                    and q.status=:status and (:zone is null or q.seatZone=:zone) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.id
+                """, WaitingQueue.class).setParameter("show", showId).setParameter("status", QueueStatus.WAITING)
+                    .setParameter("zone", zone)
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
             // A registration committed after the discovery snapshot. Retry on the next sweep rather
             // than acquiring its group out of order or bypassing its potentially earlier number.
@@ -94,6 +113,7 @@ public class BookingWaitingDispatcher {
                 var group = locked.get(q.getRequestGroup().getId());
                 if (group.getStatus() != BookingGroupStatus.ACTIVE || q.getStatus() != QueueStatus.WAITING) continue;
                 if (!show.getStartTime().isAfter(holds.now()) || show.getStatus() != ShowtimeStatus.SCHEDULED) {
+                    BookingZoneLocks.finish(em, shows);
                     q.setStatus(QueueStatus.EXPIRED); q.setUpdatedAt(holds.now());
                     BookingQueueLifecycle.changed(em, q, holds.now()); continue;
                 }
@@ -103,13 +123,15 @@ public class BookingWaitingDispatcher {
                 // Higher-priority waits remain eligible while another candidate is held.
                 // These managed rows retain our own allocations as the batch advances.
                 // Never reuse them outside this write transaction or across dispatch calls.
-                if (lockedInventory == null) lockedInventory = holds.lockWaitingInventory(showId);
+                if (lockedInventory == null) lockedInventory = holds.lockWaitingInventory(showId,
+                        zone == null ? List.of(SeatPosition.values()) : List.of(zone));
                 var inventory = lockedInventory.rows();
                 var requested = BookingQueueLifecycle.currentSeatIds(em, q.getId());
                 if (!requested.isEmpty()) {
                     var exact = inventory.stream().filter(i -> requested.contains(i.getSeat().getId())).toList();
                     if (exact.size() != group.getPartySize() || exact.stream().anyMatch(i -> i.getStatus() != SeatStatus.AVAILABLE
                             || i.getReservation() != null || i.getHoldExpiredAt() != null || !i.getSeat().isActive())) continue;
+                    BookingZoneLocks.finish(em, shows);
                     holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, requested, lockedInventory);
                     NotificationService.waitingAcquired(em, group);
                     allocated++;
@@ -121,6 +143,7 @@ public class BookingWaitingDispatcher {
                                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // Allocate in number order among requests whose conditions currently match.
+                BookingZoneLocks.finish(em, shows);
                 holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, best.get().seatIds(), lockedInventory);
                 NotificationService.waitingAcquired(em, group);
                 allocated++;

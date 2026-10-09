@@ -40,7 +40,7 @@ public class BookingIdempotency {
         key(key);
         String hash = hash(json.writeValueAsString(canonical));
         // UNIQUE key 획득을 같은 트랜잭션에서 기다린다. PROCESSING 단독 커밋은 없다.
-        // 요청 기록 잠금 다음의 도메인 잠금은 반드시 그룹 -> 회차 -> 예약/좌석 순서다.
+        // 요청 기록 다음에는 그룹 -> (회차, 구역) -> 예약/좌석 -> 집계·Outbox 순서로 잠근다.
         em.createNativeQuery("""
                 insert into booking_operations
                 (user_id, operation_type, request_key, request_hash, status, created_at, updated_at)

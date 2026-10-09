@@ -17,7 +17,7 @@ import java.util.*;
 
 /** 일반/스마트/대기 호출자가 선택한 좌석을 한 번에 확보한다. 추천/대기 실행은 하지 않는다. */
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class BookingHoldService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final EntityManager em;
@@ -47,7 +47,7 @@ public class BookingHoldService {
         return hold(userId, groupId, key, Source.MANUAL, new Candidate(null, request.seatIds()));
     }
 
-    // The waiting dispatcher calls acquire after locking all competing groups and shows.
+    // The waiting dispatcher calls acquire after locking all competing groups and zones.
     public BookingResult hold(Long userId, Long groupId, String key, Source source, Candidate candidate) {
         BookingIdempotency.key(key);
         lockBookingUser(userId);
@@ -98,8 +98,10 @@ public class BookingHoldService {
             if (group.getSelectedShowtime() == null) reject(409, "선택 회차 연결을 확인할 수 없습니다.");
             target = group.getSelectedShowtime().getId();
         }
-        BookingQueueLifecycle.lockShows(em, group.getId(), target);
-        var show = em.find(Showtime.class, target, LockModeType.PESSIMISTIC_WRITE);
+        var zones = BookingZoneLocks.seatZones(em, target, ids);
+        BookingZoneLocks.lockGroup(em, group.getId(), target, zones);
+        var show = em.find(Showtime.class, target);
+        if (show != null) em.refresh(show);
         // 잠금 대기 후의 현재 시각을 사용한다.
         var now = now();
         validateShow(show, now);
@@ -108,11 +110,11 @@ public class BookingHoldService {
                 && (q.getStatus() == QueueStatus.EXPIRED || q.getStatus() == QueueStatus.CANCELLED)))
             reject(409, "이 그룹에서 종료된 회차 기회입니다. 새 관람 요청으로 신청해주세요.");
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
-        var inventory = lockedInventory == null ? lockInventory(show.getId()) : lockedInventory.rows();
+        var inventory = lockedInventory == null ? lockSelectedInventory(show.getId(), ids) : lockedInventory.rows();
         // Hibernate may change its reported lock mode after flushing an updated row.
         // Ownership comes from our locking factory and the same managed persistence context.
         if (lockedInventory != null && (lockedInventory.context != em.getDelegate()
-                || !lockedInventory.showId.equals(show.getId()) || inventory.stream().anyMatch(row -> !em.contains(row))))
+                || !lockedInventory.showId.equals(show.getId()) || inventory.stream().anyMatch(row -> row.getId() != null && !em.contains(row))))
             throw new IllegalStateException("Waiting inventory must be locked in the current transaction");
         now = now();
         validateShow(show, now);
@@ -134,24 +136,31 @@ public class BookingHoldService {
         var exact = ownQueue.filter(q -> !requested.isEmpty());
         if (source == Source.WAITING && exact.isPresent() && !requested.equals(ids.stream().sorted().toList()))
             reject(409, "직접 대기한 좌석만 확보할 수 있습니다.");
-        if (source == Source.MANUAL) {
-            var zones = new HashSet<SeatPosition>(); selected.forEach(i -> zones.add(i.getSeat().getSeatPosition()));
+        if (source != Source.WAITING) {
             Integer before = exact.filter(q -> q.getStatus() == QueueStatus.WAITING && requested.equals(ids.stream().sorted().toList()))
                     .map(WaitingQueue::displayNumber).orElse(null);
-            var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
+            var earlier = em.createQuery("select q from WaitingQueue q where q.showtime.id=:show and q.status=:waiting and q.requestGroup.id<>:group and (q.seatZone in :zones or q.seatZone is null) and (:before is null or coalesce(q.zoneQueueNumber,q.queueNumber)<:before) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber)", WaitingQueue.class)
                     .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setParameter("group", groupId)
-                    .setParameter("before", before).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                    .setParameter("zones", zones).setParameter("before", before).getResultList();
+            var priorityInventory = earlier.isEmpty() ? inventory : lockZoneInventory(show.getId(),
+                    earlier.stream().anyMatch(q -> q.getSeatZone() == null) ? List.of(SeatPosition.values()) : zones);
             for (var q : earlier) {
                 var waitingSeats = BookingQueueLifecycle.currentSeatIds(em, q.getId());
                 if (BookingQueueLifecycle.competing(q.getSeatZone(), waitingSeats, ids, zones)
-                        && canAllocateWaiting(q, show, inventory, waitingSeats))
+                        && canAllocateWaiting(q, show, priorityInventory, waitingSeats))
                     throw new BookingRejection(409, "WAITING_PRIORITY", "선택한 좌석에 배정 가능한 앞선 대기가 있습니다. 좌석 대기로 신청해주세요.");
             }
         }
+        if (source != Source.MANUAL) validateSelectedLayout(show.getId(), selected);
         if (source != Source.MANUAL && !(source == Source.WAITING && group.getEntryPoint() == BookingEntryPoint.THEATER_NORMAL && exact.isPresent()))
             validateAutomaticLayout(selected, inventory);
 
         // 모든 검증이 끝난 뒤에만 도메인 쓰기를 시작한다.
+        BookingZoneLocks.finishGroup(em, group.getId(), show.getId());
+        em.refresh(show);
+        now = now();
+        validateShow(show, now);
+        adjustAvailable(show.getId(), -selected.size(), now);
         var expires = now.plusMinutes(5);
         var reservation = new Reservation();
         reservation.setUser(group.getUser()); reservation.setRequestGroup(group); reservation.setShowtime(show);
@@ -172,7 +181,6 @@ public class BookingHoldService {
         slot.setExpiresAt(expires); em.persist(slot);
         group.setStatus(BookingGroupStatus.HOLDING); group.setUpdatedAt(now);
         BookingQueueLifecycle.held(em, group, show.getId(), expires, now);
-        updateAvailable(show, inventory, now);
         BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_ACQUIRED", now);
         // 알림은 실제 대기열 승급(Dispatcher)에서만 생성한다.
         return response(reservation, now);
@@ -274,8 +282,9 @@ public class BookingHoldService {
         // slot의 lazy 예약을 먼저 읽어 잠그지 않는다. 회차 ID는 스칼라로 찾는다.
         Long showId = em.createQuery("select r.showtime.id from Reservation r where r.id=:id", Long.class)
                 .setParameter("id", reservationId).getSingleResult();
-        BookingQueueLifecycle.lockShows(em, group.getId(), showId);
-        var show = em.find(Showtime.class, showId, LockModeType.PESSIMISTIC_WRITE);
+        var reservationSeats = reservationSeatIds(reservationId);
+        BookingZoneLocks.lockGroup(em, group.getId(), showId, BookingZoneLocks.seatZones(em, showId, reservationSeats));
+        var show = em.find(Showtime.class, showId);
         var reservation = em.find(Reservation.class, reservationId, LockModeType.PESSIMISTIC_WRITE);
         var now = now();
         if (reservation.getStatus() != ReservationStatus.PENDING || reservation.getExpiresAt() == null
@@ -284,7 +293,7 @@ public class BookingHoldService {
                 || !reservation.getRequestGroup().getId().equals(group.getId())
                 || !reservation.getUser().getId().equals(group.getUser().getId()))
             throw new IllegalStateException("선점 슬롯 연결이 일치하지 않아 자동 복구를 중단합니다.");
-        var inventory = lockInventory(showId);
+        var inventory = lockSelectedInventory(showId, reservationSeats);
         var owned = inventory.stream().filter(s -> s.getReservation() != null
                 && s.getReservation().getId().equals(reservationId)).toList();
         var expected = em.createQuery("select rs.seat.id from ReservationSeat rs where rs.reservation.id=:id order by rs.seat.id", Long.class)
@@ -293,13 +302,15 @@ public class BookingHoldService {
                 || owned.stream().anyMatch(s -> s.getStatus() != SeatStatus.HOLDING
                 || !Objects.equals(s.getHoldExpiredAt(), reservation.getExpiresAt())))
             throw new IllegalStateException("좌석 연결이 일치하지 않아 자동 복구를 중단합니다.");
+        BookingZoneLocks.finishGroup(em, group.getId(), showId);
+        adjustAvailable(showId, availableReleased(show, owned), now);
         for (var seat : owned) {
             seat.setStatus(SeatStatus.AVAILABLE); seat.setReservation(null); seat.setHoldExpiredAt(null);
         }
         reservation.setStatus(ReservationStatus.EXPIRED); reservation.setUpdatedAt(now);
         group.setStatus(BookingGroupStatus.ACTIVE); group.setUpdatedAt(now);
         BookingQueueLifecycle.released(em, group.getId(), false, now);
-        em.remove(slot); updateAvailable(show, inventory, now);
+        em.remove(slot);
         BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_EXPIRED", now);
         NotificationService.holdExpired(em, group.getId());
         return true;
@@ -315,22 +326,69 @@ public class BookingHoldService {
         List<ShowtimeSeat> rows() { return rows; }
     }
 
-    LockedInventory lockWaitingInventory(Long showId) {
-        var rows=lockInventory(showId);
+    LockedInventory lockWaitingInventory(Long showId, Collection<SeatPosition> zones) {
+        var rows=lockZoneInventory(showId, zones);
         return new LockedInventory(em.getDelegate(),showId,rows);
     }
 
-    @org.springframework.beans.factory.annotation.Value("${app.booking.lock-inventory-pessimistic-write:false}")
-    private boolean lockInventoryPessimisticWrite;
-
-    List<ShowtimeSeat> lockInventory(Long showId) {
+    List<ShowtimeSeat> lockZoneInventory(Long showId, Collection<SeatPosition> zones) {
         invalidateSummaries(List.of(showId));
-        // 회차 행이 재고 변경의 공통 mutex다. 좌석은 PK 순으로 잠근다.
-        var query = em.createQuery("select s from ShowtimeSeat s where s.showtime.id=:id order by s.id", ShowtimeSeat.class)
-                .setParameter("id", showId);
-        // Benchmark toggle: false preserves current behavior; true also applies row-level locks to inventory.
-        if (lockInventoryPessimisticWrite) query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
-        return query.getResultList();
+        var ids = em.createQuery("select i.id from ShowtimeSeat i where i.showtime.id=:show and i.seat.seatPosition in :zones order by i.id", Long.class)
+                .setParameter("show", showId).setParameter("zones", zones).getResultList();
+        var rows = ids.isEmpty() ? new ArrayList<ShowtimeSeat>() : new ArrayList<>(em.createQuery(
+                "select i from ShowtimeSeat i where i.id in :ids order by i.id", ShowtimeSeat.class)
+                .setParameter("ids", ids).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList());
+        // Geometry from other zones preserves row centers without reading/locking their mutable inventory.
+        var others = em.createQuery("select i.seat from ShowtimeSeat i where i.showtime.id=:show and i.seat.seatPosition not in :zones", Seat.class)
+                .setParameter("show", showId).setParameter("zones", zones).getResultList();
+        for (var seat : others) {
+            var geometry = new ShowtimeSeat(); geometry.setSeat(seat); geometry.setStatus(SeatStatus.BLOCKED); rows.add(geometry);
+        }
+        return rows;
+    }
+
+    List<ShowtimeSeat> lockSelectedInventory(Long showId, List<Long> seatIds) {
+        invalidateSummaries(List.of(showId));
+        // Resolve primary keys first so the locking query cannot scan/lock the whole show's inventory.
+        var rowIds = em.createQuery("select i.id from ShowtimeSeat i where i.showtime.id=:show and i.seat.id in :seats", Long.class)
+                .setParameter("show", showId).setParameter("seats", seatIds).getResultList();
+        if (rowIds.isEmpty()) return List.of();
+        return em.createQuery("select i from ShowtimeSeat i where i.id in :ids order by i.id", ShowtimeSeat.class)
+                .setParameter("ids", rowIds).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+    }
+
+    List<Long> reservationSeatIds(Long reservationId) {
+        var seats = new TreeSet<>(em.createQuery("select s.seat.id from ReservationSeat s where s.reservation.id=:id", Long.class)
+                .setParameter("id", reservationId).getResultList());
+        seats.addAll(em.createQuery("select i.seat.id from ShowtimeSeat i where i.reservation.id=:id", Long.class)
+                .setParameter("id", reservationId).getResultList());
+        return List.copyOf(seats);
+    }
+
+    static int availableReleased(Showtime show, List<ShowtimeSeat> owned) {
+        return (int) owned.stream().filter(i -> i.getSeat().isActive()
+                && i.getSeat().getScreen().getId().equals(show.getScreen().getId())).count();
+    }
+
+    void adjustAvailable(Long show, int delta, LocalDateTime now) {
+        // Database arithmetic prevents two zones from overwriting each other's totals.
+        em.createNativeQuery("update showtimes set available_seats=available_seats+:delta,updated_at=:now where id=:show")
+                .setParameter("delta", delta).setParameter("now", now).setParameter("show", show).executeUpdate();
+    }
+
+    private void validateSelectedLayout(Long showId, List<ShowtimeSeat> selected) {
+        // A selected-only inventory must still detect duplicate positions outside the chosen block.
+        var duplicates = em.createQuery("""
+                select count(i) from ShowtimeSeat i where i.showtime.id=:show
+                and exists (select c.id from ShowtimeSeat c where c.showtime.id=:show and c.seat.id in :seats
+                    and c.seat.seatRow=i.seat.seatRow and c.seat.adjacencySegment=i.seat.adjacencySegment
+                    and c.seat.positionInSegment=i.seat.positionInSegment)
+                group by i.seat.seatRow,i.seat.adjacencySegment,i.seat.positionInSegment
+                having count(i)>1
+                """, Long.class).setParameter("show", showId)
+                .setParameter("seats", selected.stream().map(i -> i.getSeat().getId()).toList())
+                .getResultList();
+        if (!duplicates.isEmpty()) reject(409, "좌석 연결정보가 중복되었습니다.");
     }
 
     static void validateShow(Showtime show, LocalDateTime now) {
@@ -432,12 +490,6 @@ public class BookingHoldService {
                 seats.stream().map(s -> s.getSeat().getSeatRow() + s.getSeat().getSeatNumber()).toList(),
                 r.getTotalAmount(), offset(r.getExpiresAt()), offset(now),
                 seats.stream().map(s -> new ReservationResponse.SeatPrice(s.getSeat().getId(), s.getAudienceType(), s.getPrice())).toList());
-    }
-
-    static void updateAvailable(Showtime show, List<ShowtimeSeat> inventory, LocalDateTime now) {
-        show.setAvailableSeats((int) inventory.stream().filter(s -> s.getSeat().isActive()
-                && s.getSeat().getScreen().getId().equals(show.getScreen().getId()) && s.getStatus() == SeatStatus.AVAILABLE).count());
-        show.setUpdatedAt(now);
     }
 
     LocalDateTime now() { return LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS); }
