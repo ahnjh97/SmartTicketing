@@ -64,6 +64,8 @@ foreach ($line in ($numstat -split '\r?\n')) {
     if ([string]::IsNullOrWhiteSpace($line)) { continue }
     $parts = $line -split '\t', 3
     if ($parts.Count -lt 3) { continue }
+    # Exclude this reporting script itself so it does not inflate the measured branch diff.
+    if ($parts[2] -eq "scripts/compare-outbox-metrics.ps1") { continue }
     $add = 0
     $del = 0
     [void][int]::TryParse($parts[0], [ref]$add)
@@ -84,9 +86,9 @@ $candidateProps = Get-BranchFile $CandidateBranch "src/main/resources/applicatio
 
 $checks = @(
     [pscustomobject]@{ Name = "Spring Boot Actuator dependency"; Base = (Test-Contains $baseGradle "spring-boot-starter-actuator"); Candidate = (Test-Contains $candidateGradle "spring-boot-starter-actuator"); What = "Operational metrics endpoint support" },
-    [pscustomobject]@{ Name = "Micrometer Counter"; Base = (Test-Contains $baseWorker "Counter\.builder|Counter\.counter"); Candidate = (Test-Contains $candidateWorker "Counter\.builder|Counter\.counter"); What = "Processed item counters" },
+    [pscustomobject]@{ Name = "Micrometer Counter"; Base = (Test-Contains $baseWorker "registry\.counter|Counter\.builder|Counter\.counter"); Candidate = (Test-Contains $candidateWorker "registry\.counter|Counter\.builder|Counter\.counter"); What = "Processed item counters" },
     [pscustomobject]@{ Name = "Micrometer Timer"; Base = (Test-Contains $baseWorker "Timer\.builder|Timer\.record"); Candidate = (Test-Contains $candidateWorker "Timer\.builder|Timer\.record"); What = "Job processing duration metrics" },
-    [pscustomobject]@{ Name = "Micrometer Gauge"; Base = (Test-Contains $baseWorker "Gauge\.builder"); Candidate = (Test-Contains $candidateWorker "Gauge\.builder"); What = "Current queue/backlog gauges" },
+    [pscustomobject]@{ Name = "Micrometer Gauge"; Base = (Test-Contains $baseWorker "registry\.gauge|Gauge\.builder"); Candidate = (Test-Contains $candidateWorker "registry\.gauge|Gauge\.builder"); What = "Current queue/backlog gauges" },
     [pscustomobject]@{ Name = "Outbox pendingCount()"; Base = (Test-Contains $baseStore "pendingCount\s*\("); Candidate = (Test-Contains $candidateStore "pendingCount\s*\("); What = "Pending Outbox item count" },
     [pscustomobject]@{ Name = "Outbox/Actuator configuration"; Base = (Test-Contains $baseProps "outbox|management\.endpoints"); Candidate = (Test-Contains $candidateProps "outbox|management\.endpoints"); What = "Related runtime configuration" }
 )
