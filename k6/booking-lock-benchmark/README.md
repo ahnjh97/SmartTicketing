@@ -8,7 +8,7 @@
 - 개선 버전: 해당 잠금 옵션을 제거한 코드
 - **서버와 DB를 각각 분리**하고 테스트 데이터는 동일한 규모/상태로 준비하세요. 선점 요청은 그룹/좌석 상태를 변경하므로 같은 DB에 연속 실행하면 공정한 비교가 아닙니다.
 - 각 fixture에는 실행당 한 번만 쓸 수 있는 서로 다른 `groupId`를 준비하세요. fixture의 `cases` 배열 길이는 `Vus × Iterations` 이상이어야 합니다.
-- 각 케이스의 `token`, `groupId`, `seatIds`는 해당 서버/DB에 실제로 존재해야 합니다.
+- 각 케이스의 `loginId/password`, `groupId`, `seatIds`는 해당 서버/DB에 실제로 존재해야 합니다. 스크립트가 측정 전 각 계정으로 로그인해 토큰을 발급받습니다.
 - 테스트 계정과 테스트 회차만 사용하세요. 운영 서버에 실행하지 마세요.
 
 ## 1. Fixture 준비
@@ -19,13 +19,13 @@
 ```json
 {
   "cases": [
-    { "token": "BASELINE_JWT_1", "groupId": 1001, "seatIds": [501] },
-    { "token": "BASELINE_JWT_2", "groupId": 1002, "seatIds": [502] }
+    { "loginId": "load_user_01", "password": "LOCAL_TEST_PASSWORD", "groupId": 1001, "seatIds": [501] },
+    { "loginId": "load_user_02", "password": "LOCAL_TEST_PASSWORD", "groupId": 1002, "seatIds": [502] }
   ]
 }
 ```
 
-`optimized-fixture.json`도 같은 형태로, 개선 서버 DB의 실제 JWT/그룹/좌석 ID를 넣으세요. 예시는 형식 설명용 가짜 ID이며 그대로 실행하면 안 됩니다.
+`optimized-fixture.json`도 같은 형태로, 개선 서버 DB의 실제 JWT/그룹/좌석 ID를 넣으세요. 예시는 형식 설명용 가짜 ID/계정이며 그대로 실행하면 안 됩니다. 비밀번호가 들어가는 fixture 파일은 Git에 커밋하지 마세요.
 
 각 그룹은 선택된 회차가 설정되어 있고, 해당 `seatIds`가 그 회차의 좌석이어야 합니다. 성능 비교를 위해서는 가능한 한 좌석이 서로 겹치지 않는 케이스를 사용하세요. 같은 좌석 경쟁을 재현하고 싶다면 별도 경쟁 fixture를 만들고, 201/409 분포를 함께 해석하세요.
 
