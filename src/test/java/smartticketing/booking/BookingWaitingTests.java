@@ -291,6 +291,60 @@ class BookingWaitingTests {
         assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
 
+    @Test void oneLockedInventoryServesMultipleAllocationsWithoutDuplicateSeats() {
+        var first=fixture(2,6);
+        var second=another(first,2,false); var third=another(first,2,false); var last=another(first,2,false);
+        register(first); register(second); register(third); register(last);
+        readStatements.clear();
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(3);
+        assertThat(readStatements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from showtime_seats")
+                && sql.toLowerCase(Locale.ROOT).contains("for update")).count()).isEqualTo(1);
+        statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(third,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(last,QueueStatus.WAITING,QueueStatus.WAITING);
+        tx(em -> {
+            var rows=inventory(em,first.shows.getFirst());
+            assertThat(rows).hasSize(6).allMatch(i -> i.getStatus()==SeatStatus.HOLDING);
+            assertThat(rows.stream().map(i -> i.getReservation().getId()).distinct()).hasSize(3);
+            assertThat(em.find(Showtime.class,first.shows.getFirst()).getAvailableSeats()).isZero();
+            return null;
+        });
+        long reservation=state(first).activeReservationId();
+        tx(em -> BookingPaymentTests.service(em,CLOCK,true).cancel(first.user,reservation,key()));
+        // A separate dispatch must fetch a fresh inventory and see the committed release.
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(1);
+        statuses(last,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void pausedOnlyShowDoesNotLockGroupsOrInventory() {
+        var f=fixture(2,2); register(f);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+        readStatements.clear();
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getLast())).isZero();
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("for update"));
+        statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void simultaneousDispatchOnSameShowPreservesQueueOrderAndSingleSeatOwnership() throws Exception {
+        var first=fixture(2,4); var second=another(first,2,false); var third=another(first,2,false);
+        tx(em -> { BookingSmartTests.partition(inventory(em,first.shows.getFirst()),new int[]{2,2}); return null; });
+        register(first); register(second); register(third);
+        BookingPaymentTests.race(() -> dispatcher(CLOCK).dispatch(first.shows.getFirst()),
+                () -> dispatcher(CLOCK).dispatch(first.shows.getFirst()));
+        statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(third,QueueStatus.WAITING,QueueStatus.WAITING);
+        tx(em -> {
+            var rows=inventory(em,first.shows.getFirst());
+            assertThat(rows).hasSize(4).allMatch(i -> i.getStatus()==SeatStatus.HOLDING);
+            assertThat(rows.stream().map(i -> i.getReservation().getId()).distinct()).hasSize(2);
+            assertThat(em.createQuery("select count(r) from Reservation r where r.showtime.id=:show",Long.class)
+                    .setParameter("show",first.shows.getFirst()).getSingleResult()).isEqualTo(2);
+            return null;
+        });
+    }
+
     @Test void fullShowsSkipWriteLocksAndReturnToRecoveryAfterSeatRelease() {
         var f=fixture(1,1); register(f); long show=f.shows.getFirst();
         tx(em -> { inventory(em,show).forEach(i -> i.setStatus(SeatStatus.BLOCKED)); return null; });

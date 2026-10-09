@@ -13,6 +13,7 @@ import java.util.*;
 @Service
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class BookingWaitingDispatcher {
+    private static final int GROUP_QUERY_BATCH_SIZE = 100;
     // A hint only: inventory is checked again under the existing MySQL locks.
     // Closed/started shows must still be visited to expire their waiting rows.
     private static final String ACTIONABLE = """
@@ -56,9 +57,9 @@ public class BookingWaitingDispatcher {
                 .setParameter("show",showId).getResultList().isEmpty()))) return 0;
         var groups = read.execute(s -> em.createQuery("""
                 select distinct q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
-                and q.requestGroup is not null and q.status in :statuses order by q.requestGroup.id
+                and q.requestGroup is not null and q.status=:status order by q.requestGroup.id
                 """, Long.class).setParameter("show", showId)
-                .setParameter("statuses", List.of(QueueStatus.WAITING, QueueStatus.PAUSED)).getResultList());
+                .setParameter("status", QueueStatus.WAITING).getResultList());
         if (groups.isEmpty()) return 0;
         return write.execute(s -> {
             em.clear();
@@ -66,10 +67,17 @@ public class BookingWaitingDispatcher {
             var locked = new HashMap<Long, BookingRequestGroup>();
             for (var id : groups) locked.put(id, em.find(BookingRequestGroup.class, id, LockModeType.PESSIMISTIC_WRITE));
             var shows = new TreeSet<Long>(); shows.add(showId);
-            for (var id : groups) shows.addAll(BookingQueueLifecycle.showIds(em, id));
+            for (int start=0; start<groups.size(); start+=GROUP_QUERY_BATCH_SIZE) {
+                var batch=groups.subList(start,Math.min(start+GROUP_QUERY_BATCH_SIZE,groups.size()));
+                shows.addAll(em.createQuery("select distinct q.showtime.id from WaitingQueue q where q.requestGroup.id in :groups",Long.class)
+                        .setParameter("groups",batch).getResultList());
+            }
             shows.forEach(id -> em.find(Showtime.class, id, LockModeType.PESSIMISTIC_WRITE));
-            for (var id : groups) {
-                if (BookingQueueLifecycle.rows(em, id).stream().anyMatch(q -> !shows.contains(q.getShowtime().getId()))) return 0;
+            for (int start=0; start<groups.size(); start+=GROUP_QUERY_BATCH_SIZE) {
+                var batch=groups.subList(start,Math.min(start+GROUP_QUERY_BATCH_SIZE,groups.size()));
+                var current=em.createQuery("select q from WaitingQueue q where q.requestGroup.id in :groups order by q.id",WaitingQueue.class)
+                        .setParameter("groups",batch).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                if (current.stream().anyMatch(q -> !shows.contains(q.getShowtime().getId()))) return 0;
             }
             var show = em.find(Showtime.class, showId);
             var queues = em.createQuery("""
@@ -81,6 +89,7 @@ public class BookingWaitingDispatcher {
             // than acquiring its group out of order or bypassing its potentially earlier number.
             if (queues.stream().anyMatch(q -> !locked.containsKey(q.getRequestGroup().getId()))) return 0;
             int allocated = 0;
+            BookingHoldService.LockedInventory lockedInventory = null;
             for (var q : queues) {
                 var group = locked.get(q.getRequestGroup().getId());
                 if (group.getStatus() != BookingGroupStatus.ACTIVE || q.getStatus() != QueueStatus.WAITING) continue;
@@ -92,13 +101,16 @@ public class BookingWaitingDispatcher {
                 catch (BookingRejection mismatch) { continue; }
 
                 // Higher-priority waits remain eligible while another candidate is held.
-                var inventory = holds.lockInventory(showId);
+                // These managed rows retain our own allocations as the batch advances.
+                // Never reuse them outside this write transaction or across dispatch calls.
+                if (lockedInventory == null) lockedInventory = holds.lockWaitingInventory(showId);
+                var inventory = lockedInventory.rows();
                 var requested = BookingQueueLifecycle.currentSeatIds(em, q.getId());
                 if (!requested.isEmpty()) {
                     var exact = inventory.stream().filter(i -> requested.contains(i.getSeat().getId())).toList();
                     if (exact.size() != group.getPartySize() || exact.stream().anyMatch(i -> i.getStatus() != SeatStatus.AVAILABLE
                             || i.getReservation() != null || i.getHoldExpiredAt() != null || !i.getSeat().isActive())) continue;
-                    holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, requested);
+                    holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, requested, lockedInventory);
                     NotificationService.waitingAcquired(em, group);
                     allocated++;
                     continue;
@@ -109,7 +121,7 @@ public class BookingWaitingDispatcher {
                                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // Allocate in number order among requests whose conditions currently match.
-                holds.acquire(group.getUser().getId(), group.getId(), BookingHoldService.Source.WAITING, showId, best.get().seatIds());
+                holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, best.get().seatIds(), lockedInventory);
                 NotificationService.waitingAcquired(em, group);
                 allocated++;
             }

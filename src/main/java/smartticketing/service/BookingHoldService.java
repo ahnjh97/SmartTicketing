@@ -70,6 +70,18 @@ public class BookingHoldService {
     // Package scope: smart orchestration supplies its own request-level idempotency transaction.
     @Transactional(noRollbackFor = BookingRejection.class)
     ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids) {
+        return acquire(userId, groupId, source, showtimeId, ids, null);
+    }
+
+    // Dispatcher-only reuse of the managed inventory already locked in this transaction.
+    @Transactional(noRollbackFor = BookingRejection.class)
+    ReservationResponse acquireWaiting(Long userId, Long groupId, Long showtimeId, List<Long> ids,
+                                       LockedInventory lockedInventory) {
+        return acquire(userId, groupId, Source.WAITING, showtimeId, ids, Objects.requireNonNull(lockedInventory));
+    }
+
+    private ReservationResponse acquire(Long userId, Long groupId, Source source, Long showtimeId, List<Long> ids,
+                                        LockedInventory lockedInventory) {
         var group = lockOwnedGroup(userId, groupId);
         if (group.getStatus() != BookingGroupStatus.ACTIVE)
             reject(409, "그룹에 활성 선점이 있거나 종료된 요청입니다.");
@@ -96,7 +108,12 @@ public class BookingHoldService {
                 && (q.getStatus() == QueueStatus.EXPIRED || q.getStatus() == QueueStatus.CANCELLED)))
             reject(409, "이 그룹에서 종료된 회차 기회입니다. 새 관람 요청으로 신청해주세요.");
         BookingAudiencePolicy.revalidate(group, show.getStartTime().toLocalDate());
-        var inventory = lockInventory(show.getId());
+        var inventory = lockedInventory == null ? lockInventory(show.getId()) : lockedInventory.rows();
+        // Hibernate may change its reported lock mode after flushing an updated row.
+        // Ownership comes from our locking factory and the same managed persistence context.
+        if (lockedInventory != null && (lockedInventory.context != em.getDelegate()
+                || !lockedInventory.showId.equals(show.getId()) || inventory.stream().anyMatch(row -> !em.contains(row))))
+            throw new IllegalStateException("Waiting inventory must be locked in the current transaction");
         now = now();
         validateShow(show, now);
         var selected = inventory.stream().filter(s -> ids.contains(s.getSeat().getId())).toList();
@@ -286,6 +303,21 @@ public class BookingHoldService {
         BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_EXPIRED", now);
         NotificationService.holdExpired(em, group.getId());
         return true;
+    }
+
+    static final class LockedInventory {
+        private final Object context;
+        private final Long showId;
+        private final List<ShowtimeSeat> rows;
+        private LockedInventory(Object context, Long showId, List<ShowtimeSeat> rows) {
+            this.context=context; this.showId=showId; this.rows=List.copyOf(rows);
+        }
+        List<ShowtimeSeat> rows() { return rows; }
+    }
+
+    LockedInventory lockWaitingInventory(Long showId) {
+        var rows=lockInventory(showId);
+        return new LockedInventory(em.getDelegate(),showId,rows);
     }
 
     List<ShowtimeSeat> lockInventory(Long showId) {
