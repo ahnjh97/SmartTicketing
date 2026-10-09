@@ -169,7 +169,7 @@ if ($BaseK6Json -and $CandidateK6Json) {
         [pscustomobject]@{ Metric = "http_req_failed"; Field = "rate"; Label = "요청 실패율"; LowerBetter = $true },
         [pscustomobject]@{ Metric = "http_reqs"; Field = "rate"; Label = "초당 처리 요청 수 (건/초)"; LowerBetter = $false }
     )
-    $lines.Add("## 4. k6 measured performance comparison")
+    $lines.Add("## 5. k6 부하 테스트 성능 비교")
     $lines.Add("")
     $lines.Add("| 지표 | 기준 브랜치 | 비교 대상 브랜치 | 변화율 | 판정 |")
     $lines.Add("|---|---:|---:|---:|---|")
@@ -199,7 +199,7 @@ if ($BaseK6Json -and $CandidateK6Json) {
     $lines.Add("")
     $lines.Add("> 두 k6 실행은 데이터, 환경, 테스트 시나리오, 가상 사용자 수(VU), 실행 시간을 동일하게 맞춰야 비교할 수 있습니다.")
 } else {
-    $lines.Add("## 4. k6 measured performance comparison")
+    $lines.Add("## 5. k6 부하 테스트 성능 비교")
     $lines.Add("")
     $lines.Add("k6 결과 JSON이 제공되지 않아 응답 시간, 실패율, 처리량의 개선율을 계산하지 않았습니다.")
     $lines.Add("두 브랜치에서 동일한 조건으로 k6 테스트를 실행하고 결과 JSON을 저장한 뒤 다음 명령을 실행하세요:")
