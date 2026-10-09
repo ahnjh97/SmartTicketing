@@ -38,7 +38,7 @@ export default function () {
   const response = http.post(
     `${manifest.baseUrl}/api/booking-groups/${user.groupId}/smart-hold`,
     null,
-    { headers: { Authorization: `Bearer ${user.token}`, 'Idempotency-Key': `lock-bench-${__VU}-${__ITER}` },
+    { headers: { Authorization: `Bearer ${user.token}`, 'Idempotency-Key': `lock-bench-${String(__VU).padStart(3, '0')}-${String(__ITER).padStart(3, '0')}-${Date.now().toString(36)}` },
       tags: { name: 'smart_hold' }, timeout: '60s' }
   );
   statusCounts.add(1, { status: String(response.status) });
