@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import smartticketing.entity.BookingOutboxEvent.Type;
 import java.util.*;
 
-/** Allocation remains idempotent under MySQL locks; refresh always reloads committed state. */
+/** Allocation is idempotent; projection catches up committed changes using the outbox revision range. */
 @Component
 public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
     private final BookingWaitingDispatcher dispatcher;
@@ -20,6 +20,6 @@ public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
         if(event.schemaVersion()!=1) throw new IllegalArgumentException("Unsupported booking event schema");
         // Redis failure must never prevent seats from being assigned in MySQL.
         if(dispatchEnabled) dispatcher.dispatch(event.showtimeId());
-        projection.refresh(event.showtimeId());
+        projection.update(event.showtimeId());
     }
 }
