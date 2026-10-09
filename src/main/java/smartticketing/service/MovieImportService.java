@@ -189,7 +189,7 @@ public class MovieImportService {
         return changedIds.size();
     }
 
-    /** 3단계 조회 서비스에서 사용. DB에 있는 영화는 외부 API 없이 즉시 반환한다. */
+    /** DB에 있는 영화는 즉시 반환하고, 없는 영화만 TMDB에서 가져온다. */
     public synchronized Movie getOrImportMovie(Long tmdbId) {
         if (tmdbId == null || tmdbId <= 0) throw new IllegalArgumentException("TMDB ID는 양수여야 합니다.");
         return movieRepository.findByTmdbMovieId(tmdbId).orElseGet(() -> importOne(tmdbId));

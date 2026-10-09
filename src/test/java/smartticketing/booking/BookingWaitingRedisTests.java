@@ -51,6 +51,19 @@ class BookingWaitingRedisTests {
         assertThat(actual.items()).allMatch(i -> i.aheadCount()==1);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
     }
+    @Test void disabledRanksUseDbAndProjectionDoesNotContactRedis() {
+        var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
+        var unused=org.mockito.Mockito.mock(StringRedisTemplate.class);
+        var disabled=new BookingWaitingRanks(unused,false,db.jdbcUrl());
+        var projection=new BookingWaitingProjection(SharedEntityManagerCreator.createSharedEntityManager(db.factory()),disabled,manager());
+        projection.refresh(first.shows().getFirst());
+        projection.repairIfNeeded(first.shows().getFirst());
+        var expected=state(second);
+        readStatements.clear();
+        assertThat(cachedState(second,disabled).items()).isEqualTo(expected.items());
+        assertThat(readStatements).anyMatch(sql -> sql.contains("count(") && sql.contains("waiting_queues"));
+        org.mockito.Mockito.verifyNoInteractions(unused);
+    }
     @Test void versionMismatchAndRedisLossFallBackThenRebuild() {
         var first=fixture(1,1); register(first); var second=another(first,1,false); register(second);
         for(var show:first.shows()) projection().refresh(show);
@@ -63,6 +76,27 @@ class BookingWaitingRedisTests {
         worker.repair();
         readStatements.clear(); cachedState(second,ranks);
         assertThat(readStatements).noneMatch(s -> s.contains("count(") && s.contains("waiting_queues"));
+    }
+
+    @Test void healthyProjectionRepairSkipsQueueRowsAndRedisRewrite() {
+        var f=fixture(1,1); register(f); long show=f.shows().getFirst();
+        projection().refresh(show);
+        var versionKey=prefix+"{"+show+"}:version";
+        redis.expire(versionKey,java.time.Duration.ofSeconds(30));
+        readStatements.clear(); projection().repairIfNeeded(show);
+        assertThat(readStatements).noneMatch(sql -> sql.contains("waiting_queues"));
+        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+    }
+
+    @Test void repairDetectsEvictionEvenInAnUnrequestedZone() {
+        var f=fixture(1,1); register(f); long show=f.shows().getFirst();
+        projection().refresh(show);
+        var zoneKey=prefix+"{"+show+"}:SIDE_REAR";
+        redis.delete(zoneKey);
+        readStatements.clear(); projection().repairIfNeeded(show);
+        assertThat(readStatements).anyMatch(sql -> sql.contains("waiting_queues"));
+        assertThat(redis.opsForZSet().score(zoneKey,"_")).isEqualTo(-1d);
+        assertThat(cachedState(f,ranks).items()).isEqualTo(state(f).items());
     }
     @Test void redisFailureFallsBackWithoutFailingRequest() {
         var f=fixture(1,1); register(f);

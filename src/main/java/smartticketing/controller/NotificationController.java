@@ -34,6 +34,13 @@ public class NotificationController {
         return NotificationSseHub.connect(current.id(jwt));
     }
 
+    @GetMapping("/page")
+    public smartticketing.dto.common.CursorPage<NotificationResponse> page(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "false") boolean unreadOnly, @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        return service.page(current.id(jwt), unreadOnly, cursor, size);
+    }
+
     @PatchMapping("/{id}/read")
     public ResponseEntity<Void> read(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         service.read(current.id(jwt), id);

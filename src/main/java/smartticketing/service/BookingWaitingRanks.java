@@ -16,6 +16,13 @@ public class BookingWaitingRanks {
     private final boolean enabled;
     private final String prefix;
     private volatile long unavailableUntil;
+    private static final DefaultRedisScript<Long> CURRENT = new DefaultRedisScript<>("""
+            if redis.call('GET',KEYS[1])~=ARGV[1] then return 0 end
+            for i=2,#KEYS do
+              if not redis.call('ZSCORE',KEYS[i],'_') then return 0 end
+            end
+            return 1
+            """,Long.class);
     private static final DefaultRedisScript<Long> REPLACE = new DefaultRedisScript<>("""
             local old=redis.call('GET',KEYS[1])
             local version=ARGV[1]
@@ -41,12 +48,22 @@ public class BookingWaitingRanks {
             """,List.class);
 
     public BookingWaitingRanks(StringRedisTemplate redis,
-            @Value("${booking.waiting.redis-enabled:true}") boolean enabled,
+            @Value("${app.cache.enabled:false}") boolean enabled,
             @Value("${spring.datasource.url}") String database) {
         this.redis=redis; this.enabled=enabled;
         prefix="booking-ranks:v1:"+UUID.nameUUIDFromBytes(database.getBytes(java.nio.charset.StandardCharsets.UTF_8))+":";
     }
     public boolean enabled() { return enabled; }
+    /** Check metadata only; do not renew TTL so periodic rebuilding can still heal corruption. */
+    public boolean isCurrent(long show,long version) {
+        if(!enabled) return true;
+        if(System.currentTimeMillis()<unavailableUntil) throw new IllegalStateException("Waiting rank Redis temporarily unavailable");
+        try {
+            var result=redis.execute(CURRENT,keys(show),Long.toString(version));
+            if(result==null) throw new IllegalStateException("Waiting rank check was not acknowledged");
+            return result==1;
+        } catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000; throw failure; }
+    }
     @jakarta.annotation.PostConstruct
     void initialize() {
         if(!enabled) return;

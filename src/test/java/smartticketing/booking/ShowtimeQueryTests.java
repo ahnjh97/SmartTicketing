@@ -41,7 +41,7 @@ class ShowtimeQueryTests {
         em.persist(movie); movieId = movie.getId();
         new BookingSeedService(em, CLOCK).seed(List.of(theaterId));
         em.flush(); em.clear();
-        query = new ShowtimeQueryService(em, new BookingCatalogService(em), CLOCK);
+        query = new ShowtimeQueryService(em, new BookingCatalogService(em, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled")), CLOCK, new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
     }
     @AfterEach void rollback() {
         if (em.getTransaction().isActive()) em.getTransaction().rollback(); em.close();
@@ -131,12 +131,68 @@ class ShowtimeQueryTests {
         var byMovie = query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), null, null);
         assertThat(byMovie.items()).hasSize(3);
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
+        assertThat(statistics.getEntityStatistics(ShowtimeSeat.class.getName()).getLoadCount()).isZero();
+        assertThat(statistics.getEntityStatistics(Seat.class.getName()).getLoadCount()).isZero();
         em.clear(); statistics.clear();
         var byTheater = query.showtimes(null, theaterId, LocalDate.of(2026, 10, 1), null, null);
         assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
         assertThat(byTheater.items()).isEqualTo(byMovie.items());
         assertThat(byMovie.items()).extracting(i -> i.availableSeats()).containsExactlyInAnyOrder(120L, 0L, 70L);
         assertThat(byMovie.items()).extracting(i -> i.maxContiguousSeats()).containsExactlyInAnyOrder(6, 0, 1);
+    }
+
+    @Test void inventoryBatchesKeepEveryShowAndSeatSummaryWithoutLoadingSeatEntities() {
+        var template = showtime("normal");
+        var seat = em.createQuery("from Seat s where s.screen.id=:screen order by s.id", Seat.class)
+                .setParameter("screen", template.getScreen().getId()).setMaxResults(1).getSingleResult();
+        var added = new java.util.ArrayList<Long>();
+        for (int i = 0; i < 101; i++) {
+            var show = new Showtime();
+            show.setMovie(template.getMovie()); show.setScreen(template.getScreen());
+            show.setStartTime(LocalDateTime.of(2026, 10, 1, 13, 0).plusMinutes(i));
+            show.setEndTime(show.getStartTime().plusMinutes(120));
+            show.setTotalSeats(1); show.setAvailableSeats(1); show.setPricePerPerson(10000);
+            show.setCreatedAt(template.getCreatedAt()); show.setUpdatedAt(template.getUpdatedAt()); em.persist(show);
+            var inventory = new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat);
+            inventory.setStatus(i % 2 == 0 ? SeatStatus.AVAILABLE : SeatStatus.BLOCKED); em.persist(inventory);
+            added.add(show.getId());
+        }
+        em.flush(); em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true); statistics.clear();
+        var items = query.showtimes(movieId, null, LocalDate.of(2026, 10, 1), null, null).items();
+        assertThat(items).hasSize(104);
+        assertThat(items.stream().filter(i -> added.contains(i.id())).toList()).hasSize(101).allSatisfy(item -> {
+            int index = added.indexOf(item.id());
+            assertThat(item.totalSeats()).isEqualTo(1);
+            assertThat(item.availableSeats()).isEqualTo(index % 2 == 0 ? 1 : 0);
+            assertThat(item.maxContiguousSeats()).isEqualTo(index % 2 == 0 ? 1 : 0);
+            assertThat(item.layoutComplete()).isTrue();
+        });
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(4);
+        assertThat(statistics.getEntityStatistics(ShowtimeSeat.class.getName()).getLoadCount()).isZero();
+        assertThat(statistics.getEntityStatistics(Seat.class.getName()).getLoadCount()).isZero();
+    }
+
+    @Test void seatProjectionPreservesOrderAndExcludesInactiveAndWrongScreenSeats() {
+        var show = showtime("normal");
+        var other = showtime("sold-out");
+        var rows = em.createQuery("from ShowtimeSeat s join fetch s.seat where s.showtime.id=:id order by s.seat.seatRow,s.seat.seatNumber", ShowtimeSeat.class)
+                .setParameter("id", show.getId()).getResultList();
+        rows.getFirst().getSeat().setActive(false);
+        rows.get(1).getSeat().setScreen(other.getScreen());
+        // Use a free row/number so changing the screen does not collide with its existing layout.
+        rows.get(1).getSeat().setSeatRow("Z");
+        var expected = rows.subList(2, rows.size()).stream().map(i -> i.getSeat().getId()).toList();
+        em.flush(); em.clear();
+        var statistics = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true); statistics.clear();
+        var result = query.seats(show.getId());
+        assertThat(result.seats()).extracting(i -> i.id()).containsExactlyElementsOf(expected);
+        assertThat(result.availableSeats()).isEqualTo(expected.size());
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+        assertThat(statistics.getEntityStatistics(ShowtimeSeat.class.getName()).getLoadCount()).isZero();
+        assertThat(statistics.getEntityStatistics(Seat.class.getName()).getLoadCount()).isZero();
     }
 
     @Test void invalidFiltersAndUnavailableShowsAreHandledWithoutFalseAvailability() {

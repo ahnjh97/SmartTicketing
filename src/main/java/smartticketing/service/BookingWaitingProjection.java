@@ -32,6 +32,14 @@ public class BookingWaitingProjection {
         });
         ranks.replace(show,snapshot.version(),snapshot.entries());
     }
+    public void repairIfNeeded(long show) {
+        if(!ranks.enabled()) return;
+        long version=read.execute(status -> em.createQuery("select s.revision from BookingOutboxStream s where s.showtimeId=:show",Long.class)
+                .setParameter("show",show).getResultStream().findFirst().orElse(0L));
+        // Healthy projections need neither full queue reads nor Redis replacement.
+        // Refresh takes a new snapshot so a commit during this check is not overwritten.
+        if(!ranks.isCurrent(show,version)) refresh(show);
+    }
     public List<Long> activeShows(long after,int limit) {
         return read.execute(status -> em.createQuery("select distinct q.showtime.id from WaitingQueue q where q.requestGroup is not null and q.showtime.id>:after and q.status in :states order by q.showtime.id",Long.class)
                 .setParameter("after",after).setParameter("states",List.of(QueueStatus.WAITING,QueueStatus.PAUSED,QueueStatus.HOLDING))

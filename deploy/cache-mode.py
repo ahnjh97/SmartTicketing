@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Switch the reserved cache flag without rebuilding or changing deployed images.
+"""Switch booking Redis features without rebuilding or changing deployed images.
 
-Requires Python 3.9+ and Docker Compose v2. No application cache exists yet.
+Requires Python 3.9+ and Docker Compose v2. Feature support depends on the deployed image.
 Only deployment settings are changed; Redis remains available for ticket QR use.
 """
 import argparse
@@ -17,7 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 STATE = '.env.deployment'
 KEYS = {'BACKEND_IMAGE', 'FRONTEND_IMAGE', 'APP_CACHE_ENABLED'}
-NOTICE = 'Configuration only: application cache behavior is not implemented yet. QR Redis stays enabled.'
+NOTICE = 'Controls smart summaries, waiting ranks/repair and dispatch locks in updated backend images. QR Redis stays enabled.'
 
 
 def read_state(root):
@@ -195,7 +195,7 @@ def main():
                 values = read_state(ROOT)
                 actual = Docker(ROOT, values).container('backend')
                 print(json.dumps({'saved': values, 'running_backend': actual,
-                                  'application_cache_implemented': False}, indent=2))
+                                  'application_cache_implemented': True}, indent=2))
                 print(NOTICE)
         else:
             switch(ROOT, 'true' if args.mode == 'cache-on' else 'false')

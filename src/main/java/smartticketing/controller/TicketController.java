@@ -65,6 +65,12 @@ public class TicketController {
         return ResponseEntity.ok(service.one(current.id(jwt), id));
     }
 
+    @GetMapping("/page")
+    public smartticketing.dto.common.CursorPage<TicketResponse> page(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
+        return service.page(current.id(jwt), cursor, size);
+    }
+
     @PostMapping("/reservations/{reservationId}")
     public ResponseEntity<TicketResponse> issue(@AuthenticationPrincipal Jwt jwt, @PathVariable Long reservationId) {
         return ResponseEntity.ok(service.issue(current.id(jwt), reservationId));

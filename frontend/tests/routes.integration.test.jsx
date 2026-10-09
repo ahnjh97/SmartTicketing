@@ -53,6 +53,7 @@ beforeEach(() => {
         if (url === "/api/auth/logout") return new Response(null, { status: 204 });
         if (url === "/api/users/me") return new Response(JSON.stringify(completedUser));
         if (url === "/api/tickets") return new Response('[]');
+        if (url.startsWith('/api/tickets/page?') || url.startsWith('/api/notifications/page?')) return new Response('{"items":[],"nextCursor":null}');
         if (url === '/api/booking-groups') return new Response('{"items":[],"hasMore":false}');
         if (url === '/api/booking-groups/active') return new Response('[]');
         if (url.startsWith('/api/notifications')) return new Response('[]');
@@ -169,7 +170,7 @@ test("social signup retains its direct route and loads provider information", as
     expect(screen.queryByLabelText("닉네임")).toBe(null);
 });
 
-test("tickets load the existing API for members and redirect guests to login", async () => {
+test("tickets load the paged API for members and redirect guests to login", async () => {
     mount("/tickets");
     await screen.findByLabelText("아이디");
     await at("/login");
@@ -179,7 +180,8 @@ test("tickets load the existing API for members and redirect guests to login", a
     mount("/tickets");
     await screen.findByRole("button", { name: "내 티켓 열기" });
     await at("/tickets");
-    expect(await within(screen.getByRole('main')).findByText('발급된 티켓이 없습니다.')).toBeTruthy();
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/tickets/page?'))).toBe(true));
+    expect(within(screen.getByRole('main')).getByRole('heading', {name:/발급된 티켓 0개/})).toBeTruthy();
 });
 
 test("signup accepts a non-email login ID and opens preference setup with its issued token", async () => {

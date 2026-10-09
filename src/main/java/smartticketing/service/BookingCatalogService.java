@@ -32,8 +32,12 @@ public class BookingCatalogService {
         if (cached != null) return cached;
         String where = " where m.active = true" + (landscapeOnly
                 ? " and m.backdropUrl is not null and trim(m.backdropUrl) <> ''" : "");
-        var items = em.createQuery("from Movie m" + where + " order by m.id", Movie.class)
-                .setFirstResult(offset).setMaxResults(size).getResultList().stream().map(MovieItem::from).toList();
+        var items = em.createQuery("""
+                select new smartticketing.dto.booking.CatalogResponse$MovieItem(
+                    m.id, m.title, m.posterUrl, m.runningTime, m.rating, m.backdropUrl, m.logoUrl)
+                from Movie m
+                """ + where + " order by m.id", MovieItem.class)
+                .setFirstResult(offset).setMaxResults(size).getResultList();
         long total = em.createQuery("select count(m) from Movie m" + where, Long.class).getSingleResult();
         Page<MovieItem> response = new Page<>(items, page, size, total);
         queryCache.put("movies", cacheKey, response);
@@ -55,12 +59,18 @@ public class BookingCatalogService {
         String cacheKey = term + ":" + page + ":" + size + ":" + (brand == null ? "" : brand.name());
         Page<TheaterItem> cached = queryCache.get("theaters", cacheKey, new TypeReference<Page<TheaterItem>>() {});
         if (cached != null) return cached;
-        String where = " where t.active = true and (t.name like :pattern escape '!' or t.address like :pattern escape '!')";
+        String where = " where t.active = true";
+        if (!term.isEmpty()) where += " and (t.name like :pattern escape '!' or t.address like :pattern escape '!')";
         if (brand != null) where += " and t.brand=:brand";
-        var rows = em.createQuery("from Theater t" + where + " order by t.name, t.id", Theater.class).setParameter("pattern", pattern);
-        var count = em.createQuery("select count(t) from Theater t" + where, Long.class).setParameter("pattern", pattern);
+        var rows = em.createQuery("""
+                select new smartticketing.dto.booking.CatalogResponse$TheaterItem(
+                    t.id, t.name, t.brand, t.address, t.latitude, t.longitude)
+                from Theater t
+                """ + where + " order by t.name, t.id", TheaterItem.class);
+        var count = em.createQuery("select count(t) from Theater t" + where, Long.class);
+        if (!term.isEmpty()) { rows.setParameter("pattern", pattern); count.setParameter("pattern", pattern); }
         if (brand != null) { rows.setParameter("brand", brand); count.setParameter("brand", brand); }
-        var items = rows.setFirstResult(offset).setMaxResults(size).getResultList().stream().map(TheaterItem::from).toList();
+        var items = rows.setFirstResult(offset).setMaxResults(size).getResultList();
         long total = count.getSingleResult();
         Page<TheaterItem> response = new Page<>(items, page, size, total);
         queryCache.put("theaters", cacheKey, response);

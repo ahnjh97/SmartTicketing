@@ -9,13 +9,20 @@ import java.nio.file.*;
 import java.time.*;
 import java.util.*;
 
-/** Explicit opt-in browser harness. Owns only a fresh TemporaryMysqlDatabase. Not a JUnit test. */
+/**
+ * Explicit opt-in browser harness. Owns only a fresh TemporaryMysqlDatabase. Not a JUnit test.
+ * BOOKING_BROWSER_RUN selects normal-booking (default), smart-booking, or waiting-queue.
+ * Control files: .gradle/{run}-browser.restart, .gradle/{run}-browser.stop,
+ * and .gradle/{run}-release-{1..3} for releasing seats in the waiting-queue scenario.
+ */
 public class BookingBrowserFixture {
     public static void main(String[] args) throws Exception {
         if (!"true".equals(System.getenv("BOOKING_BROWSER_TEST"))) throw new IllegalStateException("Browser test opt-in required");
-        String run = System.getenv().getOrDefault("BOOKING_BROWSER_RUN", "stage6");
-        if (!run.matches("stage[0-9]+")) throw new IllegalArgumentException("Invalid browser run name");
-        boolean waitingRun = run.equals("stage8") || run.equals("stage9");
+        String run = System.getenv().getOrDefault("BOOKING_BROWSER_RUN", "normal-booking");
+        if (!Set.of("normal-booking", "smart-booking", "waiting-queue").contains(run))
+            throw new IllegalArgumentException("BOOKING_BROWSER_RUN must be normal-booking, smart-booking, or waiting-queue");
+        boolean waitingRun = run.equals("waiting-queue");
+        boolean smartRun = run.equals("smart-booking") || waitingRun;
         Path restart = Path.of(".gradle/" + run + "-browser.restart");
         Path stop = Path.of(".gradle/" + run + "-browser.stop");
         if (Files.exists(stop)) throw new IllegalStateException("Remove the previous browser stop marker before launch");
@@ -29,7 +36,7 @@ public class BookingBrowserFixture {
                 for (int i=1;i<=3;i++) {
                     var theater = new Theater(); theater.setName("[격리 검증] 시네마 "+i); theater.setAddress("서울 테스트 주소"); theater.setKakaoPlaceId("browser-"+i); theater.setBrand(TheaterBrand.CGV); em.persist(theater);
                     var preference = new UserPreferredTheater(); preference.setUser(user); preference.setTheater(theater); preference.setPriority(i); em.persist(preference);
-                    if (i!=1 && !run.equals("stage7") && !waitingRun) continue;
+                    if (i!=1 && !smartRun) continue;
                     var screen = new Screen(); screen.setName("PREMIUM 1관"); screen.setTheater(theater); em.persist(screen);
                     var show = new Showtime(); show.setMovie(movie); show.setScreen(screen); show.setStartTime(now.plusHours(2)); show.setEndTime(now.plusHours(4));
                     show.setPricePerPerson(10000); show.setTotalSeats(72); show.setAvailableSeats(70); show.setCreatedAt(now); show.setUpdatedAt(now); em.persist(show);
@@ -41,7 +48,7 @@ public class BookingBrowserFixture {
                         if(waitingRun || row==2&&number<=2 || i==2 || i==3 && number%2==0) inventory.setStatus(SeatStatus.BLOCKED); em.persist(inventory);
                     }
                     System.out.println("BROWSER_PATH=/theaters?theater="+theater.getId()+"&movie="+movie.getId()+"&showtime="+show.getId()+"&date="+show.getStartTime().toLocalDate()+"&entry=THEATER_NORMAL");
-                    if ((run.equals("stage7") || waitingRun) && i==1) {
+                    if (smartRun && i==1) {
                         var from = show.getStartTime().minusMinutes(30).withMinute(0).withSecond(0).withNano(0);
                         System.out.println("BROWSER_SMART_MOVIE_PATH=/movies?movie="+movie.getId()+"&date="+from.toLocalDate()+"&from="+from.toLocalTime()+"&until="+from.plusHours(3).toLocalTime()+"&party=2&entry=MOVIE_SMART");
                     }

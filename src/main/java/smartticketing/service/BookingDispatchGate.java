@@ -26,7 +26,7 @@ public class BookingDispatchGate {
     private volatile long unavailableUntil;
 
     public BookingDispatchGate(StringRedisTemplate redis,
-            @Value("${booking.waiting.dispatch-lock-enabled:true}") boolean enabled,
+            @Value("${app.cache.enabled:false}") boolean enabled,
             @Value("${booking.waiting.dispatch-lock-ms:30000}") long leaseMs,
             @Value("${spring.datasource.url}") String database) {
         this.redis=redis; this.enabled=enabled; lease=Duration.ofMillis(Math.max(1,leaseMs));

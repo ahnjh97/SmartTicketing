@@ -54,6 +54,8 @@ export default function TicketsPage() {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [nextCursor, setNextCursor] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [selectedTicketId, setExpandedTicketId] = useState(null);
     const selectedTicket = tickets.find(ticket => ticket.ticketId === selectedTicketId);
     const expandedTicketId = selectedTicket && !["EXPIRED", "CANCELLED"].includes(selectedTicket.status) ? selectedTicketId : null;
@@ -85,9 +87,9 @@ export default function TicketsPage() {
 
     useEffect(() => {
         let mounted = true;
-        ticketApi.mine()
+        ticketApi.page()
             .then((data) => {
-                if (mounted) setTickets(Array.isArray(data) ? data : []);
+                if (mounted) { setTickets(data.items); setNextCursor(data.nextCursor); }
             })
             .catch((e) => {
                 if (mounted) setError(e?.message ?? "티켓을 불러오지 못했습니다.");
@@ -99,6 +101,18 @@ export default function TicketsPage() {
             mounted = false;
         };
     }, []);
+
+    async function loadMore() {
+        if (loadingMore || !nextCursor) return;
+        setLoadingMore(true);
+        setError("");
+        try {
+            const data = await ticketApi.page(nextCursor);
+            setTickets(items => [...items, ...data.items.filter(t => !items.some(item => item.ticketId === t.ticketId))]);
+            setNextCursor(data.nextCursor);
+        } catch (e) { setError(e?.message ?? "추가 티켓을 불러오지 못했습니다."); }
+        finally { setLoadingMore(false); }
+    }
 
     useEffect(() => {
         if (!expandedTicketId || verificationPhase !== "processing") return;
@@ -193,6 +207,7 @@ export default function TicketsPage() {
     return (
         <section className={styles.page}>
             <h1>내 티켓</h1>
+            {nextCursor && <p>최근 발급 티켓부터 표시합니다. 이전 티켓과 날짜는 더 보기로 불러오세요.</p>}
             <div className={styles.panel}>
                 <div className={styles.ticketFilterHeader}>
                     <h2>발급된 티켓 <span className={styles.count}>{filteredTickets.length}개</span></h2>
@@ -201,7 +216,8 @@ export default function TicketsPage() {
                         {ticketDates.map((date) => <option key={date} value={date}>{date.replaceAll('-', '.')}</option>)}
                     </select>
                 </div>
-                {loading ? null : error ? <p role="alert">{error}</p> : filteredTickets.length === 0 ? null : (
+                {error && <p role="alert">{error}</p>}
+                {loading || filteredTickets.length === 0 ? null : (
                     <div className={styles.ticketGroups}>
                         {Object.entries(
                             filteredTickets.reduce((groups, ticket) => {
@@ -278,6 +294,9 @@ export default function TicketsPage() {
                     </div>
                 )}
             </div>
+            {nextCursor && <button type="button" disabled={loadingMore} onClick={loadMore}>
+                {loadingMore ? "불러오는 중…" : "이전 티켓 더 보기"}
+            </button>}
             {expandedTicketId && (() => {
                 const selectedTicket = tickets.find((ticket) => ticket.ticketId === expandedTicketId);
                 if (!selectedTicket) return null;

@@ -21,7 +21,8 @@ export function loadOptions() {
     },
     discardResponseBodies: true,
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'count'],
-    // Errors are recorded in the report; do not abort the OFF/ON comparison.\n    thresholds: {},
+    // Record failures in the report while allowing both cache modes to finish.
+    thresholds: {},
   };
 }
 
@@ -50,6 +51,7 @@ export function writeSummary(data, feature, metricNames) {
       httpReqFailed: data.metrics.http_req_failed?.values || null,
       httpReqs: data.metrics.http_reqs?.values || null,
       checks: data.metrics.checks?.values || null,
+      droppedIterations: data.metrics.dropped_iterations?.values || null,
     },
     endpoints: metrics,
   };
@@ -57,6 +59,6 @@ export function writeSummary(data, feature, metricNames) {
   const file = __ENV.RESULT_FILE || `benchmark-results/${feature}-${summary.cacheMode}.json`;
   return {
     [file]: JSON.stringify(summary, null, 2),
-    stdout: `Redis ${summary.cacheMode} | ${feature} | rate=${RATE}/s | p95=${summary.metrics.httpReqDuration?.['p(95)'] ?? 'n/a'}ms | p99=${summary.metrics.httpReqDuration?.['p(99)'] ?? 'n/a'}ms\\n`,
+    stdout: `Redis ${summary.cacheMode} | ${feature} | rate=${RATE}/s | p95=${summary.metrics.httpReqDuration?.['p(95)'] ?? 'n/a'}ms | p99=${summary.metrics.httpReqDuration?.['p(99)'] ?? 'n/a'}ms\n`,
   };
 }
