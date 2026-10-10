@@ -2,6 +2,7 @@ package smartticketing.booking;
 
 import smartticketing.entity.*;
 import smartticketing.entity.enums.*;
+import smartticketing.service.BenchmarkSeatLayout;
 import tools.jackson.databind.json.JsonMapper;
 import java.math.BigDecimal;
 import java.nio.file.*;
@@ -36,12 +37,10 @@ public class QueryRedisBenchmark {
                 var screen=new Screen(); screen.setName("부하 상영관"); screen.setTheater(theater); em.persist(screen);
                 var show=new Showtime(); show.setMovie(first); show.setScreen(screen);
                 show.setStartTime(DATE.atTime(18,0)); show.setEndTime(DATE.atTime(20,0));
-                show.setPricePerPerson(10000); show.setTotalSeats(100); show.setAvailableSeats(100);
+                show.setPricePerPerson(10000); show.setTotalSeats(BenchmarkSeatLayout.size()); show.setAvailableSeats(BenchmarkSeatLayout.size());
                 show.setCreatedAt(DATE.minusDays(2).atStartOfDay()); show.setUpdatedAt(show.getCreatedAt()); em.persist(show);
-                for(int s=0;s<100;s++) {
-                    var seat=new Seat(); seat.setScreen(screen); seat.setSeatRow(String.valueOf((char)('A'+s/10)));
-                    seat.setSeatNumber(s%10+1); seat.setSeatPosition(SeatPosition.MIDDLE_MIDDLE);
-                    seat.setAdjacencySegment("row-"+s/10); seat.setPositionInSegment(s%10+1); em.persist(seat);
+                for(var seat:BenchmarkSeatLayout.create(screen)) {
+                    em.persist(seat);
                     var inventory=new ShowtimeSeat(); inventory.setShowtime(show); inventory.setSeat(seat);
                     inventory.setStatus(SeatStatus.AVAILABLE); em.persist(inventory);
                 }
@@ -73,7 +72,7 @@ public class QueryRedisBenchmark {
                 "suite",suite,"smoke",smoke,"java",System.getProperty("java.version"),"os",System.getProperty("os.name"),
                 "startedAt",OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString(),
                 "logicalProcessors",Runtime.getRuntime().availableProcessors(),"maxHeapBytes",Runtime.getRuntime().maxMemory(),
-                "fixture",Map.of("movies",200,"theaters",20,"showtimes",20,"seats",2000,"localCache",true,"localTtlMs",500,"redisTtlMs",2000,"freshJvmPerCase",true,"execution","production-prebuilt-jar"),
+                "fixture",Map.of("movies",200,"theaters",20,"showtimes",20,"seats",20*BenchmarkSeatLayout.size(),"localCache",!"true".equals(System.getenv("BENCH_CORE")),"localTtlMs","true".equals(System.getenv("BENCH_CORE"))?0:500,"redisTtlMs",2000,"freshJvmPerCase",true,"execution","production-prebuilt-jar"),
                 "cacheMode",BenchmarkProcess.cacheMode(),
                 "plannedExecutions",scenarios.stream().filter(s->!s.id().equals("login")).count()*BenchmarkProcess.modes(smoke,false).size()
                         +(scenarios.stream().anyMatch(s->s.id().equals("login"))?1:0))));
@@ -125,7 +124,7 @@ public class QueryRedisBenchmark {
                         result.put("run",label); result.put("mode",scenario.id().equals("login")?"N/A":enabled?"ON":"OFF");
                         result.put("warmupFile",warmup.get("file")); result.put("warmupExitCode",warmup.get("exitCode"));
                         result.put("containerId",backend.containerId); result.put("pid",ProcessHandle.current().pid()); result.put("database",db.jdbcUrl());
-                        result.put("cache",Map.of("redis",enabled,"local",true,"localTtlMs",500,"redisTtlMs",2000));
+                        result.put("cache",Map.of("redis",enabled,"local",!"true".equals(System.getenv("BENCH_CORE")),"localTtlMs","true".equals(System.getenv("BENCH_CORE"))?0:500,"redisTtlMs",2000));
                         Files.writeString(dir.resolve(scenario.id()+"-execution.json"),JSON.writeValueAsString(result));
                     }
                 }
@@ -139,14 +138,15 @@ public class QueryRedisBenchmark {
         Path summary=dir.resolve(name+".json");
         var command=new ArrayList<>(List.of("run","--no-usage-report","--quiet"));
         if(scenario.id().equals("login")) command.addAll(List.of("--summary-export",summary.toAbsolutePath().toString()));
-        command.add(Path.of("k6",scenario.script()).toString());
+        command.add(Path.of("k6","true".equals(System.getenv("BENCH_CORE"))?"core-query.js":scenario.script()).toString());
         var env=new HashMap<String,String>();
         env.put("BASE_URL",BenchmarkBackend.BASE_URL); env.put("CACHE_MODE",enabled?"on":"off");
         env.put("RESULT_FILE",summary.toAbsolutePath().toString());
-        env.put("REDIS_BENCH_RATE",smoke?"2":System.getenv().getOrDefault("BENCH_RATE","50"));
-        env.put("REDIS_BENCH_DURATION",smoke?"3s":warmup?"15s":System.getenv().getOrDefault("BENCH_DURATION","30s"));
-        env.put("REDIS_BENCH_PRE_VUS",smoke?"2":System.getenv().getOrDefault("BENCH_PRE_VUS","100"));
-        env.put("REDIS_BENCH_MAX_VUS",smoke?"5":System.getenv().getOrDefault("BENCH_MAX_VUS","1000"));
+        env.put("CASE",scenario.id());
+        env.put("REDIS_BENCH_RATE",smoke?"10":System.getenv().getOrDefault("BENCH_RATE","50"));
+        env.put("REDIS_BENCH_DURATION",smoke?"6s":warmup?"15s":System.getenv().getOrDefault("BENCH_DURATION","30s"));
+        env.put("REDIS_BENCH_PRE_VUS",smoke?"20":System.getenv().getOrDefault("BENCH_PRE_VUS","100"));
+        env.put("REDIS_BENCH_MAX_VUS",smoke?"20":System.getenv().getOrDefault("BENCH_MAX_VUS","1000"));
         env.put("K6_MOVIE_ID",Long.toString(fixture.movie())); env.put("K6_THEATER_ID",Long.toString(fixture.theater()));
         env.put("K6_SHOWTIME_ID",Long.toString(fixture.show())); env.put("K6_DATE",DATE.toString()); env.put("K6_ACCESS_TOKEN",token);
         env.put("USERS",warmup||smoke?"5":System.getenv().getOrDefault("BENCH_LOGIN_USERS","100"));
