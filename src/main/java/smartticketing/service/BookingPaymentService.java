@@ -95,7 +95,7 @@ public class BookingPaymentService {
         }
         p.setAmount(r.getTotalAmount());
         p.setUpdatedAt(now);
-        return new TossOrderResponse(p.getTossOrderId(), r.getMovieTitle(), r.getTotalAmount());
+        return new TossOrderResponse(p.getTossOrderId(), locked.group().getMovie().getTitle(), r.getTotalAmount());
     }
 
     /** Returns true when this exact Toss payment has already been finalized locally. */
