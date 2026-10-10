@@ -25,6 +25,12 @@ export default function TossPaymentReturnHandler() {
             const queryIndex = route.indexOf('?');
             const routePath = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
             const routeParams = new URLSearchParams(queryIndex >= 0 ? route.slice(queryIndex + 1) : '');
+            // Restore the first candidate as the active candidate if the saved smart-booking
+            // URL only contains the candidate scope. The detail panel needs a selected group.
+            if (!routeParams.has('candidate') && !routeParams.has('group')) {
+                const firstCandidate = routeParams.get('candidates')?.split(',').find(id => /^[1-9]\\d*$/.test(id));
+                if (firstCandidate) routeParams.set('candidate', firstCandidate);
+            }
             routeParams.set('reservation', reservationId);
             routeParams.set('tossResult', result);
             target.hash = `${routePath || '/theaters'}?${routeParams.toString()}`;
