@@ -85,6 +85,8 @@ public class BookingPaymentService {
             p.setStatus(PaymentStatus.READY);
             p.setAmount(r.getTotalAmount());
             p.setCreatedAt(now);
+            p.setUpdatedAt(now);
+            p.setTossOrderId("st_" + UUID.randomUUID().toString().replace("-", ""));
             em.persist(p);
         } else if (retryOrder) {
             p.setStatus(PaymentStatus.READY);
