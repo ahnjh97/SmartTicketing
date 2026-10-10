@@ -89,7 +89,7 @@ export default function useSmartCandidates(user, body, ready) {
         try {
             const order = await bookingApi.createTossOrder(reservationId);
             if (live.current !== identity) return;
-            await openTossPayment(order, reservationId, user.id);
+            await openTossPayment(order, reservationId, user.id, candidate.groupId);
         } catch (error) {
             if (live.current === identity) setFailure({ identity, error });
         } finally {
