@@ -70,7 +70,6 @@
 .total strong { font-size: 26px; }
 .total small { font-size: 13px; margin-left: 4px; }
 .ticketNumber { padding-top: 16px; overflow-wrap: anywhere; }
-.paymentCheckout .tossPay { border: 1px solid var(--booking-accent); background: transparent; color: var(--booking-ink); box-shadow: none; }
 .paymentCheckout .ticketLink { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--booking-accent); text-decoration: none; white-space: nowrap; }
 .resultActions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .cancelDialog { box-sizing: border-box; width: min(440px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 28px; color: var(--booking-ink); font-family: var(--booking-font); text-align: left; border: 1px solid var(--booking-border-strong); border-radius: var(--booking-radius-large); background: var(--booking-surface); box-shadow: var(--booking-card-shadow); }
