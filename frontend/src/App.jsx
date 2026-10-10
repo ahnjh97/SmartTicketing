@@ -20,11 +20,19 @@ import TicketVerifyPage from "./pages/TicketVerifyPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
 import AdminRouteGuard from "./components/AdminRouteGuard.jsx";
 import AdminDataPage from "./pages/AdminDataPage.jsx";
+import TossPaymentReturnHandler from './booking/TossPaymentReturnHandler.jsx';
 
 export default function App() {
+    // A Toss callback lands on the app before its effect confirms the payment and restores
+    // the HashRouter URL. Do not render the previous booking route during that interval,
+    // otherwise its stale PENDING reservation flashes as a seat-hold screen.
+    const tossCallbackPending = new URLSearchParams(window.location.search).has('tossReservationId');
     return (
         <AuthProvider>
-            <Routes>
+            <TossPaymentReturnHandler />
+            {tossCallbackPending ? <main role="status" aria-live="polite" style={{ minHeight: '50vh', display: 'grid', placeItems: 'center' }}>
+                결제 결과를 확인하고 있습니다…
+            </main> : <Routes>
                 <Route path="/ticket/verify/:qrCode" element={<TicketVerifyPage />} />
                 <Route element={<AppLayout />}>
                     <Route path={PAGE_PATHS.login} element={<LoginPage />} />
@@ -48,7 +56,7 @@ export default function App() {
                         <Route path="*" element={<Navigate to={PAGE_PATHS.home} replace />} />
                     </Route>
                 </Route>
-            </Routes>
+            </Routes>}
         </AuthProvider>
     );
 }

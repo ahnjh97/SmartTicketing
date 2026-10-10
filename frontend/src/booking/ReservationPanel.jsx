@@ -1,6 +1,7 @@
 import { formatShowDate } from '../utils/showtimeFormat.js';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
@@ -10,7 +11,9 @@ import ui from './BookingComponents.module.css';
 
 const labels = { PENDING: '좌석을 선점했습니다', CONFIRMED: '예매가 완료되었습니다', EXPIRED: '선점 시간이 만료되었습니다', CANCELLED: '예매가 취소되었습니다' };
 export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
-    const { reservation: r, payment, receivedAt, busy, pay, cancel, refresh } = flow;
+    const { reservation: r, payment, receivedAt, busy, pay, payToss, cancel, refresh } = flow;
+    const [params] = useSearchParams();
+    const tossResult = params.get('tossResult');
     const { remaining, serverNow } = useReservationClock(r, receivedAt);
     const [confirmCancel, setConfirmCancel] = useState(false);
     const heading = useRef(null);
@@ -37,7 +40,8 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
                 </div>
                 <div className={styles.paymentCheckout}>
                     <div className={styles.total} aria-label="예약 금액"><strong>{r.totalAmount.toLocaleString('ko-KR')}<small>원</small></strong></div>
-                    {pending && <button className={`${ui.primary} ${styles.pay}`} disabled={busy || remaining === 0} onClick={() => pay(false)}>{busy ? '처리 중…' : '모의결제'}</button>}
+                    {pending && <button type="button" className={`${ui.primary} ${styles.pay} ${styles.tossPay}`} disabled={busy || remaining === 0}
+                        onClick={payToss}>{busy ? '결제 준비 중…' : '결제'}</button>}
                     {confirmed && <Link className={`${ui.primary} ${styles.pay} ${styles.ticketLink}`} to="/tickets">내 티켓에서 확인</Link>}
                 </div>
             </div>
@@ -48,7 +52,12 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.1 8a8 8 0 1 0 .5 7"/></svg>
             </button>
         </div>
+        {flow.error && <p className={styles.error} role="alert">결제 요청 실패: {flow.error.message || '알 수 없는 오류'} </p>}
         {failed && pending && <p className={styles.error} role="alert">모의결제에 실패했습니다. 남은 시간 안에 다시 결제할 수 있습니다.</p>}
+        {tossResult === 'success' && confirmed && <p role="status">토스 테스트 결제가 승인되었습니다.</p>}
+        {tossResult === 'failed' && <p className={styles.error} role="alert">토스 결제가 취소되었거나 실패했습니다. 남은 시간 안에 다시 시도할 수 있습니다.</p>}
+        {tossResult === 'error' && <p className={styles.error} role="alert">토스 결제 승인을 완료하지 못했습니다. 예약 상태를 새로고침하고 개발자센터의 테스트 결제 내역을 확인해주세요.</p>}
+        {tossResult === 'invalid' && <p className={styles.error} role="alert">토스 결제 응답을 확인할 수 없습니다. 다시 결제해주세요.</p>}
         {pending && remaining === 0 && <p role="status">결제 가능 시간이 지났습니다. 서버의 최신 상태를 확인해주세요.</p>}
         {pending && <>
             {import.meta.env.DEV && import.meta.env.VITE_BOOKING_MOCK_FAILURE === 'true' && <GlassButton disabled={busy || remaining === 0} onClick={() => pay(true)}>개발용 결제 실패 확인</GlassButton>}
@@ -56,7 +65,7 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
         {!pending && !confirmed && <div className={styles.resultActions}><GlassButton onClick={onRestart}>다시 예매하기</GlassButton></div>}
         {confirmCancel && cancellable && <CancelDialog busy={busy} onClose={() => setConfirmCancel(false)}>
             <h2 id="reservation-cancel-title">{pending ? '선점을 취소할까요?' : '예매를 취소할까요?'}</h2>
-            <p>{pending ? '선점한 모든 좌석이 해제됩니다.' : '모든 좌석이 취소되고 결제 금액은 모의 전액 환불됩니다.'}</p>
+            <p>{pending ? '선점한 모든 좌석이 해제됩니다.' : '모든 좌석이 취소되고 결제 방식에 따라 취소 또는 환불 처리됩니다.'}</p>
             <p>부분 취소는 지원하지 않으며, 취소한 좌석의 재확보는 보장되지 않습니다.</p>
             <div className={styles.resultActions}><GlassButton disabled={busy} onClick={() => setConfirmCancel(false)}>유지하기</GlassButton>
                 <button className={ui.primary} disabled={busy} onClick={async () => { await cancel(); setConfirmCancel(false); }}>전체 취소 확정</button></div>

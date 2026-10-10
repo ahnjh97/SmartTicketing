@@ -1,5 +1,6 @@
 package smartticketing.entity.enums;
 
 public enum PaymentMethod {
-    MOCK
+    MOCK,
+    TOSS
 }

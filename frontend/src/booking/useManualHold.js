@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { bookingApi } from '../api/booking.js';
+import { openTossPayment } from './tossPayments.js';
 import useAuth from '../hooks/useAuth.js';
 import { positive } from './state.js';
 import { startVisiblePolling } from './visiblePolling.js';
@@ -115,6 +116,35 @@ export default function useManualHold({ smart = false } = {}) {
             }
         } finally { gate.current = false; if (live.current !== null) setBusy(false); }
     }
+    async function payToss() {
+        const id = current?.reservation?.id;
+        if (gate.current) {
+            setFailure({ identity, error: new Error('다른 예약 작업이 진행 중입니다. 예약 상태를 새로고침한 뒤 다시 시도해주세요.') });
+            return;
+        }
+        if (!user || !id) {
+            const error = new Error(!user
+                ? '로그인 상태를 확인할 수 없습니다. 다시 로그인해주세요.'
+                : '예약 정보를 불러오지 못했습니다. 예약 상태를 새로고침해주세요.');
+            setFailure({ identity, error });
+            return;
+        }
+        gate.current = true;
+        generation.current++;
+        setBusy(true);
+        setFailure(null);
+        try {
+            const order = await bookingApi.createTossOrder(id);
+            if (live.current !== identity) return;
+            await openTossPayment(order, id, user.id);
+        } catch (error) {
+            if (live.current === identity) setFailure({ identity, error });
+        } finally {
+            gate.current = false;
+            if (live.current === identity) setBusy(false);
+        }
+    }
+
     async function mutate(operation, fail = false) {
         const id = operation === 'cancel-waiting' ? current?.group?.id : current?.reservation?.id;
         if (!id || gate.current || !user) return;
@@ -149,5 +179,5 @@ export default function useManualHold({ smart = false } = {}) {
     return { user, groupId, reservationId, group: current?.group || (failure?.identity === identity ? failure.group : null), reservation: current?.reservation,
         cancelWaiting: () => mutate('cancel-waiting'), waiting: current?.waiting, payment: current?.payment, pay: fail => mutate('pay', fail), cancel: () => mutate('cancel'),
         receivedAt: current?.receivedAt, loading: Boolean(user && (groupId || reservationId) && !current && !error),
-        busy, error, hold, resetIntent, refresh: () => { setFailure(null); setRevision(value => value + 1); } };
+        busy, error, hold, payToss, resetIntent, refresh: () => { setFailure(null); setRevision(value => value + 1); } };
 }
