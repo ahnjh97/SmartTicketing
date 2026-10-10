@@ -118,7 +118,14 @@ export default function useManualHold({ smart = false } = {}) {
     }
     async function payToss() {
         const id = current?.reservation?.id;
-        if (!id || gate.current || !user) return;
+        if (gate.current) return;
+        if (!user || !id) {
+            const error = new Error(!user
+                ? '로그인 상태를 확인할 수 없습니다. 다시 로그인해주세요.'
+                : '예약 정보를 불러오지 못했습니다. 예약 상태를 새로고침해주세요.');
+            setFailure({ identity, error });
+            return;
+        }
         gate.current = true;
         generation.current++;
         setBusy(true);
