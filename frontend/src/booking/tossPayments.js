@@ -28,7 +28,7 @@ function customerKeyFor(userId) {
     return key;
 }
 
-export async function openTossPayment(order, reservationId, userId) {
+export async function openTossPayment(order, reservationId, userId, candidateId) {
     const clientKey = import.meta.env.VITE_TOSS_CLIENT_KEY?.trim();
     if (!clientKey) throw new Error('프론트엔드 환경변수 VITE_TOSS_CLIENT_KEY가 없습니다. Vite를 재시작해주세요.');
     await loadSdk();
@@ -41,8 +41,17 @@ export async function openTossPayment(order, reservationId, userId) {
     // Keep the HashRouter route in same-origin storage as a fallback in case the provider
     // returns only its payment parameters and drops custom success-URL query parameters.
     const returnSlot = `toss.return-to.${reservationId}`;
-    try { sessionStorage.setItem(returnSlot, window.location.hash || '#/theaters'); } catch { /* URL fallback remains available */ }
-    returnUrl.searchParams.set('tossReturnTo', window.location.hash || '#/theaters');
+    const returnRoute = new URL(window.location.origin);
+    returnRoute.hash = window.location.hash || '#/theaters';
+    const hashRoute = returnRoute.hash.slice(1);
+    const queryIndex = hashRoute.indexOf('?');
+    const routePath = queryIndex >= 0 ? hashRoute.slice(0, queryIndex) : hashRoute;
+    const routeParams = new URLSearchParams(queryIndex >= 0 ? hashRoute.slice(queryIndex + 1) : '');
+    if (candidateId) routeParams.set('candidate', String(candidateId));
+    const savedRoute = `${routePath || '/theaters'}?${routeParams.toString()}`;
+    const returnHash = `#${savedRoute}`;
+    try { sessionStorage.setItem(returnSlot, returnHash); } catch { /* URL fallback remains available */ }
+    returnUrl.searchParams.set('tossReturnTo', returnHash);
     const successUrl = returnUrl.toString();
     const failUrl = new URL(successUrl);
     failUrl.searchParams.set('tossFailed', '1');
