@@ -4,6 +4,10 @@ import { beforeEach, afterEach, expect, test, vi } from 'vitest';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import App from '../src/App.jsx';
 import { seoulDate } from '../src/booking/state.js';
+import { openTossPayment } from '../src/booking/tossPayments.js';
+import { bookingApi } from '../src/api/booking.js';
+
+vi.mock('../src/booking/tossPayments.js', () => ({ openTossPayment: vi.fn() }));
 
 const day=seoulDate(new Date(Date.now()+86400000));
 const member={id:1,nickname:'관객',birthDate:'1990-01-01',address:'서울',preferredTheaters:[71,72,73].map(theaterId=>({theaterId})),preferredSeats:[{position:'MIDDLE_MIDDLE',priority:1}]};
@@ -29,6 +33,7 @@ function allocate(index) {
 }
 async function api(url, options = {}) {
     if(url==='/api/users/me') return response(member);
+    if(url==='/api/main') return response({ nowShowing: [movie], comingSoon: [] });
     if(url.startsWith('/api/movies?')) return response({items:[movie]});
     if(url==='/api/movies/41') return response(movie);
     if(url.startsWith('/api/theaters?')) return response({items:[]});
@@ -46,7 +51,11 @@ async function api(url, options = {}) {
     if(url==='/api/booking-groups/active') return response([]);
     if(url.startsWith('/api/reservations/')) {
         const id=Number(url.split('/')[3]); const c=plan.candidates.find(c=>c.payment?.reservation.id===id);
-        if(url.endsWith('/mock-payments')) {c.status='COMPLETED';c.payment.status='SUCCESS';c.payment.reservation.status='CONFIRMED';c.payment.ticket={ticketNumber:`ST-${id}`};c.waiting.items[0].status='COMPLETED';return response(c.payment,201);}
+        if(url.endsWith('/toss-orders')) return response({ orderId: `st-${id}`, orderName: movie.title, amount: c.payment.reservation.totalAmount });
+        if(url.endsWith('/toss-confirmations')) {
+            expect(JSON.parse(options.body)).toEqual({ orderId: `st-${id}`, paymentKey: `test-payment-${id}`, amount: c.payment.reservation.totalAmount });
+            c.status='COMPLETED';c.payment.status='SUCCESS';c.payment.reservation.status='CONFIRMED';c.payment.ticket={ticketNumber:`ST-${id}`};c.waiting.items[0].status='COMPLETED';return response(c.payment,201);
+        }
         if(url.endsWith('/cancel')) {c.status='CANCELLED';c.payment.reservation.status='CANCELLED';c.waiting.items[0].status='CANCELLED';return response(c.payment);}
         if(url.endsWith('/payment')) return response(c.payment);
     }
@@ -58,12 +67,32 @@ async function api(url, options = {}) {
 function Probe(){const location=useLocation();const navigate=useNavigate();return <><output data-testid="url">{location.pathname}{location.search}</output><button onClick={()=>navigate('/movies?movie=41')}>조건 화면으로 이동</button></>;}
 function mount(path=moviePath){return render(<StrictMode><MemoryRouter initialEntries={[path]}><App/><Probe/></MemoryRouter></StrictMode>);}
 const nativeShow=HTMLDialogElement.prototype.showModal,nativeClose=HTMLDialogElement.prototype.close;
-beforeEach(()=>{localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test');plan=initial();created=0;lost=false;pending=null;vi.stubGlobal('fetch',vi.fn(api));
+beforeEach(()=>{openTossPayment.mockReset().mockResolvedValue(undefined);localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test');plan=initial();created=0;lost=false;pending=null;vi.stubGlobal('fetch',vi.fn(api));
     HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();HTMLDialogElement.prototype.showModal=nativeShow;HTMLDialogElement.prototype.close=nativeClose;});
 const candidates=()=>within(screen.getByRole('region',{name:'대기 및 선점 목록'}));
 async function loaded(){await screen.findByRole('complementary',{name:'좌석 선정 후보'});}
 const choose=label=>fireEvent.click(candidates().getByRole('button',{name:new RegExp(label)}));
+
+async function paySelectedCandidate() {
+    const calls = openTossPayment.mock.calls.length;
+    fireEvent.click(await screen.findByRole('button', { name: '결제', exact: true }));
+    await waitFor(() => expect(openTossPayment).toHaveBeenCalledTimes(calls + 1));
+    const [order, reservationId, userId, candidateId] = openTossPayment.mock.calls.at(-1);
+    const candidate = plan.candidates.find(c => c.groupId === candidateId);
+    expect(userId).toBe(member.id);
+    expect(candidate.payment.reservation.id).toBe(reservationId);
+    expect(candidate.payment.reservation.status).toBe('PENDING');
+    await bookingApi.confirmToss(reservationId, {
+        orderId: order.orderId, paymentKey: `test-payment-${reservationId}`, amount: order.amount,
+    }, crypto.randomUUID());
+    const path = new URL(screen.getByTestId('url').textContent, 'http://local');
+    path.searchParams.set('candidate', candidateId);
+    path.searchParams.set('reservation', reservationId);
+    path.searchParams.set('tossResult', 'success');
+    cleanup(); mount(path.pathname + path.search);
+    await screen.findByRole('heading', { name: '예매가 완료되었습니다' });
+}
 
 test('movie smart creates three independent zone candidates once and persists the plan URL',async()=>{
     mount(moviePath.replace('&entry=MOVIE_SMART',''));
@@ -115,22 +144,24 @@ test('sold-out theater smart creates candidates for its selected show without re
 
 test('paying the side retains the center queue, then center can be paid and only the side cancelled',async()=>{
     allocate(0);mount();await loaded();
-    fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
+    await paySelectedCandidate();
     choose('선호 좌석');expect(screen.getByRole('region',{name:'후보 구역 대기'}).textContent).toContain('대기순서');
+    expect(screen.getByTestId('url').textContent).not.toContain('reservation=');
+    expect(screen.getByTestId('url').textContent).not.toContain('tossResult=');
     expect(candidates().queryByRole('button',{name:/빠른 예매/})).toBeNull();
     allocate(2);fireEvent(window,new Event('focus'));
-    fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
+    await paySelectedCandidate();
     expect(plan.candidates[0].payment.reservation.status).toBe('CONFIRMED');expect(plan.candidates[2].payment.reservation.status).toBe('CONFIRMED');
-    const paidPath = moviePath + '&smart=1&candidate=401'; cleanup(); mount(paidPath); await screen.findByRole('heading',{name:'예매가 완료되었습니다'}); fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
+    const paidPath = moviePath + '&smart=1&candidate=401&reservation=501&tossResult=success'; cleanup(); mount(paidPath); await screen.findByRole('heading',{name:'예매가 완료되었습니다'}); fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
     fireEvent.click(screen.getByRole('button',{name:'전체 취소 확정'}));await screen.findByRole('heading',{name:'예매가 취소되었습니다'});
     expect(plan.candidates[2].payment.reservation.status).toBe('CONFIRMED');expect(plan.candidates[1].waiting.items[0].status).toBe('WAITING');
 });
 
 test('all three candidates can be paid independently',async()=>{
     [0,1,2].forEach(allocate);mount();await loaded();
-    for(const label of ['빠른 예매','균형 추천','선호 좌석']){choose(label);fireEvent.click(await screen.findByRole('button',{name:'모의결제'}));await screen.findByRole('heading',{name:'예매가 완료되었습니다'});}
+    for(const label of ['빠른 예매','균형 추천','선호 좌석']){choose(label);await paySelectedCandidate();}
     expect(plan.candidates.every(c=>c.payment.reservation.status==='CONFIRMED')).toBe(true);
-    expect(fetch.mock.calls.filter(([url])=>url.endsWith('/mock-payments'))).toHaveLength(3);
+    expect(fetch.mock.calls.filter(([url])=>url.endsWith('/toss-confirmations'))).toHaveLength(3);
 });
 
 test('cancelling one zone queue leaves both other queues waiting',async()=>{
@@ -146,7 +177,7 @@ test('cancelling one zone queue leaves both other queues waiting',async()=>{
 });
 
 test('a lost create response retries the same key and never presents a made-up hold',async()=>{
-    lost=true;mount();await screen.findByText('응답 유실');expect(screen.queryByRole('button',{name:'모의결제'})).toBeNull();
+    lost=true;mount();await screen.findByText('응답 유실');expect(screen.queryByRole('button',{name:'결제', exact: true})).toBeNull();
     fireEvent.click(screen.getByRole('button',{name:'다시 확인'}));await loaded();
     const requests=fetch.mock.calls.filter(([url,options])=>url==='/api/smart-booking-candidates' && options.method==='POST');
     expect(requests).toHaveLength(2);expect(requests[0][1].headers['Idempotency-Key']).toBe(requests[1][1].headers['Idempotency-Key']);
@@ -177,15 +208,15 @@ test('theater smart lists and manages existing holds across shows while creating
     expect(candidates().getAllByRole('button')).toHaveLength(3);
     expect(within(candidates().getByRole('group', { name: '신청 묶음 2' })).getAllByRole('button')).toHaveLength(2);
     expect(candidates().getByRole('button', { name: /선호 좌석/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '모의결제' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '결제', exact: true })).toBeNull();
     const request = fetch.mock.calls.find(([url, options]) => url === '/api/smart-booking-candidates' && options?.method === 'POST');
     expect(JSON.parse(request[1].body)).toMatchObject({ entryPoint: 'THEATER_SMART', selectedShowtimeId: 91 });
     const path = screen.getByTestId('url').textContent;
     cleanup(); mount(path); await loaded();
     expect(candidates().getAllByRole('button')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: '모의결제' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '결제', exact: true })).toBeNull();
     choose('다른 극장');
-    fireEvent.click(await screen.findByRole('button', { name: '모의결제' }));
+    await paySelectedCandidate();
     await screen.findByRole('heading', { name: '예매가 완료되었습니다' });
     expect(plan.candidates[0].payment.reservation.status).toBe('CONFIRMED');
     expect(plan.candidates[1].payment.reservation.status).toBe('PENDING');
@@ -262,7 +293,7 @@ test('fewer than three valid candidates are shown honestly',async()=>{
 });
 
 test('refreshing a paid candidate restores all siblings and selected candidate',async()=>{
-    allocate(2);mount();await loaded();choose('선호 좌석');fireEvent.click(screen.getByRole('button',{name:'모의결제'}));
+    allocate(2);mount();await loaded();choose('선호 좌석');await paySelectedCandidate();
     await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
     const path=screen.getByTestId('url').textContent;cleanup();mount(path);await screen.findByRole('heading',{name:'예매가 완료되었습니다'});
     expect(candidates().getAllByRole('button')).toHaveLength(2);expect(created).toBe(1);

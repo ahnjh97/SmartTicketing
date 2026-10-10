@@ -6,10 +6,16 @@ import App from '../src/App.jsx';
 import { seoulDate } from '../src/booking/state.js';
 import SeatPicker from '../src/booking/SeatPicker.jsx';
 import { secondsRemaining } from '../src/booking/useReservationClock.js';
+import { openTossPayment } from '../src/booking/tossPayments.js';
+import { bookingApi } from '../src/api/booking.js';
+
+// The provider window is external; exercise our order and confirmation APIs around it.
+vi.mock('../src/booking/tossPayments.js', () => ({ openTossPayment: vi.fn() }));
 
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
 beforeEach(() => {
+    openTossPayment.mockReset().mockResolvedValue(undefined);
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
     HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
@@ -71,8 +77,15 @@ async function api(url, options = {}) {
     if (url === '/api/booking-groups/401') return response({ ...group, activeReservationId: saved?.id });
     if (url === '/api/booking-groups/401/manual-hold') { saved = { ...reservation }; return response(saved); }
     if (url === '/api/reservations/501/payment') return response(payment());
-    if (url === '/api/reservations/501/mock-payments') { attempts++; paymentStatus = attempts === 1 ? 'FAILED' : 'SUCCESS';
-        saved = { ...saved, status: attempts === 1 ? 'PENDING' : 'CONFIRMED' }; return response(payment()); }
+    if (url === '/api/reservations/501/toss-orders') {
+        attempts++;
+        if (attempts === 1) return new Response(JSON.stringify({ message: '결제 준비에 실패했습니다.' }), { status: 503 });
+        return response({ orderId: 'st-manual', orderName: saved.movieTitle, amount: saved.totalAmount });
+    }
+    if (url === '/api/reservations/501/toss-confirmations') {
+        expect(JSON.parse(options.body)).toEqual({ orderId: 'st-manual', paymentKey: 'test-payment', amount: 18000 });
+        paymentStatus = 'SUCCESS'; saved = { ...saved, status: 'CONFIRMED' }; return response(payment());
+    }
     if (url === '/api/reservations/501/cancel') { saved = { ...saved, status: 'CANCELLED' }; paymentStatus = 'CANCELLED'; return response(saved); }
     if (url === '/api/tickets') return response([]);
     throw new Error(`Unexpected API ${url}`);
@@ -98,14 +111,23 @@ test('real route connects audience, seats, hold, reload, payment failure/retry a
     expect(create[1].headers['Idempotency-Key']).toMatch(/^[a-z0-9-]{16,64}$/);
     const path = screen.getByTestId('path').textContent; cleanup(); mount(path);
     await screen.findByRole('timer');
-    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
-    await screen.findByText(/모의결제에 실패했습니다/);
-    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
+    fireEvent.click(screen.getByRole('button',{ name:'결제', exact: true }));
+    await screen.findAllByText(/결제 준비에 실패했습니다/);
+    expect(openTossPayment).not.toHaveBeenCalled();
+    expect(saved.status).toBe('PENDING');
+    fireEvent.click(screen.getByRole('button',{ name:'결제', exact: true }));
+    await waitFor(() => expect(openTossPayment).toHaveBeenCalledWith(
+        { orderId: 'st-manual', orderName: saved.movieTitle, amount: 18000 }, 501, 1));
+    await bookingApi.confirmToss(501, { orderId: 'st-manual', paymentKey: 'test-payment', amount: 18000 }, crypto.randomUUID());
+    // A provider redirect loads the persisted reservation again, rather than paying optimistically.
+    cleanup(); mount(path + '&tossResult=success');
     await screen.findByRole('heading',{ name:'예매가 완료되었습니다' });
     expect(screen.getByText('ST-TEST')).toBeTruthy();
-    const pays = fetch.mock.calls.filter(([url])=>url.endsWith('/mock-payments'));
-    expect(pays[0][1].headers['Idempotency-Key']).not.toBe(pays[1][1].headers['Idempotency-Key']);
-    expect(JSON.parse(pays[0][1].body)).toEqual({paymentMethod:'MOCK',simulateFailure:false});
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/toss-orders'))).toHaveLength(2);
+    const confirms = fetch.mock.calls.filter(([url]) => url.endsWith('/toss-confirmations'));
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0][1].headers['Idempotency-Key']).toMatch(/^[a-z0-9-]{16,64}$/);
+    expect(fetch.mock.calls.some(([url]) => url.endsWith('/mock-payments'))).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
     expect(screen.getByRole('dialog', { name: '예매를 취소할까요?' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '유지하기' }));
@@ -133,7 +155,7 @@ test('expired restored reservation offers restart and never offers payment', asy
     saved={...reservation,status:'EXPIRED'}; group={id:401}; vi.stubGlobal('fetch',vi.fn(api));
     mount('/theaters?entry=THEATER_NORMAL&group=401&reservation=501');
     await screen.findByRole('heading',{name:'선점 시간이 만료되었습니다'});
-    expect(screen.queryByRole('button',{name:'모의결제'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'결제', exact: true})).toBeNull();
 });
 test('foreign reservation restoration shows the server ownership error without details', async () => {
     vi.stubGlobal('fetch',vi.fn((url,options)=>url==='/api/booking-groups/401' ? Promise.resolve(new Response(JSON.stringify({message:'관람 요청을 찾을 수 없습니다.'}),{status:404})) : api(url,options)));

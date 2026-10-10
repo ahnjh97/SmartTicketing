@@ -110,7 +110,12 @@ export default function useSmartCandidates(user, body, ready) {
             else await bookingApi.cancelGroup(candidate.groupId, request.key);
             forget(request);
             const data = await bookingApi.smartCandidates(candidate.groupId);
-            if (live.current === identity) setParams(previous => { const next = new URLSearchParams(previous); next.set('candidate', candidate.groupId); return next; }, { replace: true });
+            if (live.current === identity) setParams(previous => {
+                const next = new URLSearchParams(previous);
+                next.set('candidate', candidate.groupId);
+                next.delete('tossResult');
+                return next;
+            }, { replace: true });
             if (live.current === identity) save(data);
         } catch (error) {
             if (error.status >= 400 && error.status < 500 && error.status !== 401) forget(request);
@@ -119,6 +124,13 @@ export default function useSmartCandidates(user, body, ready) {
     }
     return { data, receivedAt: current?.receivedAt, error, busy, create, mutate, payToss,
         refresh: () => { setFailure(null); setRevision(n => n + 1); },
-        select: id => setParams(previous => { const next = new URLSearchParams(previous); next.set('candidate', id); return next; }, { replace: true }),
+        select: id => setParams(previous => {
+            const next = new URLSearchParams(previous);
+            next.set('candidate', id);
+            // Payment-return parameters belong only to the reservation just paid.
+            next.delete('reservation');
+            next.delete('tossResult');
+            return next;
+        }, { replace: true }),
         selectedId, managing, candidateIds };
 }
