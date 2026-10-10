@@ -55,8 +55,12 @@ public class UserController {
     }
 
     @DeleteMapping("/me")
-    public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Jwt jwt,
+                                         jakarta.servlet.http.HttpServletRequest request) {
         service.withdraw(current.id(jwt));
+        var session = request.getSession(false);
+        if (session != null) session.invalidate();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         return ResponseEntity.noContent().build();
     }
 }
