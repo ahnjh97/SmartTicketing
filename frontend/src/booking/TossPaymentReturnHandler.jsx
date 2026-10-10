@@ -11,11 +11,17 @@ export default function TossPaymentReturnHandler() {
         const reservationId = params.get('tossReservationId');
         if (!reservationId) return;
         handled.current = true;
+        const returnSlot = `toss.return-to.${reservationId}`;
+        let savedRoute = params.get('tossReturnTo');
+        if (!savedRoute) {
+            try { savedRoute = sessionStorage.getItem(returnSlot); } catch { /* use safe fallback below */ }
+        }
+        savedRoute ||= '#/theaters';
 
         const returnToBooking = result => {
             const target = new URL(window.location.pathname, window.location.origin);
-            const savedRoute = params.get('tossReturnTo') || '#/theaters';
             const route = savedRoute.startsWith('#') ? savedRoute.slice(1) : savedRoute;
+            try { sessionStorage.removeItem(returnSlot); } catch { /* optional browser storage */ }
             const queryIndex = route.indexOf('?');
             const routePath = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
             const routeParams = new URLSearchParams(queryIndex >= 0 ? route.slice(queryIndex + 1) : '');
