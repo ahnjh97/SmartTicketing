@@ -31,6 +31,44 @@ public class TossPaymentService {
         return bookings.createTossOrder(userId, reservationId);
     }
 
+    /** Refund at Toss first; only then release the local reservation and seats. */
+    public BookingResult cancelIfPaidToss(Long userId, Long reservationId, String idempotencyKey) {
+        String paymentKey = bookings.tossPaymentKeyForCancellation(userId, reservationId);
+        if (paymentKey == null) return null;
+        if (secretKey.isBlank())
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "토스 시크릿 키가 백엔드에 설정되지 않았습니다.");
+        boolean cancelled = false;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = client.post()
+                    .uri("/v1/payments/{paymentKey}/cancel", paymentKey)
+                    .headers(headers -> headers.setBasicAuth(secretKey, ""))
+                    .body(Map.of("cancelReason", "SmartTicketing 예매 취소"))
+                    .retrieve()
+                    .body(Map.class);
+            cancelled = response != null && "CANCELED".equals(response.get("status"));
+        } catch (RestClientResponseException ignored) {
+            // A timeout may happen after Toss processed the refund; query before deciding.
+        }
+        if (!cancelled) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> status = client.get()
+                        .uri("/v1/payments/{paymentKey}", paymentKey)
+                        .headers(headers -> headers.setBasicAuth(secretKey, ""))
+                        .retrieve()
+                        .body(Map.class);
+                cancelled = status != null && "CANCELED".equals(status.get("status"));
+            } catch (RestClientResponseException ignored) {
+                // Do not release seats when the provider state cannot be verified.
+            }
+        }
+        if (!cancelled)
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "토스 환불 상태를 확인하지 못했습니다. 좌석은 해제하지 않았습니다.");
+        return bookings.cancel(userId, reservationId, idempotencyKey);
+    }
+
     public BookingResult confirm(Long userId, Long reservationId, String idempotencyKey, TossConfirmRequest request) {
         boolean alreadyPaid = bookings.validateTossConfirmation(userId, reservationId,
                 request.orderId(), request.amount(), request.paymentKey());
