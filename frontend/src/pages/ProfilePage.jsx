@@ -18,17 +18,17 @@ export default function ProfilePage() {
     function renderSocialLogo(provider) {
         const logos = {
             google: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Google_2015_logo.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97//SmartTicketing/main/asset/Google_2015_logo.svg",
                 alt: "Google",
                 className: "social-logo social-wordmark google-logo",
             },
             naver: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Naver_Logotype.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Naver_Logotype.svg",
                 alt: "NAVER",
                 className: "social-logo social-wordmark naver-logo",
             },
             kakao: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Kakao_CI_yellow.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SSmartTicketing/main/asset/Kakao_CI_yellow.svg",
                 alt: "Kakao",
                 className: "social-logo social-wordmark kakao-logo",
             },
