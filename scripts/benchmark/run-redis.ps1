@@ -9,6 +9,6 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($K6Binary -or $JavaBinary -or $Output) {
-    throw 'Windows K6Binary/JavaBinary/Output overrides are retired. Run scripts/benchmark/run-linux.ps1 -Suite booking instead; it manages container runtimes and a unique result folder.'
+    throw 'Windows K6Binary/JavaBinary/Output overrides are retired. Run scripts/benchmark/run-components.ps1 -Suite booking instead; it manages container runtimes and a unique result folder.'
 }
-& (Join-Path $PSScriptRoot 'run-linux.ps1') -Suite booking -Distribution $Distribution -CacheMode $CacheMode -Smoke:$Smoke
+& (Join-Path $PSScriptRoot 'run-components.ps1') -Suite booking -Distribution $Distribution -CacheMode $CacheMode -Smoke:$Smoke

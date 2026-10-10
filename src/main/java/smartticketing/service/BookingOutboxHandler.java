@@ -9,4 +9,9 @@ import java.util.Set;
 public interface BookingOutboxHandler {
     Set<Type> types();
     void handle(BookingOutboxStore.Delivery event);
+
+    /** Same show and schema only. Default preserves every event's side effects. */
+    default void handleBatch(java.util.List<BookingOutboxStore.Delivery> events) {
+        events.forEach(this::handle);
+    }
 }

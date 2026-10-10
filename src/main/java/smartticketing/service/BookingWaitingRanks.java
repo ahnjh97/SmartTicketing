@@ -34,9 +34,8 @@ public class BookingWaitingRanks {
               local target=tonumber(ARGV[i])
               if target>0 then redis.call('ZADD',KEYS[target],ARGV[i+1],ARGV[i+2]) end
             end
-            local ttl=redis.call('PTTL',KEYS[1])
             redis.call('SET',KEYS[1],ARGV[2])
-            if ttl>0 then redis.call('PEXPIRE',KEYS[1],ttl) end
+            for i=1,#KEYS do redis.call('EXPIRE',KEYS[i],120) end
             return 1
             """,Long.class);
     private static final DefaultRedisScript<Long> CURRENT = new DefaultRedisScript<>("""
@@ -44,6 +43,7 @@ public class BookingWaitingRanks {
             for i=2,#KEYS do
               if not redis.call('ZSCORE',KEYS[i],'_') then return 0 end
             end
+            for i=1,#KEYS do redis.call('EXPIRE',KEYS[i],120) end
             return 1
             """,Long.class);
     private static final DefaultRedisScript<Long> REPLACE = new DefaultRedisScript<>("""
@@ -57,6 +57,7 @@ public class BookingWaitingRanks {
             for i=2,#ARGV,3 do redis.call('ZADD',KEYS[tonumber(ARGV[i])],ARGV[i+1],ARGV[i+2]) end
             for i=2,#KEYS do redis.call('EXPIRE',KEYS[i],120) end
             redis.call('SET',KEYS[1],version,'EX',120)
+            redis.call('SET',KEYS[1]..':audit','1','EX',1800)
             return 1
             """,Long.class);
     private static final DefaultRedisScript<List> READ = new DefaultRedisScript<>("""
@@ -99,7 +100,7 @@ public class BookingWaitingRanks {
         prefix="booking-ranks:v1:"+UUID.nameUUIDFromBytes(database.getBytes(java.nio.charset.StandardCharsets.UTF_8))+":";
     }
     public boolean enabled() { return enabled; }
-    /** Null means missing metadata or partial eviction. Never renew the repair TTL. */
+    /** Null means missing metadata or partial eviction. Readers never extend cache lifetime. */
     public Long version(long show) {
         if(!enabled) return null;
         if(System.currentTimeMillis()<unavailableUntil) throw new IllegalStateException("Waiting rank Redis temporarily unavailable");
@@ -122,7 +123,7 @@ public class BookingWaitingRanks {
             return result==1;
         } catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000; throw failure; }
     }
-    /** Check metadata only; do not renew TTL so periodic rebuilding can still heal corruption. */
+    /** Worker-only renewal after checking the DB revision. Independent audit TTL still forces reconciliation. */
     public boolean isCurrent(long show,long version) {
         if(!enabled) return true;
         if(System.currentTimeMillis()<unavailableUntil) throw new IllegalStateException("Waiting rank Redis temporarily unavailable");
@@ -131,6 +132,12 @@ public class BookingWaitingRanks {
             if(result==null) throw new IllegalStateException("Waiting rank check was not acknowledged");
             return result==1;
         } catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000; throw failure; }
+    }
+    public boolean auditDue(long show) {
+        if(!enabled) return false;
+        if(System.currentTimeMillis()<unavailableUntil) throw new IllegalStateException("Waiting rank Redis temporarily unavailable");
+        try { return !Boolean.TRUE.equals(redis.hasKey(keys(show).getFirst()+":audit")); }
+        catch(RuntimeException failure) { unavailableUntil=System.currentTimeMillis()+5000;throw failure; }
     }
     @jakarta.annotation.PostConstruct
     void initialize() {

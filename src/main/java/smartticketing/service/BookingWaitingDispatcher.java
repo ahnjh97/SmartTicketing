@@ -14,6 +14,11 @@ import java.util.*;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class BookingWaitingDispatcher {
     private static final int GROUP_QUERY_BATCH_SIZE = 100;
+    @org.springframework.beans.factory.annotation.Value("${booking.waiting.dispatch-batch-size:50}")
+    private int dispatchBatchSize=50;
+    private final Map<String,Long> cursors=java.util.Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override protected boolean removeEldestEntry(Map.Entry<String,Long> entry) { return size()>1000; }
+    });
     // A hint only: inventory is checked again under the existing MySQL locks.
     // Closed/started shows must still be visited to expire their waiting rows.
     private static final String ACTIONABLE = """
@@ -37,8 +42,11 @@ public class BookingWaitingDispatcher {
     }
 
     public List<Long> pendingShows() {
-        return read.execute(s -> actionable("select distinct s.id from WaitingQueue q join q.showtime s where q.requestGroup is not null and q.status=:status and " + ACTIONABLE + " order by s.id")
-                .setParameter("status", QueueStatus.WAITING).getResultList());
+        return pendingShows(0,100);
+    }
+    public List<Long> pendingShows(long after,int limit) {
+        return read.execute(s -> actionable("select distinct s.id from WaitingQueue q join q.showtime s where s.id>:after and q.requestGroup is not null and q.status=:status and " + ACTIONABLE + " order by s.id")
+                .setParameter("status", QueueStatus.WAITING).setParameter("after",after).setMaxResults(limit).getResultList());
     }
 
     private TypedQuery<Long> actionable(String query) {
@@ -70,13 +78,18 @@ public class BookingWaitingDispatcher {
     }
 
     private int dispatchZone(Long showId, SeatPosition zone) {
-        var groups = read.execute(s -> em.createQuery("""
-                select distinct q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
-                and q.requestGroup is not null and q.status=:status and (:zone is null or q.seatZone=:zone) order by q.requestGroup.id
-                """, Long.class).setParameter("show", showId)
-                .setParameter("zone", zone).setParameter("status", QueueStatus.WAITING).getResultList());
-        if (groups.isEmpty()) return 0;
-        return write.execute(s -> {
+        String cursorKey=showId+":"+zone;
+        int limit=Math.max(1,Math.min(100,dispatchBatchSize));
+        var page = read.execute(s -> em.createQuery("""
+                select q.id,q.requestGroup.id from WaitingQueue q where q.showtime.id=:show
+                and q.id>:after and q.requestGroup is not null and q.status=:status
+                and (:zone is null or q.seatZone=:zone) order by q.id
+                """, Object[].class).setParameter("show", showId).setParameter("after",cursors.getOrDefault(cursorKey,0L))
+                .setParameter("zone", zone).setParameter("status", QueueStatus.WAITING).setMaxResults(limit).getResultList());
+        if (page.isEmpty()) { cursors.remove(cursorKey); return 0; }
+        var queueIds=page.stream().map(row -> (Long)row[0]).toList();
+        var groups=page.stream().map(row -> (Long)row[1]).distinct().sorted().toList();
+        int result=write.execute(s -> {
             em.clear();
             // Multiple-group transactions acquire EVERY group before ANY zone, in ID order.
             var locked = new HashMap<Long, BookingRequestGroup>();
@@ -99,10 +112,10 @@ public class BookingWaitingDispatcher {
             }
             var show = em.find(Showtime.class, showId);
             var queues = em.createQuery("""
-                    select q from WaitingQueue q where q.showtime.id=:show and q.requestGroup is not null
+                    select q from WaitingQueue q where q.showtime.id=:show and q.id in :ids and q.requestGroup is not null
                     and q.status=:status and (:zone is null or q.seatZone=:zone) order by q.seatZone,coalesce(q.zoneQueueNumber,q.queueNumber),q.id
                 """, WaitingQueue.class).setParameter("show", showId).setParameter("status", QueueStatus.WAITING)
-                    .setParameter("zone", zone)
+                    .setParameter("zone", zone).setParameter("ids",queueIds)
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
             // A registration committed after the discovery snapshot. Retry on the next sweep rather
             // than acquiring its group out of order or bypassing its potentially earlier number.
@@ -132,7 +145,8 @@ public class BookingWaitingDispatcher {
                     if (exact.size() != group.getPartySize() || exact.stream().anyMatch(i -> i.getStatus() != SeatStatus.AVAILABLE
                             || i.getReservation() != null || i.getHoldExpiredAt() != null || !i.getSeat().isActive())) continue;
                     BookingZoneLocks.finish(em, shows);
-                    holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, requested, lockedInventory);
+                    try { holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, requested, lockedInventory); }
+                    catch(BookingRejection conflict) { if("WAITING_PRIORITY".equals(conflict.code)) continue; throw conflict; }
                     NotificationService.waitingAcquired(em, group);
                     allocated++;
                     continue;
@@ -144,12 +158,15 @@ public class BookingWaitingDispatcher {
                                 .thenComparingInt(SmartSeatCandidates.Block::firstPosition));
                 if (best.isEmpty()) continue; // Allocate in number order among requests whose conditions currently match.
                 BookingZoneLocks.finish(em, shows);
-                holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, best.get().seatIds(), lockedInventory);
+                try { holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, best.get().seatIds(), lockedInventory); }
+                catch(BookingRejection conflict) { if("WAITING_PRIORITY".equals(conflict.code)) continue; throw conflict; }
                 NotificationService.waitingAcquired(em, group);
                 allocated++;
             }
             return allocated;
         });
+        if(page.size()<limit) cursors.remove(cursorKey); else cursors.put(cursorKey,queueIds.getLast());
+        return result;
     }
 
 }

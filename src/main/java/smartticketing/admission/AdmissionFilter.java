@@ -28,7 +28,15 @@ public class AdmissionFilter extends OncePerRequestFilter {
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String path = request.getRequestURI().substring(request.getContextPath().length());
+        // Use the container's decoded, normalized route, just like MVC/Security.
+        // Raw requestURI can hide /api behind percent escapes or dot segments.
+        String path = request.getServletPath();
+        if (request.getPathInfo() != null) path += request.getPathInfo();
+        if (path.isEmpty()) {
+            try { path = org.springframework.web.util.UriUtils.decode(
+                    request.getRequestURI().substring(request.getContextPath().length()),java.nio.charset.StandardCharsets.UTF_8); }
+            catch (IllegalArgumentException malformed) { write(response,400,Map.of("code","INVALID_PATH")); return; }
+        }
         boolean admission = path.startsWith("/api/admission/");
         if (!admission && (!settings.enabled() || path.equals("/api/health/readiness")
                 || !(path.startsWith("/api/") || path.startsWith("/oauth2/") || path.startsWith("/login/")))) {

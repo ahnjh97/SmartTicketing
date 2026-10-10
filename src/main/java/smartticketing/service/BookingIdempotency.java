@@ -55,6 +55,8 @@ public class BookingIdempotency {
                 .setParameter("key", key).setLockMode(LockModeType.PESSIMISTIC_WRITE).getSingleResult();
         if (!operation.getRequestHash().equals(hash))
             return error(409, "같은 Idempotency-Key에 다른 요청을 사용할 수 없습니다.", now);
+        if (operation.getStatus() != BookingOperationStatus.PROCESSING && operation.getResponseBody()==null)
+            return error(409, "요청 결과의 보관 기간이 지났습니다. 현재 예매 상태를 확인해주세요.", now);
         if (operation.getStatus() != BookingOperationStatus.PROCESSING)
             return new BookingResult(operation.getResponseStatus(), operation.getResponseBody());
 

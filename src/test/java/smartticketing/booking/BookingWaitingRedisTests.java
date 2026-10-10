@@ -13,7 +13,60 @@ import static smartticketing.booking.BookingWaitingTests.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingWaitingRedisTests {
+    @Test void periodicAuditRepairsSilentMemberCorruptionWithoutForcingEveryRefreshToRebuild() {
+        var f=fixture(1,1);register(f);long show=f.shows().getFirst();
+        projection().refresh(show);
+        String zone=prefix+"{"+show+"}:MIDDLE_MIDDLE";
+        redis.opsForZSet().add(zone,"999999999",0);
+        assertThat(ranks.auditDue(show)).isFalse();
+        projection().repairIfNeeded(show);
+        assertThat(redis.opsForZSet().score(zone,"999999999")).isNotNull();
+        redis.delete(prefix+"{"+show+"}:version:audit");
+        assertThat(ranks.auditDue(show)).isTrue();
+        projection().repairIfNeeded(show);
+        assertThat(redis.opsForZSet().score(zone,"999999999")).isNull();
+        assertThat(cachedState(f,ranks).items()).isEqualTo(state(f).items());
+    }
+    @Test
+    @org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named="BOOKING_OUTBOX_BENCHMARK",matches="true")
+    void compareOutboxBurstDrainWithRealProjectionAndDispatcher() {
+        var f=fixture(1,1); register(f,List.of(f.shows().getFirst()),key());
+        tx(em -> { inventory(em,f.shows().getFirst()).forEach(s -> s.setStatus(SeatStatus.BLOCKED)); return null; });
+        var store=new BookingOutboxStore(SharedEntityManagerCreator.createSharedEntityManager(db.factory()),manager());
+        var handler=new BookingWaitingOutboxHandler(dispatcher(CLOCK),projection(),true);
+        // Warm both code paths. Alternate order to reduce one-sided JVM/DB warmup bias.
+        for(int round=0;round<4;round++) for(int variant=0;variant<2;variant++) {
+            boolean batched=(round+variant)%2==0;
+            tx(em -> { em.createQuery("delete from BookingOutboxEvent").executeUpdate(); return null; });
+            projection().refresh(f.shows().getFirst());
+            tx(em -> {
+                for(int i=0;i<64;i++) BookingOutbox.append(em,f.shows().getFirst(),BookingOutboxEvent.Type.WAITING_CHANGED,f.group(),"BURST_BENCHMARK",NOW);
+                return null;
+            });
+            readStatements.clear();
+            long start=System.nanoTime();
+            if(batched) {
+                var worker=new BookingOutboxWorker(store,List.of(handler),new AdminMaintenanceGate(),CLOCK);
+                ReflectionTestUtils.setField(worker,"runBudgetMs",10000L);
+                worker.recover();
+            } else {
+                while(true) {
+                    var event=store.claim(EnumSet.allOf(BookingOutboxEvent.Type.class),NOW,java.time.Duration.ofSeconds(30));
+                    if(event.isEmpty()) break;
+                    handler.handle(event.get()); store.complete(event.get(),NOW);
+                }
+            }
+            long elapsed=System.nanoTime()-start;
+            int statements=readStatements.size();
+            long completed=tx(em -> em.createQuery("select count(e) from BookingOutboxEvent e where e.status=:s",Long.class)
+                    .setParameter("s",BookingOutboxEvent.Status.COMPLETED).getSingleResult());
+            assertThat(completed).isEqualTo(64);
+            assertThat(cachedState(f,ranks).items()).isEqualTo(state(f).items());
+            if(round>0) System.out.printf(Locale.ROOT,"OUTBOX_BURST mode=%s round=%d events=64 elapsedMs=%.3f sql=%d%n",batched?"batch":"single",round,elapsed/1_000_000d,statements);
+        }
+    }
     static LettuceConnectionFactory connection;
     static StringRedisTemplate redis;
     static BookingWaitingRanks ranks;
@@ -204,7 +257,7 @@ class BookingWaitingRedisTests {
         redis.expire(versionKey,java.time.Duration.ofSeconds(30));
         readStatements.clear(); projection().repairIfNeeded(show);
         assertThat(readStatements).noneMatch(sql -> sql.contains("waiting_queues"));
-        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+        assertThat(redis.getExpire(versionKey)).isBetween(100L,120L);
     }
 
     @Test void incrementalCatchupReadsOnlyChangedGroupsAndReplayReadsNoQueueRows() {
@@ -252,7 +305,7 @@ class BookingWaitingRedisTests {
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+middle.name(),"1")).isNull();
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+middle.name(),"2")).isNull();
         assertThat(redis.opsForZSet().score(prefix+"{"+show+"}:"+side.name(),"1")).isEqualTo(5d);
-        assertThat(redis.getExpire(versionKey)).isBetween(1L,30L);
+        assertThat(redis.getExpire(versionKey)).isBetween(100L,120L);
         assertThat(ranks.patch(show,1,2,List.of(a,b),List.of())).isFalse();
         assertThat(ranks.version(show)).isEqualTo(3L);
         redis.delete(prefix+"{"+show+"}:SIDE_REAR");
