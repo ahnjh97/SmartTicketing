@@ -12,7 +12,7 @@
 - Booking lifecycle and mock payment transaction: `src/main/java/smartticketing/service/BookingPaymentService.java`
 - Controller: `src/main/java/smartticketing/controller/BookingPaymentController.java`
 - Payment entity: `src/main/java/smartticketing/entity/Payment.java`
-- Current payment method enum: `src/main/java/smartticketing/entity/enums/PaymentMethod.java` (currently `MOCK` only)
+- Current payment method enum: `src/main/java/smartticketing/entity/enums/PaymentMethod.java` (supports `MOCK` and `TOSS`)
 - Current payment statuses: `src/main/java/smartticketing/entity/enums/PaymentStatus.java`
 - Configuration: `src/main/resources/application.properties`
 - The existing `모의결제` button remains unchanged; a separate `토스 테스트 결제` button is shown beneath it for pending reservations.
