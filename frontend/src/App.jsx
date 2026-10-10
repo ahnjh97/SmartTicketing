@@ -20,10 +20,12 @@ import TicketVerifyPage from "./pages/TicketVerifyPage.jsx";
 import { PAGE_PATHS } from "./navigation.js";
 import AdminRouteGuard from "./components/AdminRouteGuard.jsx";
 import AdminDataPage from "./pages/AdminDataPage.jsx";
+import TossPaymentReturnHandler from './booking/TossPaymentReturnHandler.jsx';
 
 export default function App() {
     return (
         <AuthProvider>
+            <TossPaymentReturnHandler />
             <Routes>
                 <Route path="/ticket/verify/:qrCode" element={<TicketVerifyPage />} />
                 <Route element={<AppLayout />}>
