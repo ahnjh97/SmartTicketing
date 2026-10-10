@@ -1,6 +1,6 @@
 # Toss Payments integration plan for SmartTicketing
 
-> Status: integration design/checklist only. This branch does not yet enable external payments. The existing MOCK flow remains unchanged.
+> Status: initial test integration implemented on `feature/toss-payments`. It is not yet locally built or end-to-end verified. Use test keys only; do not merge to production until the verification checklist passes.
 >
 > Base branch: `feature/jusang`  
 > Working branch: `feature/toss-payments`
@@ -15,7 +15,10 @@
 - Current payment method enum: `src/main/java/smartticketing/entity/enums/PaymentMethod.java` (currently `MOCK` only)
 - Current payment statuses: `src/main/java/smartticketing/entity/enums/PaymentStatus.java`
 - Configuration: `src/main/resources/application.properties`
-- Current UI calls `POST /api/reservations/{id}/mock-payments` and sends `paymentMethod: MOCK`.
+- The existing `모의결제` button remains unchanged; a separate `토스 테스트 결제` button is shown beneath it for pending reservations.
+- The Toss checkout uses the SDK v2 standard script, server-generated order IDs/amounts, authenticated order and confirmation endpoints, provider-side confirmation, and the existing reservation/ticket/queue/outbox finalization transaction.
+- The existing mock endpoint still accepts only `MOCK`; a pending Toss payment cannot be completed through the mock endpoint.
+- Paid Toss cancellations call the provider cancellation API before the existing local cancellation lifecycle. If the provider's cancellation state cannot be verified, local seats are not released.
 - The booking service performs seat inventory validation, payment state update, reservation confirmation, ticket issue, queue completion, and outbox event in its existing transaction. This must not be bypassed by a client-side “success” redirect.
 
 ## 2. Recommended integration shape
@@ -61,7 +64,7 @@ Official docs:
 
 ## 5. Local environment variables
 
-Add these to the untracked local `.env` / shell environment after the integration code is implemented:
+Add these to the untracked project-root `.env` for local testing:
 
 ```dotenv
 # Public key: frontend may read this via Vite's VITE_ prefix
@@ -73,13 +76,14 @@ TOSS_SECRET_KEY=test_gsk_REPLACE_WITH_YOUR_TEST_SECRET_KEY
 
 The key prefixes above describe the recommended v2 payment-integration key type; use the exact pair shown in your own Developer Center. Do not copy the placeholder strings as actual credentials.
 
-For Docker/production, pass `TOSS_SECRET_KEY` only to the backend container through the server's secret environment configuration. Pass the client key to the frontend build environment as needed. Since Vite variables are embedded into the built JavaScript, only the client key may use a `VITE_` prefix.
+Spring Boot imports the optional root `.env` as properties for local development. Vite reads the same root file through `envDir`. For Docker/production, pass `TOSS_SECRET_KEY` only to the backend container through the server's secret environment configuration. Pass the client key to the frontend build environment as needed. Since Vite variables are embedded into the built JavaScript, only the client key may use a `VITE_` prefix.
 
 ## 6. Verification gate before merge
 
 - [ ] New branch is based on `feature/jusang`; neither `main` nor `feature/jusang` is modified by this branch.
 - [ ] Existing mock payment tests still pass.
 - [ ] Test key/client key pair matches; no secret key in frontend bundle, Git history, logs, or screenshots.
+- [ ] Frontend build and backend tests pass; end-to-end test checkout, approval, duplicate redirect, failed payment, and full refund are verified locally.
 - [ ] Backend independently checks reservation ownership, amount, order ID, status, and expiry.
 - [ ] Duplicate confirmation cannot issue duplicate tickets.
 - [ ] Provider timeout/rejection cannot accidentally mark seats as sold.
