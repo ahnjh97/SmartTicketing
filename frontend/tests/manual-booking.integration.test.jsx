@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode, useState } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, beforeEach, vi } from 'vitest';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { HashRouter, MemoryRouter, useLocation } from 'react-router-dom';
 import App from '../src/App.jsx';
 import { seoulDate } from '../src/booking/state.js';
 import SeatPicker from '../src/booking/SeatPicker.jsx';
@@ -15,12 +15,14 @@ vi.mock('../src/booking/tossPayments.js', () => ({ openTossPayment: vi.fn() }));
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
 beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     openTossPayment.mockReset().mockResolvedValue(undefined);
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
     HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
 afterEach(() => {
     cleanup();
+    window.history.replaceState({}, '', '/');
     if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal;
     else delete HTMLDialogElement.prototype.showModal;
     if (nativeClose) HTMLDialogElement.prototype.close = nativeClose;
@@ -67,6 +69,7 @@ function payment() { return { paymentId: paymentStatus ? 601 : null, status: pay
 async function api(url, options = {}) {
     if(url==='/api/booking-groups/401/waiting-queues') return response({groupId:401,groupStatus:'HOLDING',activeReservationId:saved?.id,items:[],choices:[]});
     if (url === '/api/users/me') return response(member);
+    if (url === '/api/main') return response({ nowShowing: [{ id: 41 }], comingSoon: [] });
     if (url === '/api/auth/login') return response({ accessToken: 'test-token' });
     if (url.startsWith('/api/theaters?')) return response({ items: [], totalElements: 0 });
     if (url === '/api/theaters/71') return response({ id: 71, name: '서울 극장' });
@@ -104,6 +107,65 @@ async function selectAndHold() {
     fireEvent.click(screen.getByRole('button',{ name: '예매하기' }));
     await screen.findByRole('heading',{ name: '좌석을 선점했습니다' });
 }
+
+test.each([
+    ['success', false],
+    ['success', true],
+    ['failed', false],
+    ['invalid', false],
+])('manual payment Back restores conditions without another hold: %s, saved route %s', async (result, useStorage) => {
+    saved = { ...reservation };
+    group = { id: 401, audience: { adultCount: 1, youthCount: 1 } };
+    vi.stubGlobal('fetch', vi.fn(api));
+    const savedRoute = `#${initial}&group=401&reservation=501&seats=1,2`;
+    const callback = new URL('/', window.location.origin);
+    callback.searchParams.set('tossReservationId', '501');
+    if (useStorage) sessionStorage.setItem('toss.return-to.501', savedRoute);
+    else callback.searchParams.set('tossReturnTo', savedRoute);
+    if (result === 'success') {
+        callback.searchParams.set('orderId', 'st-manual');
+        callback.searchParams.set('paymentKey', 'test-payment');
+        callback.searchParams.set('amount', '18000');
+    } else if (result === 'failed') callback.searchParams.set('tossFailed', '1');
+    callback.hash = savedRoute;
+    window.history.replaceState({}, '', callback);
+    const mountBrowser = () => render(<StrictMode><HashRouter><App /><Probe /></HashRouter></StrictMode>);
+    const newBookingRequests = () => fetch.mock.calls.filter(([url, options]) => options?.method === 'POST'
+        && (url === '/api/booking-groups' || url === '/api/smart-booking-candidates'
+            || /\/(manual-hold|smart-hold|waiting-queues)$/.test(url)));
+    mountBrowser();
+    const heading = result === 'success' ? '예매가 완료되었습니다' : '좌석을 선점했습니다';
+    await screen.findByRole('heading', { name: heading });
+    expect(window.location.search).toBe('');
+    const resultPath = window.location.hash;
+    expect(newBookingRequests()).toHaveLength(0);
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByTestId('path').textContent).not.toContain('entry='));
+    const conditions = new URL(screen.getByTestId('path').textContent, window.location.origin);
+    expect(Object.fromEntries(conditions.searchParams)).toEqual({
+        theater: '71', movie: '41', showtime: '91', date: day, adult: '1', youth: '1',
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    expect(newBookingRequests()).toHaveLength(0);
+
+    // Reloading this history entry must also remain passive.
+    cleanup(); mountBrowser();
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    expect(newBookingRequests()).toHaveLength(0);
+    await act(async () => { window.history.forward(); });
+    await waitFor(() => expect(window.location.hash).toBe(resultPath));
+    await screen.findByRole('heading', { name: heading });
+    expect(newBookingRequests()).toHaveLength(0);
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/toss-confirmations'))).toHaveLength(result === 'success' ? 1 : 0);
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '일반예매', exact: true }));
+    expect((await screen.findByRole('button', { name: 'A1 좌석' })).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: '예매하기', exact: true }).disabled).toBe(true);
+    expect(newBookingRequests()).toHaveLength(0);
+});
 test('real route connects audience, seats, hold, reload, payment failure/retry and whole cancellation', async () => {
     vi.stubGlobal('fetch',vi.fn(api)); mount(); await selectAndHold();
     const create = fetch.mock.calls.find(([url])=>url==='/api/booking-groups');

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AuthProvider from "./auth/AuthProvider.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import RouteGuard from "./components/RouteGuard.jsx";
@@ -23,6 +23,8 @@ import AdminDataPage from "./pages/AdminDataPage.jsx";
 import TossPaymentReturnHandler from './booking/TossPaymentReturnHandler.jsx';
 
 export default function App() {
+    // Re-evaluate callback visibility when the handler restores the HashRouter route.
+    useLocation();
     // A Toss callback lands on the app before its effect confirms the payment and restores
     // the HashRouter URL. Do not render the previous booking route during that interval,
     // otherwise its stale PENDING reservation flashes as a seat-hold screen.

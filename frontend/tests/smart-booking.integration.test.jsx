@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, afterEach, expect, test, vi } from 'vitest';
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import App from '../src/App.jsx';
 import { seoulDate } from '../src/booking/state.js';
 import { openTossPayment } from '../src/booking/tossPayments.js';
@@ -67,9 +67,9 @@ async function api(url, options = {}) {
 function Probe(){const location=useLocation();const navigate=useNavigate();return <><output data-testid="url">{location.pathname}{location.search}</output><button onClick={()=>navigate('/movies?movie=41')}>조건 화면으로 이동</button></>;}
 function mount(path=moviePath){return render(<StrictMode><MemoryRouter initialEntries={[path]}><App/><Probe/></MemoryRouter></StrictMode>);}
 const nativeShow=HTMLDialogElement.prototype.showModal,nativeClose=HTMLDialogElement.prototype.close;
-beforeEach(()=>{openTossPayment.mockReset().mockResolvedValue(undefined);localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test');plan=initial();created=0;lost=false;pending=null;vi.stubGlobal('fetch',vi.fn(api));
+beforeEach(()=>{window.history.replaceState({}, '', '/');openTossPayment.mockReset().mockResolvedValue(undefined);localStorage.clear();sessionStorage.clear();localStorage.setItem('accessToken','test');plan=initial();created=0;lost=false;pending=null;vi.stubGlobal('fetch',vi.fn(api));
     HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};});
-afterEach(()=>{cleanup();vi.unstubAllGlobals();HTMLDialogElement.prototype.showModal=nativeShow;HTMLDialogElement.prototype.close=nativeClose;});
+afterEach(()=>{cleanup();window.history.replaceState({}, '', '/');vi.unstubAllGlobals();HTMLDialogElement.prototype.showModal=nativeShow;HTMLDialogElement.prototype.close=nativeClose;});
 const candidates=()=>within(screen.getByRole('region',{name:'대기 및 선점 목록'}));
 async function loaded(){await screen.findByRole('complementary',{name:'좌석 선정 후보'});}
 const choose=label=>fireEvent.click(candidates().getByRole('button',{name:new RegExp(label)}));
@@ -93,6 +93,57 @@ async function paySelectedCandidate() {
     cleanup(); mount(path.pathname + path.search);
     await screen.findByRole('heading', { name: '예매가 완료되었습니다' });
 }
+
+test.each([
+    ['movie success', moviePath, 'success', false],
+    ['movie success from saved route', moviePath, 'success', true],
+    ['movie cancelled', moviePath, 'failed', false],
+    ['theater success', theaterPath, 'success', false],
+])('payment return Back opens conditions without creating candidates again: %s', async (_name, path, result, useStorage) => {
+    allocate(0);
+    const savedRoute = `#${path}&smart=1&candidates=401,402,403&candidate=401`;
+    const callback = new URL('/', window.location.origin);
+    callback.searchParams.set('tossReservationId', '501');
+    if (useStorage) sessionStorage.setItem('toss.return-to.501', savedRoute);
+    else callback.searchParams.set('tossReturnTo', savedRoute);
+    if (result === 'success') {
+        callback.searchParams.set('orderId', 'st-501');
+        callback.searchParams.set('paymentKey', 'test-payment-501');
+        callback.searchParams.set('amount', '20000');
+    } else callback.searchParams.set('tossFailed', '1');
+    // A stale executable route is present when the provider returns.
+    callback.hash = path;
+    window.history.replaceState({}, '', callback);
+    render(<StrictMode><HashRouter><App /><Probe /></HashRouter></StrictMode>);
+    await screen.findByRole('heading', { name: result === 'success' ? '예매가 완료되었습니다' : '좌석을 선점했습니다' });
+    expect(created).toBe(0);
+    expect(window.location.search).toBe('');
+    const resultPath = window.location.hash;
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByTestId('url').textContent).not.toContain('entry='));
+    const conditions = new URL(screen.getByTestId('url').textContent, window.location.origin);
+    for (const key of ['entry', 'smart', 'candidate', 'candidates', 'group', 'reservation', 'tossResult']) {
+        expect(conditions.searchParams.has(key)).toBe(false);
+    }
+    expect(conditions.searchParams.get('movie')).toBe('41');
+    expect(conditions.searchParams.get('date')).toBe(day);
+    expect(conditions.searchParams.get('adult')).toBe('2');
+    await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매', exact: true }).disabled).toBe(false));
+    expect(created).toBe(0);
+    expect(fetch.mock.calls.some(([url]) => url.endsWith('/smart-hold') || url.endsWith('/manual-hold'))).toBe(false);
+
+    await act(async () => { window.history.forward(); });
+    await waitFor(() => expect(window.location.hash).toBe(resultPath));
+    await screen.findByRole('heading', { name: result === 'success' ? '예매가 완료되었습니다' : '좌석을 선점했습니다' });
+    expect(created).toBe(0);
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/toss-confirmations'))).toHaveLength(result === 'success' ? 1 : 0);
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByRole('button', { name: '스마트예매', exact: true }).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '스마트예매', exact: true }));
+    await waitFor(() => expect(created).toBe(1));
+});
 
 test('movie smart creates three independent zone candidates once and persists the plan URL',async()=>{
     mount(moviePath.replace('&entry=MOVIE_SMART',''));

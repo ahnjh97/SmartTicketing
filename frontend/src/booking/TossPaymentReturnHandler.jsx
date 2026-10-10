@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { bookingApi } from '../api/booking.js';
+import { bookingSelectionPath } from './navigation.js';
 
 export default function TossPaymentReturnHandler() {
     const handled = useRef(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (handled.current) return;
@@ -19,11 +22,11 @@ export default function TossPaymentReturnHandler() {
         savedRoute ||= '#/theaters';
 
         const returnToBooking = result => {
-            const target = new URL(window.location.pathname, window.location.origin);
             const route = savedRoute.startsWith('#') ? savedRoute.slice(1) : savedRoute;
             try { sessionStorage.removeItem(returnSlot); } catch { /* optional browser storage */ }
             const queryIndex = route.indexOf('?');
-            const routePath = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
+            const requestedPath = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
+            const routePath = ['/movies', '/theaters'].includes(requestedPath) ? requestedPath : '/theaters';
             const routeParams = new URLSearchParams(queryIndex >= 0 ? route.slice(queryIndex + 1) : '');
             // Restore the first candidate as the active candidate if the saved smart-booking
             // URL only contains the candidate scope. The detail panel needs a selected group.
@@ -33,8 +36,13 @@ export default function TossPaymentReturnHandler() {
             }
             routeParams.set('reservation', reservationId);
             routeParams.set('tossResult', result);
-            target.hash = `${routePath || '/theaters'}?${routeParams.toString()}`;
-            window.location.replace(target.toString());
+            // Remove the provider callback before rendering booking routes. Replace this
+            // history entry with passive conditions, then push the result on top of it.
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.search = '';
+            window.history.replaceState(window.history.state, '', cleanUrl);
+            navigate(bookingSelectionPath(routePath, routeParams), { replace: true });
+            navigate(`${routePath}?${routeParams.toString()}`);
         };
 
         if (params.has('tossFailed') || params.has('code')) {
@@ -62,7 +70,7 @@ export default function TossPaymentReturnHandler() {
         }).catch(() => {
             returnToBooking('error');
         });
-    }, []);
+    }, [navigate]);
 
     return null;
 }
