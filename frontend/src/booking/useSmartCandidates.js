@@ -8,9 +8,11 @@ import { openTossPayment } from './tossPayments.js';
 export default function useSmartCandidates(user, body, ready) {
     const [params, setParams] = useSearchParams();
     const managing = params.get('smart') === '1' || Boolean(params.get('group') || params.get('candidate'));
-    const selectedId = params.get('candidate') || params.get('group');
     const candidateScope = params.get('candidates');
     const candidateIds = candidateScope ? candidateScope.split(',').filter(id => /^[1-9]\d*$/.test(id)) : null;
+    // On a payment return, older saved routes may contain candidates=... but no candidate=...
+    // Use the first scoped group so the detail API can reload its reservation state.
+    const selectedId = params.get('candidate') || params.get('group') || candidateIds?.[0];
     const identity = `${user?.id}:${managing ? `manage:${candidateScope || 'all'}` : params.toString()}`;
     const [result, setResult] = useState(null);
     const [failure, setFailure] = useState(null);
