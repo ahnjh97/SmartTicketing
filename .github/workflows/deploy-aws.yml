@@ -47,9 +47,13 @@ jobs:
           bash -n deploy/check-frontend-container.sh
           bash -n deploy/check-backend-container.sh
           bash -n deploy/admin-secret.sh
+          bash -n deploy/toss-secret.sh
           bash -n deploy/reset-theaters.sh
           sh -n deploy/backend-entrypoint.sh
           sh -n frontend/docker/40-runtime-config.sh
+      - name: Verify payment secret transport
+        working-directory: .
+        run: python3 -m unittest discover -s deploy -p 'test_toss_secret.py'
       - name: Deployment regression tests (full suite)
         if: ${{ inputs.full_tests }}
         run: python3 -m unittest discover -s deploy -p 'test_*.py'
@@ -132,11 +136,19 @@ jobs:
           (cd build/deploy && sha256sum --check app.jar.sha256)
           docker build --target prebuilt -t "$BACKEND_IMAGE" .
       - name: Build frontend production image
-        run: >-
-          docker build -t "$FRONTEND_IMAGE"
-          --build-arg VITE_KAKAO_MAP_JS_KEY=
-          --build-arg VITE_API_BASE_URL=
-          --build-arg VITE_BASE_PATH=/ frontend
+        env:
+          VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
+        # Fork PRs can build without secrets; production deployments require a key.
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != 'pull_request' && -z "${VITE_TOSS_CLIENT_KEY//[[:space:]]/}" ]]; then
+            echo 'Set VITE_TOSS_CLIENT_KEY in GitHub Actions Secrets.' >&2
+            exit 1
+          fi
+          docker build -t "$FRONTEND_IMAGE" \
+            --build-arg VITE_KAKAO_MAP_JS_KEY= \
+            --build-arg VITE_TOSS_CLIENT_KEY="$VITE_TOSS_CLIENT_KEY" \
+            --build-arg VITE_API_BASE_URL= \
+            --build-arg VITE_BASE_PATH=/ frontend
       - name: Validate container entrypoints
         run: |
           expected=$(cut -d ' ' -f 1 build/deploy/app.jar.sha256)
@@ -189,6 +201,7 @@ jobs:
           AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
           AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
           ADMIN_INITIAL_PASSWORD: ${{ secrets.ADMIN_INITIAL_PASSWORD }}
+          TOSS_SECRET_KEY: ${{ secrets.TOSS_SECRET_KEY }}
           DEPLOY_SHA: ${{ github.sha }}
           DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
@@ -198,6 +211,7 @@ jobs:
           : "${AWS_SSH_KEY:?Set AWS_SSH_KEY}"
           # Validate before connecting; never print the generated secret assignment.
           bash deploy/admin-secret.sh > /dev/null
+          bash deploy/toss-secret.sh > /dev/null
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$DEPLOY_ID" =~ ^[0-9]+-[0-9]+$ ]]
           (cd build/images && sha256sum --check images.tar.gz.sha256)
@@ -234,7 +248,7 @@ jobs:
           ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
             "umask 077; mkdir -p ~/.smartticketing-artifacts && cat > ~/.smartticketing-artifacts/$DEPLOY_ID.tar.gz" \
             < build/images/images.tar.gz
-          { bash deploy/admin-secret.sh; cat deploy/image-fingerprint.sh deploy/deploy.sh; } | \
+          { bash deploy/admin-secret.sh; bash deploy/toss-secret.sh; cat deploy/image-fingerprint.sh deploy/deploy.sh; } | \
             ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
             "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_FINGERPRINT' '$FRONTEND_FINGERPRINT'"
       - name: Verify public HTTPS and JSON APIs
