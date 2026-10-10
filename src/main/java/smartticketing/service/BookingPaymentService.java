@@ -69,6 +69,7 @@ public class BookingPaymentService {
             reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
         if (p != null && p.getStatus() == PaymentStatus.SUCCESS)
             reject(409, "이미 결제가 완료된 예약입니다.");
+        var retryOrder = p != null && p.getStatus() == PaymentStatus.FAILED;
         var now = holds.now();
         if (p == null) {
             p = new Payment();
@@ -78,11 +79,11 @@ public class BookingPaymentService {
             p.setAmount(r.getTotalAmount());
             p.setCreatedAt(now);
             em.persist(p);
-        } else if (p.getStatus() == PaymentStatus.FAILED) {
+        } else if (retryOrder) {
             p.setStatus(PaymentStatus.READY);
             p.setTossPaymentKey(null);
         }
-        if (p.getTossOrderId() == null || p.getStatus() == PaymentStatus.FAILED) {
+        if (p.getTossOrderId() == null || retryOrder) {
             p.setTossOrderId("st_" + UUID.randomUUID().toString().replace("-", ""));
         }
         p.setAmount(r.getTotalAmount());
@@ -180,7 +181,7 @@ public class BookingPaymentService {
         BookingZoneLocks.finishGroup(em, locked.group().getId(), locked.show().getId());
         if (payment == null) {
             payment = new Payment(); payment.setReservation(r); payment.setCreatedAt(now); payment.setUpdatedAt(now);
-            payment.setPaymentMethod(PaymentMethod.MOCK); payment.setAmount(r.getTotalAmount()); em.persist(payment);
+            payment.setPaymentMethod(request.paymentMethod()); payment.setAmount(r.getTotalAmount()); em.persist(payment);
         }
         if (!Objects.equals(payment.getAmount(), r.getTotalAmount())) throw new IllegalStateException("결제 금액 불일치");
         payment.setUpdatedAt(now);
