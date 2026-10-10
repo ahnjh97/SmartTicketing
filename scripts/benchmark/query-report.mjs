@@ -56,7 +56,7 @@ const html=`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="vie
 <main><h1>Linux k6 조회·로그인 결과 ${env.smoke?'(빠른 동작 확인)':''}</h1>
 <p>${esc(env.startedAt)} · ${esc(env.os)} · Java ${esc(env.java)} · ${esc(env.suite)} · Redis ${compare?'ON/OFF 비교':esc(env.cacheMode.toUpperCase())+' 단독'}</p>
 <div class="note"><strong>${complete?'계획된 실행 완료':'실행 미완료'} · ${rows.length}/${env.plannedExecutions}개 · 실패/부하 미달 구간 ${failures}개</strong>
-<p>영화 200개·극장 20개·회차 20개·좌석 2,000개의 고정된 합성 데이터. 개발 DB와 분리한 임시 환경입니다. 실제 운영 데이터 규모를 재현하지 않았습니다.</p>
+<p>영화 200개·극장 20개·회차 20개·좌석 2,400개의 고정된 합성 데이터. 개발 DB와 분리한 임시 환경입니다. 실제 운영 데이터 규모를 재현하지 않았습니다.</p>
 <p>Redis 공통 스위치만 바꿉니다. 로컬 캐시(500ms)와 동시 요청 병합은 양쪽에 동일하게 유지하며 Redis 조회 TTL도 2초로 고정합니다. 로그인은 임시 계정 하나로 실행하며 ON/OFF 비교에서 제외합니다.</p>
 <p>항목·모드마다 새 JVM·새 DB·새 Redis 키 범위로 시작합니다. ${compare?'동일 항목을 OFF → ON → ON → OFF 순서로 비교합니다(스모크: OFF → ON).':'선택한 모드로 한 번 측정하며, ON/OFF 개선율을 계산하지 않습니다.'} 예열을 포함한 메타데이터는 JSON에 기록합니다.</p>
 <p>${env.smoke?'Smoke는 모드당 한 번, 3초 예열 후 짧게 동작을 확인하며 성능 결론을 내리지 않습니다.':'조회는 본 측정과 같은 요청률·VU 설정으로 15초 예열하며 예열 수치는 본 측정에서 제외합니다. 비교 p95는 실행별 p95의 산술평균입니다.'}

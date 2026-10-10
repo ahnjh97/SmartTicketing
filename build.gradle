@@ -17,6 +17,12 @@ repositories {
 	mavenCentral()
 }
 
+// The identical request-scoped JDBC observer is injected into both comparison builds.
+if (project.hasProperty('benchmarkInstrumentation')) {
+	sourceSets.main.java.srcDir 'src/benchmark/java'
+	sourceSets.test.java.srcDir 'src/benchmarkTest/java'
+}
+
 dependencies {
 	// JPA
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -91,6 +97,7 @@ tasks.register('bookingRedisBenchmark', JavaExec) {
 		copy {
 			from sourceSets.test.output.classesDirs
 			include 'smartticketing/booking/BookingRedisBenchmark*.class', 'smartticketing/booking/QueryRedisBenchmark*.class', 'smartticketing/booking/BenchmarkProcess.class', 'smartticketing/booking/BenchmarkBackend.class', 'smartticketing/booking/TemporaryMysqlDatabase.class'
+			include 'smartticketing/service/BenchmarkSeatLayout.class'
 			into fixtureDir
 		}
 	}

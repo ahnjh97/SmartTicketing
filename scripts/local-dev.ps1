@@ -16,7 +16,7 @@ function Get-CacheMode {
         }
         return $matches[1]
     }
-    return 'false'
+    return 'true'
 }
 
 function Set-CacheMode([bool]$Enabled) {
