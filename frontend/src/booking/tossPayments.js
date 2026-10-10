@@ -38,7 +38,10 @@ export async function openTossPayment(order, reservationId, userId) {
     const paymentWindow = await widgets.renderPaymentWindow({ orderName: order.orderName });
     const returnUrl = new URL(window.location.pathname, window.location.origin);
     returnUrl.searchParams.set('tossReservationId', String(reservationId));
-    // HashRouter keeps the booking context after '#'; preserve it across the provider redirect.
+    // Keep the HashRouter route in same-origin storage as a fallback in case the provider
+    // returns only its payment parameters and drops custom success-URL query parameters.
+    const returnSlot = `toss.return-to.${reservationId}`;
+    try { sessionStorage.setItem(returnSlot, window.location.hash || '#/theaters'); } catch { /* URL fallback remains available */ }
     returnUrl.searchParams.set('tossReturnTo', window.location.hash || '#/theaters');
     const successUrl = returnUrl.toString();
     const failUrl = new URL(successUrl);
