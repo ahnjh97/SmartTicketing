@@ -15,7 +15,7 @@ import smartticketing.entity.enums.*;
 import java.util.*;
 import static smartticketing.service.BookingHoldService.reject;
 
-/** Mock only. All inventory, payment and ticket writes share the hold transaction/lock order. */
+/** Payment orchestration. Inventory, reservation, ticket and queue writes share the hold transaction/lock order. */
 @Service
 @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class BookingPaymentService {
