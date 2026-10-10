@@ -14,7 +14,14 @@ export default function TossPaymentReturnHandler() {
 
         const returnToBooking = result => {
             const target = new URL(window.location.pathname, window.location.origin);
-            target.hash = `/theaters?reservation=${encodeURIComponent(reservationId)}&tossResult=${encodeURIComponent(result)}`;
+            const savedRoute = params.get('tossReturnTo') || '#/theaters';
+            const route = savedRoute.startsWith('#') ? savedRoute.slice(1) : savedRoute;
+            const queryIndex = route.indexOf('?');
+            const routePath = queryIndex >= 0 ? route.slice(0, queryIndex) : route;
+            const routeParams = new URLSearchParams(queryIndex >= 0 ? route.slice(queryIndex + 1) : '');
+            routeParams.set('reservation', reservationId);
+            routeParams.set('tossResult', result);
+            target.hash = `${routePath || '/theaters'}?${routeParams.toString()}`;
             window.location.replace(target.toString());
         };
 
