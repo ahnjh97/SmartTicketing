@@ -1,6 +1,7 @@
 import { formatShowDate } from '../utils/showtimeFormat.js';
 import InlineDetails from '../components/InlineDetails.jsx';
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
@@ -10,7 +11,9 @@ import ui from './BookingComponents.module.css';
 
 const labels = { PENDING: '좌석을 선점했습니다', CONFIRMED: '예매가 완료되었습니다', EXPIRED: '선점 시간이 만료되었습니다', CANCELLED: '예매가 취소되었습니다' };
 export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
-    const { reservation: r, payment, receivedAt, busy, pay, cancel, refresh } = flow;
+    const { reservation: r, payment, receivedAt, busy, pay, payToss, cancel, refresh } = flow;
+    const [params] = useSearchParams();
+    const tossResult = params.get('tossResult');
     const { remaining, serverNow } = useReservationClock(r, receivedAt);
     const [confirmCancel, setConfirmCancel] = useState(false);
     const heading = useRef(null);
@@ -38,6 +41,8 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
                 <div className={styles.paymentCheckout}>
                     <div className={styles.total} aria-label="예약 금액"><strong>{r.totalAmount.toLocaleString('ko-KR')}<small>원</small></strong></div>
                     {pending && <button className={`${ui.primary} ${styles.pay}`} disabled={busy || remaining === 0} onClick={() => pay(false)}>{busy ? '처리 중…' : '모의결제'}</button>}
+                    {pending && <button type="button" className={`${ui.primary} ${styles.pay} ${styles.tossPay}`} disabled={busy || remaining === 0}
+                        onClick={payToss}>{busy ? '토스 결제 준비 중…' : '토스 테스트 결제'}</button>}
                     {confirmed && <Link className={`${ui.primary} ${styles.pay} ${styles.ticketLink}`} to="/tickets">내 티켓에서 확인</Link>}
                 </div>
             </div>
@@ -49,6 +54,10 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
             </button>
         </div>
         {failed && pending && <p className={styles.error} role="alert">모의결제에 실패했습니다. 남은 시간 안에 다시 결제할 수 있습니다.</p>}
+        {tossResult === 'success' && confirmed && <p role="status">토스 테스트 결제가 승인되었습니다.</p>}
+        {tossResult === 'failed' && <p className={styles.error} role="alert">토스 결제가 취소되었거나 실패했습니다. 남은 시간 안에 다시 시도할 수 있습니다.</p>}
+        {tossResult === 'error' && <p className={styles.error} role="alert">토스 결제 승인을 완료하지 못했습니다. 예약 상태를 새로고침하고 개발자센터의 테스트 결제 내역을 확인해주세요.</p>}
+        {tossResult === 'invalid' && <p className={styles.error} role="alert">토스 결제 응답을 확인할 수 없습니다. 다시 결제해주세요.</p>}
         {pending && remaining === 0 && <p role="status">결제 가능 시간이 지났습니다. 서버의 최신 상태를 확인해주세요.</p>}
         {pending && <>
             {import.meta.env.DEV && import.meta.env.VITE_BOOKING_MOCK_FAILURE === 'true' && <GlassButton disabled={busy || remaining === 0} onClick={() => pay(true)}>개발용 결제 실패 확인</GlassButton>}
