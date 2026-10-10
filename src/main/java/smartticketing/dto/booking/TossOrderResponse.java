@@ -1,3 +1,3 @@
 package smartticketing.dto.booking;
 
-public record TossOrderResponse(String clientKey, String orderId, String orderName, Integer amount) {}
+public record TossOrderResponse(String orderId, String orderName, Integer amount) {}
