@@ -111,6 +111,18 @@ public class BookingPaymentService {
         return false;
     }
 
+    /** Returns a paid Toss payment key only after verifying reservation ownership. */
+    public String tossPaymentKeyForCancellation(Long userId, Long reservationId) {
+        holds.requireUser(userId);
+        var reservation = holds.ownedReservationForRead(userId, reservationId);
+        var p = em.createQuery("select p from Payment p where p.reservation.id=:id", Payment.class)
+                .setParameter("id", reservation.getId()).getResultStream().findFirst().orElse(null);
+        if (p == null || p.getPaymentMethod() != PaymentMethod.TOSS || p.getStatus() != PaymentStatus.SUCCESS) return null;
+        if (p.getTossPaymentKey() == null || p.getTossPaymentKey().isBlank())
+            throw new IllegalStateException("토스 결제 키가 없어 안전하게 취소할 수 없습니다.");
+        return p.getTossPaymentKey();
+    }
+
     /** Called only after the server has confirmed the payment with Toss Payments. */
     public BookingResult payTossConfirmed(Long userId, Long reservationId, String key,
             String orderId, String paymentKey, Integer amount) {
