@@ -35,7 +35,7 @@ export async function openTossPayment(order, reservationId, userId) {
     const tossPayments = window.TossPayments(clientKey);
     const widgets = tossPayments.widgets({ customerKey: customerKeyFor(userId) });
     await widgets.setAmount({ currency: 'KRW', value: order.amount });
-    const paymentWindow = await widgets.renderPaymentWindow();
+    const paymentWindow = await widgets.renderPaymentWindow({ orderName: order.orderName });
     const returnUrl = new URL(window.location.pathname, window.location.origin);
     returnUrl.searchParams.set('tossReservationId', String(reservationId));
     const successUrl = returnUrl.toString();
