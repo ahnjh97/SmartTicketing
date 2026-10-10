@@ -33,6 +33,7 @@ public class TossPaymentService {
 
     /** Refund at Toss first; only then release the local reservation and seats. */
     public BookingResult cancelIfPaidToss(Long userId, Long reservationId, String idempotencyKey) {
+        BookingIdempotency.key(idempotencyKey);
         String paymentKey = bookings.tossPaymentKeyForCancellation(userId, reservationId);
         if (paymentKey == null) return null;
         if (secretKey.isBlank())
@@ -42,7 +43,10 @@ public class TossPaymentService {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = client.post()
                     .uri("/v1/payments/{paymentKey}/cancel", paymentKey)
-                    .headers(headers -> headers.setBasicAuth(secretKey, ""))
+                    .headers(headers -> {
+                        headers.setBasicAuth(secretKey, "");
+                        headers.set("Idempotency-Key", idempotencyKey);
+                    })
                     .body(Map.of("cancelReason", "SmartTicketing 예매 취소"))
                     .retrieve()
                     .body(Map.class);
@@ -79,7 +83,10 @@ public class TossPaymentService {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = client.post()
                         .uri("/v1/payments/confirm")
-                        .headers(headers -> headers.setBasicAuth(secretKey, ""))
+                        .headers(headers -> {
+                            headers.setBasicAuth(secretKey, "");
+                            headers.set("Idempotency-Key", idempotencyKey);
+                        })
                         .body(Map.of("paymentKey", request.paymentKey(),
                                 "orderId", request.orderId(),
                                 "amount", request.amount()))
