@@ -25,6 +25,8 @@ import java.util.List;
                 )
         },
         indexes = {
+                @Index(name = "idx_waiting_queues_show_status_zone",
+                        columnList = "showtime_id, status, seat_zone, zone_queue_number"),
                 @Index(
                         name = "idx_waiting_queues_status_number",
                         columnList = "showtime_id, status, queue_number"

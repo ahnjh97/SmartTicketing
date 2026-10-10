@@ -39,6 +39,10 @@ dependencies {
 	// Web
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
+	// Observability / Micrometer metrics
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'

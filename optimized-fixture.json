@@ -1,0 +1,10 @@
+﻿{
+  "cases": [
+    {
+      "loginId": "test",
+      "password": "test",
+      "groupId": 1001,
+      "seatIds": [501]
+    }
+  ]
+}

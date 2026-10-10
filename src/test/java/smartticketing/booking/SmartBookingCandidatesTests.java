@@ -294,7 +294,7 @@ class SmartBookingCandidatesTests {
     static SmartBookingCandidatesService retryPlans(SmartBookingSummaryCache cache) {
         var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
         var service=plans(em);
-        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"configure",new JpaTransactionManager(db.factory()),
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"configure",db.transactions(),
                 cache);
         return service;
     }
@@ -323,6 +323,64 @@ class SmartBookingCandidatesTests {
         assertThat(view.candidates()).hasSize(1);
         assertThat(statements).noneMatch(sql->sql.toLowerCase().contains("for update")
                 || sql.toLowerCase().startsWith("update ") || sql.toLowerCase().startsWith("insert "));
+    }
+
+    @Test void staleCandidateRetryReusesGeometryAndLocksOnlySelectedSeatPrimaryKeys() {
+        var f=zoned(); var cache=org.mockito.Mockito.mock(SmartBookingSummaryCache.class);
+        var zones=Arrays.stream(SeatPosition.values()).map(z->new SmartBookingSummaryCache.Zone(z,true,1,List.<Long>of())).toList();
+        var show=f.shows().getFirst();
+        org.mockito.Mockito.when(cache.read(org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(Map.of(show,new SmartBookingSummaryCache.Snapshot(System.currentTimeMillis(),zones)));
+        var r=request(f);
+        var direct=new CreateBookingGroupRequest(BookingEntryPoint.THEATER_SMART,r.movieId(),r.viewingDate(),2,null,null,show,r.audience());
+        statements.clear();
+        assertThat(retryPlans(cache).create(f.user(),key(),direct).status()).isEqualTo(201);
+        var sql=List.copyOf(statements).stream().map(s->s.toLowerCase(Locale.ROOT)).toList();
+        assertThat(sql.stream().filter(s->s.matches("(?s)select \\w+\\.showtime_id,\\w+\\.id,\\w+\\.seat_row,.*")
+                && s.contains("adjacency_segment") && s.contains("position_in_segment")).count()).isEqualTo(1);
+        assertThat(sql.stream().filter(s->s.contains("from showtime_seats") && s.contains("for update")))
+                .isNotEmpty().allMatch(s->s.matches("(?s).*where \\w+\\.id in .*"));
+        assertThat(tx(em->plans(em).get(f.user(),null)).candidates()).hasSize(1);
+    }
+
+    @Test void candidateCreationDoesNotLockUnusedSeatInSelectedZone() throws Exception {
+        var f=zoned();
+        long rowId=tx(em->inventory(em,f.shows().getFirst()).getFirst().getId());
+        var pool=java.util.concurrent.Executors.newSingleThreadExecutor();
+        try(var blocker=db.open()) {
+            blocker.getTransaction().begin();
+            blocker.find(ShowtimeSeat.class,rowId,LockModeType.PESSIMISTIC_WRITE);
+            try {
+                var result=pool.submit(()->retryPlans().create(f.user(),key(),request(f)))
+                        .get(10,java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(result.status()).as(result.body()).isEqualTo(201);
+                assertThat(plan(f,createdId(result)).candidates().getFirst().zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
+            } finally { blocker.getTransaction().rollback(); }
+        } finally { pool.shutdownNow(); pool.awaitTermination(15,java.util.concurrent.TimeUnit.SECONDS); }
+    }
+
+    @Test void retryRefreshesAvailabilityInsteadOfReusingSeatsTakenAfterSearch() {
+        var f=zoned(); var cache=org.mockito.Mockito.mock(SmartBookingSummaryCache.class);
+        var attempts=new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(call->{
+            if(attempts.getAndIncrement()==0) {
+                // Another committed allocation between search and revalidation changes the best zone.
+                preferredStatus(f,f.shows().getFirst(),SeatStatus.RESERVED);
+                throw new SmartBookingCandidatesService.CandidateChanged();
+            }
+            return null;
+        }).when(cache).putAll(org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyMap());
+        var r=request(f);
+        var direct=new CreateBookingGroupRequest(BookingEntryPoint.THEATER_SMART,r.movieId(),r.viewingDate(),2,null,null,f.shows().getFirst(),r.audience());
+        var result=retryPlans(cache).create(f.user(),key(),direct);
+        assertThat(result.status()).as(result.body()).isEqualTo(201);
+        assertThat(attempts.get()).isEqualTo(2);
+        var candidates=plan(f,createdId(result)).candidates();
+        assertThat(candidates).hasSize(2);
+        assertThat(candidates.getFirst().zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
+        assertThat(candidates.getFirst().payment()).isNull();
+        assertThat(candidates.getLast().zone()).isNotEqualTo(SeatPosition.MIDDLE_MIDDLE);
+        assertThat(candidates.getLast().payment()).isNotNull();
     }
     static Fixture zoned() {
         var f=fixture(2,18);
@@ -468,6 +526,30 @@ class SmartBookingCandidatesTests {
         var all = new ArrayList<>(a); all.addAll(b);
         assertThat(all.stream().filter(c -> c.payment() != null)).hasSize(2);
         assertThat(all.stream().filter(c -> c.zone() == SeatPosition.MIDDLE_MIDDLE && c.payment() == null)).hasSize(1);
+    }
+
+    @Test void candidateCreationDoesNotLockUnselectedZoneOrItsInventory() throws Exception {
+        var f = zoned();
+        long rowId = tx(em -> {
+            var counter = new WaitingZoneSequence(); counter.setId(f.shows().getFirst() + "_SIDE_MIDDLE"); em.persist(counter);
+            return inventory(em, f.shows().getFirst()).stream()
+                    .filter(i -> i.getSeat().getSeatPosition() == SeatPosition.SIDE_MIDDLE).findFirst().orElseThrow().getId();
+        });
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (var blocker = db.open()) {
+            blocker.getTransaction().begin();
+            blocker.find(WaitingZoneSequence.class, f.shows().getFirst() + "_SIDE_MIDDLE", LockModeType.PESSIMISTIC_WRITE);
+            blocker.find(ShowtimeSeat.class, rowId, LockModeType.PESSIMISTIC_WRITE);
+            try {
+                var result = pool.submit(() -> retryPlans().create(f.user(), key(), request(f)))
+                        .get(10, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(result.status()).as(result.body()).isEqualTo(201);
+                var candidates = plan(f, createdId(result)).candidates();
+                assertThat(candidates).hasSize(1);
+                assertThat(candidates.getFirst().zone()).isEqualTo(SeatPosition.MIDDLE_MIDDLE);
+                assertThat(candidates.getFirst().payment()).isNotNull();
+            } finally { blocker.getTransaction().rollback(); }
+        } finally { pool.shutdownNow(); pool.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS); }
     }
 
     @Test void waitingInOneZoneDoesNotAllocateFreeSeatsInOtherZones() throws Exception {

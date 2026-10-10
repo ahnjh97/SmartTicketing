@@ -13,7 +13,7 @@ import java.util.*;
 
 /** Independent smart bookings. Recommendation batches have no persisted parent. */
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class SmartBookingCandidatesService {
     private final EntityManager em;
     private final BookingGroupService groups;
@@ -28,6 +28,7 @@ public class SmartBookingCandidatesService {
         this.summaries=summaries;
         creationTransaction=new org.springframework.transaction.support.TransactionTemplate(transactions);
         creationTransaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        creationTransaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public static class CandidateChanged extends RuntimeException {}
 
@@ -48,22 +49,23 @@ public class SmartBookingCandidatesService {
 
     @Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public BookingResult create(Long userId, String key, CreateBookingGroupRequest request) {
-        if(creationTransaction==null)return createAttempt(userId,key,request,false);
+        var seats = new SmartCandidateSeats();
+        if(creationTransaction==null)return createAttempt(userId,key,request,false,seats);
         for(int attempt=0;attempt<3;attempt++) {
             boolean fresh=attempt>0;
-            try { return creationTransaction.execute(status->createAttempt(userId,key,request,fresh)); }
+            try { return creationTransaction.execute(status->createAttempt(userId,key,request,fresh,seats)); }
             catch(CandidateChanged changed) { if(attempt==2)throw new ResponseStatusException(HttpStatus.CONFLICT,"좌석 상태가 변경되었습니다. 다시 시도해주세요."); }
         }
         throw new IllegalStateException();
     }
 
-    private BookingResult createAttempt(Long userId, String key, CreateBookingGroupRequest request, boolean fresh) {
+    private BookingResult createAttempt(Long userId, String key, CreateBookingGroupRequest request, boolean fresh, SmartCandidateSeats seats) {
         BookingIdempotency.key(key); holds.lockBookingUser(userId); holds.requireUser(userId);
         if (request == null || request.entryPoint() == BookingEntryPoint.THEATER_NORMAL)
             throw new IllegalArgumentException("스마트예매 조건이 필요합니다.");
         return operations.execute(userId, BookingOperationType.CREATE_SMART_CANDIDATES, key, request, holds.now(), () -> {
             var template = groups.build(userId, request);
-            var options = options(template, fresh);
+            var options = options(template, fresh, seats);
             if (options.isEmpty()) throw new BookingRejection(409, "NO_CANDIDATES", "조건에 맞는 후보가 없습니다. 시간·극장·인원을 변경해주세요.");
 
             var tie = Comparator.comparingInt(Option::theater).thenComparing(o -> o.show().getStartTime())
@@ -86,17 +88,25 @@ public class SmartBookingCandidatesService {
             if (!selected.getLast().option().available()) {
                 choose(selected, remaining, "FAST", fast);
             }
-            // Only the chosen shows are locked. A changed snapshot rolls back the entire
+            // Only the chosen zones are locked. A changed snapshot rolls back the entire
             // attempt before any drafts or queue numbers are written, then retries fresh.
             var selectedShows=selected.stream().map(s->s.option().show()).distinct().sorted(Comparator.comparing(Showtime::getId)).toList();
-            for(var show:selectedShows) em.refresh(show,LockModeType.PESSIMISTIC_WRITE);
+            var scopes = new TreeSet<BookingZoneLocks.Scope>();
+            selected.forEach(choice -> BookingZoneLocks.add(scopes, choice.option().show().getId(), choice.option().zone()));
+            for (var show : selectedShows) if (!em.createQuery("select q.id from WaitingQueue q where q.showtime.id=:show and q.seatZone is null and q.status=:waiting", Long.class)
+                    .setParameter("show", show.getId()).setParameter("waiting", QueueStatus.WAITING).setMaxResults(1).getResultList().isEmpty())
+                BookingZoneLocks.add(scopes, show.getId(), null);
+            BookingZoneLocks.lock(em, scopes);
+            for(var show:selectedShows) em.refresh(show);
             for(var show:selectedShows) {
-                var inventory=holds.lockInventory(show.getId());
-                var queues=em.createQuery("select q from WaitingQueue q where q.showtime.id=:s and q.status=:state order by q.id",WaitingQueue.class)
-                        .setParameter("s",show.getId()).setParameter("state",QueueStatus.WAITING).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+                var zones = scopes.stream().filter(scope -> scope.show().equals(show.getId())).map(BookingZoneLocks.Scope::zone).toList();
+                var inventory=seats.read(em, List.of(show.getId()), zones).get(show.getId());
+                var queues=em.createQuery("select q.seatZone,count(q) from WaitingQueue q where q.showtime.id=:s and q.status=:state and (q.seatZone in :zones or q.seatZone is null) group by q.seatZone",Object[].class)
+                        .setParameter("s",show.getId()).setParameter("state",QueueStatus.WAITING).setParameter("zones", zones).getResultList();
                 var counts=new EnumMap<SeatPosition,Long>(SeatPosition.class);
-                for(var zone:SeatPosition.values())counts.put(zone,queues.stream().filter(q->q.getSeatZone()==null || q.getSeatZone()==zone).count());
-                var checked=summarize(show,inventory,counts,template.getPartySize());
+                for(var row:queues) for(var zone:SeatPosition.values())
+                    if(row[0]==null || row[0]==zone) counts.merge(zone,(Long)row[1],Long::sum);
+                var checked=summarize(inventory,counts,template.getPartySize());
                 try { BookingHoldService.validateShow(show,holds.now()); BookingAudiencePolicy.revalidate(template,show.getStartTime().toLocalDate()); }
                 catch(BookingRejection changed) { throw new CandidateChanged(); }
                 for(var choice:selected) if(choice.option().show().getId().equals(show.getId())) {
@@ -120,6 +130,7 @@ public class SmartBookingCandidatesService {
                 draft.setCreatedAt(template.getCreatedAt()); draft.setUpdatedAt(template.getUpdatedAt());
                 drafts.add(draft);
             }
+            BookingZoneLocks.finish(em, selectedShows.stream().map(Showtime::getId).toList());
             drafts.forEach(em::persist);
             for (int index = 0; index < drafts.size(); index++) {
                 var draft = drafts.get(index);
@@ -150,7 +161,7 @@ public class SmartBookingCandidatesService {
         remaining.remove(option);
     }
 
-    private List<Option> options(BookingRequestGroup template, boolean fresh) {
+    private List<Option> options(BookingRequestGroup template, boolean fresh, SmartCandidateSeats seats) {
         var theaterIds=template.getTheaterPreferences().stream().map(Theater::getId).toList();
         if (template.getEntryPoint()==BookingEntryPoint.MOVIE_SMART && theaterIds.isEmpty())
             throw new BookingRejection(409,"NO_THEATER_SCOPE","선호극장을 설정해주세요.");
@@ -175,21 +186,12 @@ public class SmartBookingCandidatesService {
         var ids=shows.stream().map(Showtime::getId).toList();
         var cached=summaries==null||fresh?new HashMap<Long,SmartBookingSummaryCache.Snapshot>():summaries.read(ids,template.getPartySize());
         var missing=ids.stream().filter(id->!cached.containsKey(id)).toList();
-        var inventories=new HashMap<Long,List<ShowtimeSeat>>();
+        var inventories=seats.read(em,missing,null);
         var counts=new HashMap<Long,Map<SeatPosition,Long>>();
         var computed=new HashMap<Long,SmartBookingSummaryCache.Snapshot>();
-        // Scalar inventory snapshots avoid putting stale ShowtimeSeat entities into the
-        // persistence context before the final locking read. Fetch all shows in batches.
+        // Queue counts are scalar; geometry is reused across retries and only availability is refreshed.
         for(int start=0;start<missing.size();start+=100) {
             var chunk=missing.subList(start,Math.min(start+100,missing.size()));
-            var rows=em.createQuery("select i.showtime.id, s, i.status, i.reservation.id, i.holdExpiredAt from ShowtimeSeat i join i.seat s join fetch s.screen where i.showtime.id in :ids order by i.showtime.id,i.id",Object[].class)
-                    .setParameter("ids",chunk).getResultList();
-            for(var row:rows) {
-                var seat=new ShowtimeSeat();seat.setSeat((Seat)row[1]);seat.setStatus((SeatStatus)row[2]);
-                if(row[3]!=null)seat.setReservation(em.getReference(Reservation.class,(Long)row[3]));
-                seat.setHoldExpiredAt((LocalDateTime)row[4]);
-                inventories.computeIfAbsent((Long)row[0],ignored->new ArrayList<>()).add(seat);
-            }
             var queues=em.createQuery("select q.showtime.id,q.seatZone,count(q) from WaitingQueue q where q.showtime.id in :ids and q.status=:state group by q.showtime.id,q.seatZone",Object[].class)
                     .setParameter("ids",chunk).setParameter("state",QueueStatus.WAITING).getResultList();
             for(var row:queues) {
@@ -202,7 +204,7 @@ public class SmartBookingCandidatesService {
             catch(BookingRejection excluded) { continue; }
             var snapshot=cached.get(show.getId());
             if(snapshot==null) {
-                snapshot=summarize(show,inventories.getOrDefault(show.getId(),List.of()),counts.getOrDefault(show.getId(),Map.of()),template.getPartySize());
+                snapshot=summarize(inventories.get(show.getId()),counts.getOrDefault(show.getId(),Map.of()),template.getPartySize());
                 computed.put(show.getId(),snapshot);
             }
             for(var zone:preferences) {
@@ -215,12 +217,9 @@ public class SmartBookingCandidatesService {
         return result;
     }
 
-    private SmartBookingSummaryCache.Snapshot summarize(Showtime show,List<ShowtimeSeat> inventory,Map<SeatPosition,Long> counts,int party) {
-        var capacity=inventory.stream().filter(i->i.getStatus()!=SeatStatus.BLOCKED).map(i->{
-            var free=new ShowtimeSeat();free.setSeat(i.getSeat());free.setStatus(SeatStatus.AVAILABLE);return free;
-        }).toList();
-        var structural=SmartSeatCandidates.prepare(capacity,show.getScreen().getId());
-        var current=SmartSeatCandidates.prepare(inventory,show.getScreen().getId());
+    private SmartBookingSummaryCache.Snapshot summarize(SmartCandidateSeats.Snapshot inventory,Map<SeatPosition,Long> counts,int party) {
+        var structural=SmartSeatCandidates.prepareSeats(inventory.capacity());
+        var current=SmartSeatCandidates.prepareSeats(inventory.current());
         var zones=new ArrayList<SmartBookingSummaryCache.Zone>();
         var order=SmartSeatCandidates.priorityOrder().thenComparingDouble(SmartSeatCandidates.Block::centerDistance)
                 .thenComparing(SmartSeatCandidates.Block::row).thenComparing(SmartSeatCandidates.Block::segment)

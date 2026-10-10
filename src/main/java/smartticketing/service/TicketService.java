@@ -167,7 +167,30 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public List<TicketResponse> mine(Long userId) {
-        return tickets.findByReservationUserIdOrderByCreatedAtDesc(userId).stream().map(this::to).toList();
+        return toList(tickets.findByReservationUserIdOrderByCreatedAtDesc(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public smartticketing.dto.common.CursorPage<TicketResponse> page(Long userId, String cursor, int size) {
+        var before = smartticketing.util.CreatedCursor.parse(cursor, size);
+        var found = tickets.findPage(userId, before.time(), before.id(), org.springframework.data.domain.PageRequest.of(0, size + 1));
+        var items = found.stream().limit(size).toList();
+        String next = found.size() > size ? smartticketing.util.CreatedCursor.encode(items.getLast().getCreatedAt(), items.getLast().getId()) : null;
+        return new smartticketing.dto.common.CursorPage<>(toList(items), next);
+    }
+
+    private List<TicketResponse> toList(List<Ticket> items) {
+        if (items.isEmpty()) return List.of();
+        var labels = new HashMap<Long, List<String>>();
+        var ids = items.stream().map(t -> t.getReservation().getId()).distinct().toList();
+        // Bound IN lists even for legacy clients that still request the full list.
+        for (int start = 0; start < ids.size(); start += 100) {
+            for (var row : seats.findWithSeatsByReservationIds(ids.subList(start, Math.min(start + 100, ids.size())))) {
+                labels.computeIfAbsent(row.getReservation().getId(), ignored -> new ArrayList<>())
+                        .add(row.getSeat().getSeatRow() + row.getSeat().getSeatNumber());
+            }
+        }
+        return items.stream().map(t -> to(t, labels.getOrDefault(t.getReservation().getId(), List.of()))).toList();
     }
 
     @Transactional(readOnly = true)
@@ -179,9 +202,13 @@ public class TicketService {
     }
 
     private TicketResponse to(Ticket t) {
+        var ss = seats.findByReservationId(t.getReservation().getId()).stream().sorted(java.util.Comparator.comparing((ReservationSeat x) -> x.getSeat().getSeatRow()).thenComparing(x -> x.getSeat().getSeatNumber())).map(x -> x.getSeat().getSeatRow() + x.getSeat().getSeatNumber()).toList();
+        return to(t, ss);
+    }
+
+    private TicketResponse to(Ticket t, List<String> ss) {
         Reservation r = t.getReservation();
         var sh = r.getShowtime();
-        var ss = seats.findByReservationId(r.getId()).stream().sorted(java.util.Comparator.comparing((ReservationSeat x) -> x.getSeat().getSeatRow()).thenComparing(x -> x.getSeat().getSeatNumber())).map(x -> x.getSeat().getSeatRow() + x.getSeat().getSeatNumber()).toList();
         return new TicketResponse(t.getId(), r.getId(), t.getTicketNumber(), t.getQrCode(), t.getStatus(), sh.getMovie().getTitle(), sh.getScreen().getTheater().getName(), sh.getScreen().getName(), sh.getStartTime(), sh.getEndTime(), ss, t.getCreatedAt(), r.getRequestGroup() == null ? null : r.getRequestGroup().getId());
     }
 }

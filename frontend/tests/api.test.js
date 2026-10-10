@@ -27,6 +27,45 @@ afterEach(() => {
     else globalThis.localStorage = originalStorage;
 });
 
+test("request timeout aborts a stalled mutation without replaying it", async () => {
+    let attempts=0;
+    globalThis.fetch = (_url, { signal }) => new Promise((_resolve,reject) => {
+        attempts++;
+        signal.addEventListener("abort", () => reject(signal.reason), { once:true });
+    });
+    await assert.rejects(request("/mutation", { method:"POST", timeoutMs:10 }),
+        error => error instanceof ApiError && error.code === "REQUEST_TIMEOUT");
+    assert.equal(attempts,1);
+});
+
+test("caller cancellation remains distinguishable from request timeout", async () => {
+    const controller=new AbortController();
+    globalThis.fetch = (_url, { signal }) => new Promise((_resolve,reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once:true });
+    });
+    const pending=request("/query", { signal:controller.signal });
+    controller.abort();
+    await assert.rejects(pending, error => error.name === "AbortError");
+});
+
+test("SSE connection acknowledgement reconciles state even without a notification event", async () => {
+    let refreshed;
+    const received=new Promise(resolve => { refreshed=resolve; });
+    globalThis.fetch=async (_url,{signal}) => new Response(new ReadableStream({
+        start(controller) {
+            signal.addEventListener("abort", () => controller.error(signal.reason), {once:true});
+            controller.enqueue(new TextEncoder().encode("event: connected\ndata: ok\n\n"));
+        },
+    }), {headers:{"Content-Type":"text/event-stream"}});
+    const unsubscribe=notificationApi.subscribe(() => refreshed());
+    let timer;
+    try {
+        await Promise.race([received,new Promise((_resolve,reject) => {
+            timer=setTimeout(() => reject(new Error("reconnect did not reconcile")),1000);
+        })]);
+    } finally { clearTimeout(timer);unsubscribe(); }
+});
+
 test("public login and signup omit any previous user's bearer token", async () => {
     const login = { loginId: "tester", password: "password123" };
     await authApi.login(login);

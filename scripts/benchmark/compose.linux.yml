@@ -1,8 +1,6 @@
 services:
   mysql:
     image: mysql:8.4
-    cpus: 2
-    mem_limit: 1536m
     environment:
       MYSQL_ROOT_PASSWORD: ${BENCH_DB_PASSWORD:?test password required}
       TZ: Asia/Seoul
@@ -16,8 +14,6 @@ services:
       start_period: 20s
   redis:
     image: redis:7-alpine
-    cpus: 1
-    mem_limit: 256m
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -31,16 +27,12 @@ services:
     build:
       context: ${BENCHMARK_OUTPUT:?output path required}/image-context
       target: prebuilt
-    cpus: 4
-    mem_limit: 4g
     environment:
       DB_PASSWORD: ${BENCH_DB_PASSWORD:?test password required}
       TZ: Asia/Seoul
   k6:
     image: grafana/k6:2.3.0
     user: "0:0"
-    cpus: 2
-    mem_limit: 2g
     working_dir: /app
     volumes:
       - ../../k6:/app/k6:ro
@@ -50,8 +42,6 @@ services:
     build:
       context: ../..
       dockerfile: scripts/benchmark/Dockerfile
-    cpus: 4
-    mem_limit: 4g
     depends_on:
       mysql:
         condition: service_healthy

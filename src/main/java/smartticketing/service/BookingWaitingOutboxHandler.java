@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import smartticketing.entity.BookingOutboxEvent.Type;
 import java.util.*;
 
-/** Allocation remains idempotent under MySQL locks; refresh always reloads committed state. */
+/** Allocation is idempotent; projection catches up committed changes using the outbox revision range. */
 @Component
 public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
     private final BookingWaitingDispatcher dispatcher;
@@ -16,10 +16,24 @@ public class BookingWaitingOutboxHandler implements BookingOutboxHandler {
         this.dispatcher=dispatcher; this.projection=projection; this.dispatchEnabled=dispatchEnabled;
     }
     public Set<Type> types() { return EnumSet.allOf(Type.class); }
+    @Override public void handleBatch(List<BookingOutboxStore.Delivery> events) {
+        // These are invalidations, not event payloads: one current-state reconciliation
+        // covers every claimed revision. Never absorb an event claimed after this batch.
+        if(events.isEmpty()) return;
+        if(events.stream().anyMatch(e -> e.schemaVersion()!=1 || !e.showtimeId().equals(events.getFirst().showtimeId())))
+            throw new IllegalArgumentException("Incompatible booking event batch");
+        handle(events.stream().max(Comparator.comparingLong(BookingOutboxStore.Delivery::aggregateVersion)).orElseThrow());
+    }
     public void handle(BookingOutboxStore.Delivery event) {
         if(event.schemaVersion()!=1) throw new IllegalArgumentException("Unsupported booking event schema");
-        // Redis failure must never prevent seats from being assigned in MySQL.
-        if(dispatchEnabled) dispatcher.dispatch(event.showtimeId());
-        projection.refresh(event.showtimeId());
+        // Publish the committed queue change before potentially slow/busy allocation.
+        // Redis failure must never prevent seats from being assigned in MySQL;
+        // the final update below propagates failure so the durable event is retried.
+        if(dispatchEnabled) {
+            try { projection.update(event.showtimeId()); }
+            catch(RuntimeException unavailable) { /* Retry after the allocation attempt. */ }
+            dispatcher.dispatch(event.showtimeId());
+        }
+        projection.update(event.showtimeId());
     }
 }

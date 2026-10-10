@@ -3,7 +3,7 @@ package smartticketing.config;
 import smartticketing.auth.CustomOAuth2UserService;
 import smartticketing.auth.OAuth2SuccessHandler;
 import smartticketing.performace.NearbyTheaterPerformance;
-import smartticketing.repository.TheaterRepository;
+import smartticketing.service.NearbyTheaterQuery;
 import smartticketing.service.KakaoMapService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -87,7 +87,7 @@ class OptionalIntegrationsTests {
 
     @Test
     void missingMapKeyForWalkingReturnsUnavailableWithoutDatabaseAccess() {
-        var theaters = mock(TheaterRepository.class);
+        var theaters = mock(NearbyTheaterQuery.class);
         var service = new KakaoMapService(theaters, "", mock(NearbyTheaterPerformance.class), new smartticketing.service.RedisQueryCache(null, false, 2000, "test-disabled"));
         assertThatThrownBy(() -> service.findNearbyTheaters(null, 37.5, 127.0, 10000, "WALK"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,

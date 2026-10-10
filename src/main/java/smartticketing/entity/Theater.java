@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 @Table(
         name = "theaters",
         indexes = {
+                @Index(name = "idx_theaters_active_name", columnList = "is_active, name, id"),
+                @Index(name = "idx_theaters_active_brand_name", columnList = "is_active, brand, name, id"),
                 @Index(
                         name = "idx_theaters_brand_name",
                         columnList = "brand, name"

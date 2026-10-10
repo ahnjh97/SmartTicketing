@@ -61,7 +61,7 @@ const html=`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="vie
 <p>항목·모드마다 새 JVM·새 DB·새 Redis 키 범위로 시작합니다. ${compare?'동일 항목을 OFF → ON → ON → OFF 순서로 비교합니다(스모크: OFF → ON).':'선택한 모드로 한 번 측정하며, ON/OFF 개선율을 계산하지 않습니다.'} 예열을 포함한 메타데이터는 JSON에 기록합니다.</p>
 <p>${env.smoke?'Smoke는 모드당 한 번, 3초 예열 후 짧게 동작을 확인하며 성능 결론을 내리지 않습니다.':'조회는 본 측정과 같은 요청률·VU 설정으로 15초 예열하며 예열 수치는 본 측정에서 제외합니다. 비교 p95는 실행별 p95의 산술평균입니다.'}
 요청 실패·검사 실패·누락된 반복(dropped iterations)이 있으면 성능 비교를 보류합니다.</p>
-<p>WSL2 Docker에서 ${env.fixture?.execution==='production-prebuilt-jar'?'배포용 prebuilt 이미지의 app.jar를 실행합니다. 백엔드는 4 CPU·4 GiB, 별도 k6는 2 CPU·2 GiB이며 Redis AOF를 켭니다.':'앱과 k6는 4 CPU·4 GiB,'} MySQL은 2 CPU·1.5 GiB, Redis는 1 CPU·256 MiB 상한입니다. DB 버퍼 풀·OS 캐시는 강제 비우지 않으며, 동일한 예열 후의 성능을 비교합니다. 콜드 스타트나 AWS 최대 처리량을 뜻하지 않습니다. <a href="runner.log">실행 로그</a></p></div>
+<p>WSL2 Docker에서 ${env.fixture?.execution==='production-prebuilt-jar'?'배포용 prebuilt 이미지의 app.jar를 실행합니다. k6는 별도 컨테이너에서 실행하며 Redis AOF를 켭니다.':'앱과 k6는 컨테이너를 공유합니다.'} 실행 당시 자원 설정은 원본 실행 기록을 참고하세요. DB 버퍼 풀·OS 캐시는 강제 비우지 않으며, 동일한 예열 후의 성능을 비교합니다. 콜드 스타트나 AWS 최대 처리량을 뜻하지 않습니다. <a href="runner.log">실행 로그</a></p></div>
 <h2>ON/OFF 비교</h2><div class="scroll"><table><thead><tr><th>항목</th><th>OFF p95 ms</th><th>ON p95 ms</th><th>변화</th></tr></thead><tbody>
 ${pairs.map(p=>`<tr><td>${esc(p.name)}</td><td>${fmt(p.off)}</td><td>${fmt(p.on)}</td><td class="${p.valid&&p.change<=0?'good':'bad'}">${p.id==='login'?'비교 대상 아님':!compare?'단독 측정':!p.valid||!complete?'비교 보류':fmt(p.change)+'%'}</td></tr>`).join('')}
 </tbody></table></div><h2>실행별 결과</h2><div class="scroll"><table><thead><tr><th>실행 / 항목</th><th>p95 ms</th><th>p99 ms</th><th>요청</th><th>HTTP/s</th><th>HTTP 실패 %</th><th>검사 실패</th><th>누락 반복</th><th>k6 종료</th><th>원본</th></tr></thead><tbody>

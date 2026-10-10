@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingWaitingProjectionWorkerTests {
     @Test void repairContinuesAfterFullBatchAndCyclesAfterLastPage() {
         var projection=mock(BookingWaitingProjection.class);
@@ -15,14 +16,14 @@ class BookingWaitingProjectionWorkerTests {
         verify(projection).repairIfNeeded(101L);
         verify(projection,times(2)).activeShows(0,100);
     }
-    @Test void failedRefreshIsRetriedBeforeAdvancingCursor() {
+    @Test void failedRefreshDoesNotStarveLaterShowsAndIsRetriedNextCycle() {
         var projection=mock(BookingWaitingProjection.class);
         when(projection.activeShows(0,100)).thenReturn(List.of(1L,2L));
         when(projection.activeShows(1,100)).thenReturn(List.of(2L));
-        doThrow(new IllegalStateException()).doNothing().when(projection).repairIfNeeded(2L);
+        doThrow(new IllegalStateException()).when(projection).repairIfNeeded(1L);
         var worker=new BookingWaitingProjectionWorker(projection,new AdminMaintenanceGate());
         worker.repair(); worker.repair();
         verify(projection,times(2)).repairIfNeeded(2L);
-        verify(projection).repairIfNeeded(1L);
+        verify(projection,times(2)).repairIfNeeded(1L);
     }
 }

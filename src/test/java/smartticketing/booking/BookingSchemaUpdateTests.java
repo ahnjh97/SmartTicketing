@@ -14,7 +14,7 @@ class BookingSchemaUpdateTests {
                 var n = new smartticketing.entity.Notification(); n.setUser(user); n.setType(smartticketing.entity.enums.NotificationType.PAYMENT_FAILED);
                 n.setMessage("보존할 알림"); n.setRead(true); n.setCreatedAt(java.time.LocalDateTime.of(2026,1,1,12,0)); em.persist(n);
                 em.getTransaction().commit(); id = n.getId();
-                // Reproduce the pre-stage9 schema only in this owned disposable database.
+                // Reproduce the notification schema before booking/reservation links in this owned disposable database.
                 em.getTransaction().begin();
                 em.createNativeQuery("alter table notifications drop column booking_group_id, drop column reservation_id").executeUpdate();
                 em.getTransaction().commit();

@@ -1,8 +1,7 @@
 package smartticketing.service;
 
 import smartticketing.dto.theater.NearbyTheaterResponse;
-import smartticketing.entity.Theater;
-import smartticketing.repository.TheaterRepository;
+import smartticketing.service.NearbyTheaterQuery.Match;
 import smartticketing.performace.NearbyTheaterPerformance;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -14,7 +13,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.annotation.PreDestroy;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -27,7 +25,7 @@ public class KakaoMapService {
 
     private static final int WALK_RADIUS_METERS = 2_000;
 
-    private final TheaterRepository theaters;
+    private final NearbyTheaterQuery theaters;
     private final RestClient restClient;
     private final String restApiKey;
     private final NearbyTheaterPerformance performance;
@@ -35,7 +33,7 @@ public class KakaoMapService {
     private final ExecutorService transitExecutor = Executors.newFixedThreadPool(8);
 
     public KakaoMapService(
-            TheaterRepository theaters,
+            NearbyTheaterQuery theaters,
             @Value("${kakao.map.rest-api-key:}") String restApiKey,
             NearbyTheaterPerformance performance,
             RedisQueryCache queryCache
@@ -86,8 +84,9 @@ public class KakaoMapService {
             int radius,
             String sort
     ) {
+        NearbyTheaterQuery.validateCoordinates(latitude, longitude);
         String normalizedSort = normalizeSort(sort);
-        String cacheKey = String.format(Locale.ROOT, "%.6f:%.6f:%s", latitude, longitude, normalizedSort);
+        String cacheKey = String.format(Locale.ROOT, "spatial-v1:%.6f:%.6f:%s", latitude, longitude, normalizedSort);
         if ("DISTANCE".equals(normalizedSort)) {
             List<NearbyTheaterResponse> cached = queryCache.get("nearby-distance", cacheKey,
                     new TypeReference<List<NearbyTheaterResponse>>() {});
@@ -123,28 +122,10 @@ public class KakaoMapService {
             );
         }
 
-        // DB에 저장된 활성 영화관 전체를 거리순으로 정렬한 뒤 가까운 20개만 사용한다.
-        // 더 이상 10km 반경으로 결과를 잘라내지 않는다.
-        List<Theater> theaterList = performance.measureDbQuery(
-                theaters::findByActiveTrueAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByNameAsc
-        );
+        List<Match> candidates = performance.measureDbQuery(() -> theaters.findNearest(latitude, longitude));
 
-        List<TheaterDistance> candidates = theaterList.stream()
-                .map(theater -> new TheaterDistance(
-                        theater,
-                        calculateDistanceMeters(
-                                latitude,
-                                longitude,
-                                theater.getLatitude(),
-                                theater.getLongitude()
-                        )
-                ))
-                .sorted(Comparator.comparingInt(TheaterDistance::distanceMeters))
-                .limit(20)
-                .toList();
-
-        // 기존 WALK 호출과의 호환성을 유지하되 후보는 항상 가까운 20개로 제한한다.
-        List<TheaterDistance> selectedCandidates = "WALK".equals(normalizedSort)
+        // 기존 WALK 호출과의 호환성을 유지하되 후보는 항상 가까운 12개로 제한한다.
+        List<Match> selectedCandidates = "WALK".equals(normalizedSort)
                 ? candidates.stream()
                         .filter(item -> item.distanceMeters() <= WALK_RADIUS_METERS)
                         .toList()
@@ -162,7 +143,6 @@ public class KakaoMapService {
 
         return selectedCandidates.stream()
                 .map(item -> {
-                    Theater theater = item.theater();
                     RouteInfo walk = RouteInfo.empty();
 
                     if ("WALK".equals(normalizedSort)) {
@@ -170,8 +150,8 @@ public class KakaoMapService {
                                 () -> findWalk(
                                         latitude,
                                         longitude,
-                                        toDouble(theater.getLatitude()),
-                                        toDouble(theater.getLongitude())
+                                        item.latitude(),
+                                        item.longitude()
                                 )
                         );
                     }
@@ -183,7 +163,7 @@ public class KakaoMapService {
     }
 
     private List<NearbyTheaterResponse> findNearbyWithParallelTransit(
-            List<TheaterDistance> candidates,
+            List<Match> candidates,
             double latitude,
             double longitude
     ) {
@@ -192,13 +172,12 @@ public class KakaoMapService {
                         .map(item -> java.util.concurrent.CompletableFuture.supplyAsync(
                                 () -> {
                                     long start = System.nanoTime();
-                                    Theater theater = item.theater();
 
                                     RouteInfo route = findPublicTransit(
                                             latitude,
                                             longitude,
-                                            toDouble(theater.getLatitude()),
-                                            toDouble(theater.getLongitude())
+                                            item.latitude(),
+                                            item.longitude()
                                     );
 
                                     return new TransitResult(
@@ -235,20 +214,18 @@ public class KakaoMapService {
     }
 
     private NearbyTheaterResponse toResponse(
-            TheaterDistance item,
+            Match item,
             RouteInfo transit,
             RouteInfo walk
     ) {
-        Theater theater = item.theater();
-
         return new NearbyTheaterResponse(
-                theater.getId(),
-                theater.getName(),
-                theater.getBrand(),
-                theater.getAddress(),
-                theater.getKakaoPlaceId(),
-                toDouble(theater.getLatitude()),
-                toDouble(theater.getLongitude()),
+                item.id(),
+                item.name(),
+                item.brand(),
+                item.address(),
+                item.kakaoPlaceId(),
+                item.latitude(),
+                item.longitude(),
                 item.distanceMeters(),
                 null,
                 transit.distance(),
@@ -406,33 +383,6 @@ public class KakaoMapService {
         }
     }
 
-    private int calculateDistanceMeters(
-            double startLatitude,
-            double startLongitude,
-            BigDecimal endLatitude,
-            BigDecimal endLongitude
-    ) {
-        double lat1 = Math.toRadians(startLatitude);
-        double lon1 = Math.toRadians(startLongitude);
-        double lat2 = Math.toRadians(toDouble(endLatitude));
-        double lon2 = Math.toRadians(toDouble(endLongitude));
-
-        double dLat = lat2 - lat1;
-        double dLon = lon2 - lon1;
-
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(lat1) * Math.cos(lat2)
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
-        return (int) Math.round(
-                6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        );
-    }
-
-    private double toDouble(BigDecimal value) {
-        return value.doubleValue();
-    }
-
     private Integer integerValue(Object value) {
         if (value == null) {
             return null;
@@ -445,13 +395,8 @@ public class KakaoMapService {
         }
     }
 
-    private record TheaterDistance(
-            Theater theater,
-            int distanceMeters
-    ) {}
-
     private record TransitResult(
-            TheaterDistance item,
+            Match item,
             RouteInfo route,
             long elapsedNanos
     ) {}

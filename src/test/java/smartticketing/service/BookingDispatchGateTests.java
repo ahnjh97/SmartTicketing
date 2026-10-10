@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class BookingDispatchGateTests {
     static LettuceConnectionFactory connection;
     static StringRedisTemplate redis;
@@ -53,6 +54,16 @@ class BookingDispatchGateTests {
             return 1;
         });
         assertThat(redis.opsForValue().get(key)).isEqualTo("successor");
+    }
+
+    @Test void anotherZoneInTheSameShowUsesAnIndependentLease() {
+        var first = gate(); var second = gate();
+        first.run(1, smartticketing.entity.enums.SeatPosition.MIDDLE_FRONT, () -> {
+            assertThatThrownBy(() -> second.run(1, smartticketing.entity.enums.SeatPosition.MIDDLE_FRONT, () -> 0))
+                    .isInstanceOf(BookingDispatchGate.Busy.class);
+            assertThat(second.run(1, smartticketing.entity.enums.SeatPosition.SIDE_FRONT, () -> 2)).isEqualTo(2);
+            return 1;
+        });
     }
     @Test void businessFailureReleasesLeaseAndIsNotRetriedInsideGate() {
         var count=new AtomicInteger(); var gate=gate();

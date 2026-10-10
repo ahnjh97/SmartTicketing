@@ -69,11 +69,11 @@ class BookingHoldHttpTests {
                 .withBean(SmartBookingSummaryCache.class, () -> mock(SmartBookingSummaryCache.class))
                 .withBean(org.springframework.data.redis.core.StringRedisTemplate.class,
                         () -> mock(org.springframework.data.redis.core.StringRedisTemplate.class))
-                .withBean(TransactionTemplate.class, () -> new TransactionTemplate(new JpaTransactionManager(db.factory())))
+                .withBean(TransactionTemplate.class, () -> new TransactionTemplate(db.transactions()))
                 .withBean("bookingQueryClock", Clock.class, () -> clock)
                 .withBean(Validator.class, () -> validator)
                 .withBean(EntityManager.class, () -> SharedEntityManagerCreator.createSharedEntityManager(db.factory()))
-                .withBean(PlatformTransactionManager.class, () -> new JpaTransactionManager(db.factory()));
+                .withBean(PlatformTransactionManager.class, () -> db.transactions());
     }
 
     @org.junit.jupiter.api.Tag("core")
@@ -121,12 +121,13 @@ class BookingHoldHttpTests {
                         .andExpect(jsonPath("$").isEmpty());
                 var locks = statements.stream().filter(s -> s.contains("for update")).toList();
                 assertThat(locks).anyMatch(s -> s.contains("booking_request_groups"))
-                        .anyMatch(s -> s.contains("showtimes"))
                         .anyMatch(s -> s.contains("showtime_seats") && s.contains("order by"));
-                int groupLock = lockIndex(locks, "booking_request_groups");
-                int showLock = lockIndex(locks, "showtimes");
-                int seatLock = lockIndex(locks, "showtime_seats");
-                assertThat(groupLock).isLessThan(showLock); assertThat(showLock).isLessThan(seatLock);
+                assertThat(locks).noneMatch(s -> s.contains("from showtimes"));
+                int groupLock = statements.indexOf(locks.stream().filter(s -> s.contains("from booking_request_groups")).findFirst().orElseThrow());
+                int zoneLock = java.util.stream.IntStream.range(0, statements.size())
+                        .filter(index -> statements.get(index).contains("insert into waiting_zone_sequences")).findFirst().orElseThrow();
+                int seatLock = statements.indexOf(locks.stream().filter(s -> s.contains("from showtime_seats")).findFirst().orElseThrow());
+                assertThat(groupLock).isLessThan(zoneLock); assertThat(zoneLock).isLessThan(seatLock);
                 mvc.perform(post(path).with(auth).header("Idempotency-Key", key).contentType("application/json").content(seats))
                         .andExpect(status().isCreated()).andExpect(content().json(held));
                 mvc.perform(get("/api/reservations/" + reservationId.get()).with(auth))
@@ -167,11 +168,6 @@ class BookingHoldHttpTests {
                 }
             });
         }
-    }
-
-    private int lockIndex(List<String> locks, String table) {
-        for (int n = 0; n < locks.size(); n++) if (locks.get(n).contains("from " + table + " ")) return n;
-        throw new AssertionError("Missing lock: " + table);
     }
 
     @Test void paymentHttpOwnershipIdempotencyTicketCompatibilityAndCancellation() throws Exception {

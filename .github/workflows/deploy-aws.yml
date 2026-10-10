@@ -84,7 +84,8 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: gradle
-      - name: Core backend tests and JAR
+      # core includes booking correctness, Outbox delivery and Redis recovery suites.
+      - name: Core booking, Outbox and Redis tests and JAR
         if: ${{ !inputs.full_tests }}
         run: bash gradlew test bootJar -PcoreOnly --no-daemon
       - name: Full backend tests and JAR

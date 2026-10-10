@@ -13,9 +13,9 @@ public class AdminMaintenanceFilter extends OncePerRequestFilter {
     private final AdminMaintenanceGate gate;
     public AdminMaintenanceFilter(AdminMaintenanceGate gate) { this.gate = gate; }
     @Override protected boolean shouldNotFilter(HttpServletRequest r) {
-        return Set.of("GET", "HEAD", "OPTIONS").contains(r.getMethod())
-                || !r.getRequestURI().startsWith("/api/") || r.getRequestURI().startsWith("/api/admin/")
-                || r.getRequestURI().startsWith("/api/auth/");
+        String path=r.getRequestURI();
+        if (!path.startsWith("/api/")) return true;
+        return Set.of("GET", "HEAD", "OPTIONS").contains(r.getMethod());
     }
     @Override protected void doFilterInternal(HttpServletRequest r, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         if (!gate.enterWriteRequest()) {

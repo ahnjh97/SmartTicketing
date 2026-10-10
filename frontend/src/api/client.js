@@ -32,6 +32,7 @@ export async function request(path, {
     token = getAccessToken(),
     signal,
     idempotencyKey,
+    timeoutMs = 15000,
 } = {}) {
     if (authenticated && !token) {
         throw new ApiError("로그인 정보가 없습니다.", 401);
@@ -42,32 +43,50 @@ export async function request(path, {
     if (authenticated) headers.Authorization = `Bearer ${token}`;
     if (body !== undefined) headers["Content-Type"] = "application/json";
 
-    const response = await fetch(apiUrl(path, query), {
-        method,
-        headers,
-        credentials: "include",
-        signal,
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-
-    if (response.status === 204) return null;
-
-    const text = await response.text();
-    let data;
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
     try {
-        data = text ? JSON.parse(text) : null;
-    } catch {
-        if (response.ok) {
-            throw new ApiError("서버 응답을 처리할 수 없습니다.", response.status);
-        }
-    }
+        const response = await fetch(apiUrl(path, query), {
+            method,
+            headers,
+            credentials: "include",
+            signal: controller.signal,
+            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
 
-    if (!response.ok) {
-        if (response.status === 401 && authenticated) expireSession(token);
-        const fallback = response.status === 401
-            ? "로그인이 만료되었습니다. 다시 로그인해주세요."
-            : `요청에 실패했습니다. (${response.status})`;
-        throw new ApiError(data?.message || data?.detail || fallback, response.status, data?.code);
+        if (response.status === 204) return null;
+
+        const text = await response.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : null;
+        } catch {
+            if (response.ok) {
+                throw new ApiError("서버 응답을 처리할 수 없습니다.", response.status);
+            }
+        }
+
+        if (!response.ok) {
+            if (data?.code === 'ADMISSION_REQUIRED' || data?.code === 'ADMISSION_UNAVAILABLE') {
+                window.dispatchEvent(new Event('admission-required'));
+            }
+            if (response.status === 401 && authenticated) expireSession(token);
+            const fallback = response.status === 401
+                ? "로그인이 만료되었습니다. 다시 로그인해주세요."
+                : `요청에 실패했습니다. (${response.status})`;
+            throw new ApiError(data?.message || data?.detail || fallback, response.status, data?.code);
+        }
+        return data;
+    } catch (error) {
+        // No automatic mutation retry: retain the idempotency key and recover committed state.
+        if (timedOut) throw new ApiError("응답이 지연되고 있습니다. 처리 결과를 확인한 뒤 다시 시도해주세요.", 0, "REQUEST_TIMEOUT");
+        throw error;
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
     }
-    return data;
 }

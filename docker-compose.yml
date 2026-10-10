@@ -33,6 +33,20 @@ services:
     networks:
       - smartticketing
 
+  admission-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - admission_redis_data:/data
+    networks:
+      - smartticketing
+
   backend:
     image: ${BACKEND_IMAGE:-smartticketing-backend:local}
     build:
@@ -46,8 +60,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      admission-redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent --max-time 5 http://localhost:8080/api/health/readiness >/dev/null && curl --fail --silent --max-time 5 'http://localhost:8080/api/movies?page=0&size=1' >/dev/null"]
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 5 http://localhost:8080/api/health/readiness >/dev/null"]
       interval: 10s
       timeout: 12s
       retries: 48
@@ -78,6 +94,14 @@ services:
       REDIS_PORT: 6379
       # Smart-booking advisory summaries; MySQL remains authoritative for allocation.
       APP_CACHE_ENABLED: ${APP_CACHE_ENABLED:-false}
+      ADMISSION_ENABLED: ${ADMISSION_ENABLED:-true}
+      ADMISSION_CAPACITY: ${ADMISSION_CAPACITY:-100}
+      ADMISSION_BATCH_SIZE: ${ADMISSION_BATCH_SIZE:-10}
+      ADMISSION_ACTIVE_SECONDS: ${ADMISSION_ACTIVE_SECONDS:-600}
+      ADMISSION_WAIT_SECONDS: ${ADMISSION_WAIT_SECONDS:-90}
+      ADMISSION_MAX_WAITING: ${ADMISSION_MAX_WAITING:-20000}
+      ADMISSION_SECURE_COOKIE: "true"
+      ADMISSION_REDIS_HOST: admission-redis
     expose:
       - "8080"
     networks:
@@ -137,6 +161,7 @@ services:
     networks:
       - smartticketing
 volumes:
+  admission_redis_data:
   mysql_data:
   redis_data:
 

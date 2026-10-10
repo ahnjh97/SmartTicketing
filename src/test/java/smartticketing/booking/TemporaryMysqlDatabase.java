@@ -45,6 +45,8 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
                     .setProperty("hibernate.connection.url", jdbcBase + name)
                     .setProperty("hibernate.connection.username", user)
                     .setProperty("hibernate.connection.password", password)
+                    // Booking writers coordinate through group/zone locks with current committed reads.
+                    .setProperty("hibernate.connection.isolation", "2")
                     .setProperty("hibernate.connection.rewriteBatchedStatements", "true")
                     // Match Spring's HibernateJpaVendorAdapter: retain the connection so
                     // HibernateJpaDialect can apply and restore per-transaction isolation.
@@ -69,6 +71,12 @@ public final class TemporaryMysqlDatabase implements AutoCloseable {
     EntityManager open() { return factory.createEntityManager(); }
 
     SessionFactory factory() { return factory; }
+
+    org.springframework.orm.jpa.JpaTransactionManager transactions() {
+        var manager = new org.springframework.orm.jpa.JpaTransactionManager(factory);
+        manager.setJpaDialect(new org.springframework.orm.jpa.vendor.HibernateJpaDialect());
+        return manager;
+    }
     public String jdbcUrl() { return jdbcBase + name; }
 
     /** DB 내용은 보존하고 앱의 ORM 연결/캐시만 재시작한다. */

@@ -16,6 +16,7 @@ import tools.jackson.core.type.TypeReference;
 @Service
 @Transactional(readOnly = true)
 public class ShowtimeQueryService {
+    private static final int INVENTORY_BATCH_SIZE = 100;
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final EntityManager em;
     private final BookingCatalogService catalog;
@@ -153,17 +154,23 @@ public class ShowtimeQueryService {
     // 여러 회차의 좌석 정보를 한 번에 읽어 회차 수에 따른 N+1 조회를 방지한다.
     private Map<Long, List<SeatItem>> inventory(List<Long> ids) {
         if (ids.isEmpty()) return Map.of();
-        var rows = em.createQuery("""
-                select s from ShowtimeSeat s join fetch s.seat seat
-                where s.showtime.id in :ids and seat.active = true and seat.screen.id = s.showtime.screen.id
-                order by s.showtime.id, seat.seatRow, seat.seatNumber, seat.id
-                """, ShowtimeSeat.class).setParameter("ids", ids).getResultList();
         Map<Long, List<SeatItem>> grouped = new HashMap<>();
-        for (var row : rows) {
-            var seat = row.getSeat();
-            grouped.computeIfAbsent(row.getShowtime().getId(), ignored -> new ArrayList<>())
-                    .add(new SeatItem(seat.getId(), seat.getSeatRow(), seat.getSeatNumber(), seat.getAdjacencySegment(),
-                            seat.getPositionInSegment(), seat.getSeatPosition(), row.getStatus()));
+        // Read only the display/layout snapshot, without managed seat entities or hold data.
+        // Bound each IN clause and result batch when a movie spans many theaters.
+        for (int start = 0; start < ids.size(); start += INVENTORY_BATCH_SIZE) {
+            var batch = ids.subList(start, Math.min(start + INVENTORY_BATCH_SIZE, ids.size()));
+            var rows = em.createQuery("""
+                    select s.showtime.id, seat.id, seat.seatRow, seat.seatNumber, seat.adjacencySegment,
+                           seat.positionInSegment, seat.seatPosition, s.status
+                    from ShowtimeSeat s join s.seat seat
+                    where s.showtime.id in :ids and seat.active = true and seat.screen.id = s.showtime.screen.id
+                    order by s.showtime.id, seat.seatRow, seat.seatNumber, seat.id
+                    """, Object[].class).setParameter("ids", batch).getResultList();
+            for (var row : rows) {
+                grouped.computeIfAbsent((Long) row[0], ignored -> new ArrayList<>())
+                        .add(new SeatItem((Long) row[1], (String) row[2], (Integer) row[3], (String) row[4],
+                                (Integer) row[5], (SeatPosition) row[6], (SeatStatus) row[7]));
+            }
         }
         return grouped;
     }

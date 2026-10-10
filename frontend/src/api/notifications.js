@@ -18,7 +18,8 @@ function describeEvent(event) {
         normalized,
         eventName,
         data: dataLines.join("\n"),
-        isNotification: eventName === "notification",
+        // Reconcile DB state after reconnect too: Pub/Sub invalidations are not durable.
+        isNotification: eventName === "notification" || eventName === "connected",
     };
 }
 
@@ -64,6 +65,11 @@ async function runStream() {
         });
 
         if (!response.ok || !response.body) {
+            if (response.status === 429 || response.status === 503) {
+                const data = await response.json().catch(() => null);
+                if (data?.code === 'ADMISSION_REQUIRED' || data?.code === 'ADMISSION_UNAVAILABLE')
+                    window.dispatchEvent(new Event('admission-required'));
+            }
             throw new Error(`notification stream failed: ${response.status}`);
         }
 
@@ -177,6 +183,7 @@ function subscribe(listener) {
 
 export const notificationApi = {
     list: (unreadOnly = false, signal) => request("/api/notifications", { query: { unreadOnly }, signal }),
+    page: (cursor, size = 20, unreadOnly = false) => request("/api/notifications/page", { query: { cursor, size, unreadOnly } }),
     subscribe,
     read: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" }),
     readAll: () => request("/api/notifications/read-all", { method: "PATCH" }),

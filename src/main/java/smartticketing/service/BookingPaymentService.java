@@ -17,7 +17,7 @@ import static smartticketing.service.BookingHoldService.reject;
 
 /** Mock only. All inventory, payment and ticket writes share the hold transaction/lock order. */
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class BookingPaymentService {
     private final EntityManager em;
     private final BookingHoldService holds;
@@ -57,7 +57,7 @@ public class BookingPaymentService {
             reject(409, "좌석 선점 시간이 만료되었습니다.");
         }
         BookingHoldService.validateShow(locked.show(), holds.now());
-        var inventory = holds.lockInventory(locked.show().getId());
+        var inventory = holds.lockSelectedInventory(locked.show().getId(), holds.reservationSeatIds(id));
         var owned = validateInventory(locked, inventory, SeatStatus.HOLDING);
         if (!r.getExpiresAt().isAfter(holds.now())) {
             holds.expireLockedGroup(locked.group());
@@ -73,6 +73,7 @@ public class BookingPaymentService {
         if (payment != null && payment.getStatus() != PaymentStatus.FAILED && payment.getStatus() != PaymentStatus.READY)
             throw new IllegalStateException("결제와 예약 상태가 일치하지 않습니다.");
         var now = holds.now();
+        BookingZoneLocks.finishGroup(em, locked.group().getId(), locked.show().getId());
         if (payment == null) {
             payment = new Payment(); payment.setReservation(r); payment.setCreatedAt(now); payment.setUpdatedAt(now);
             payment.setPaymentMethod(PaymentMethod.MOCK); payment.setAmount(r.getTotalAmount()); em.persist(payment);
@@ -90,7 +91,6 @@ public class BookingPaymentService {
         locked.group().setStatus(BookingGroupStatus.COMPLETED); locked.group().setUpdatedAt(now);
         BookingQueueLifecycle.completed(em, locked.group().getId(), now);
         em.remove(locked.slot());
-        BookingHoldService.updateAvailable(locked.show(), inventory, now);
         BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "PAYMENT_CONFIRMED", now);
         return paymentResponse(r, payment, true);
     }
@@ -103,8 +103,10 @@ public class BookingPaymentService {
         var group = holds.lockOwnedGroup(userId, (Long) ref[0]);
         var slot = group.getStatus() == BookingGroupStatus.HOLDING
                 ? em.find(BookingGroupHold.class, group.getId(), LockModeType.PESSIMISTIC_WRITE) : null;
-        BookingQueueLifecycle.lockShows(em, group.getId(), (Long) ref[1]);
-        var show = em.find(Showtime.class, (Long) ref[1], LockModeType.PESSIMISTIC_WRITE);
+        BookingZoneLocks.lockGroup(em, group.getId(), (Long) ref[1],
+                BookingZoneLocks.seatZones(em, (Long) ref[1], holds.reservationSeatIds(id)));
+        var show = em.find(Showtime.class, (Long) ref[1]);
+        em.refresh(show);
         var reservation = em.find(Reservation.class, id, LockModeType.PESSIMISTIC_WRITE);
         return new Locked(group, slot, show, reservation);
     }
@@ -147,7 +149,7 @@ public class BookingPaymentService {
             holds.expireLockedGroup(locked.group()); reject(409, "이미 만료된 선점입니다.");
         }
         if (!locked.show().getStartTime().isAfter(holds.now())) reject(409, "상영 시작 전까지만 취소할 수 있습니다.");
-        var inventory = holds.lockInventory(locked.show().getId());
+        var inventory = holds.lockSelectedInventory(locked.show().getId(), holds.reservationSeatIds(id));
         var confirmed = r.getStatus() == ReservationStatus.CONFIRMED;
         var owned = validateInventory(locked, inventory, confirmed ? SeatStatus.RESERVED : SeatStatus.HOLDING);
         var payment = payment(id);
@@ -163,6 +165,8 @@ public class BookingPaymentService {
         if (!confirmed && (r.getExpiresAt() == null || !r.getExpiresAt().isAfter(now))) {
             holds.expireLockedGroup(locked.group()); reject(409, "이미 만료된 선점입니다.");
         }
+        BookingZoneLocks.finishGroup(em, locked.group().getId(), locked.show().getId());
+        holds.adjustAvailable(locked.show().getId(), BookingHoldService.availableReleased(locked.show(), owned), now);
         if (payment != null) { payment.setStatus(PaymentStatus.CANCELLED); payment.setUpdatedAt(now); }
         issued.forEach(t -> { t.setStatus(TicketStatus.CANCELLED); t.setUpdatedAt(now); });
         owned.forEach(s -> { s.setStatus(SeatStatus.AVAILABLE); s.setReservation(null); s.setHoldExpiredAt(null); });
@@ -172,7 +176,6 @@ public class BookingPaymentService {
             locked.group().setStatus(BookingGroupStatus.ACTIVE);
         else BookingQueueLifecycle.cancelled(em, locked.group().getId(), now);
         if (locked.slot() != null) em.remove(locked.slot());
-        BookingHoldService.updateAvailable(locked.show(), inventory, now);
 
         BookingOutbox.append(em, locked.show().getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, locked.group().getId(), "RESERVATION_CANCELLED", now);
         return holds.response(r, now);

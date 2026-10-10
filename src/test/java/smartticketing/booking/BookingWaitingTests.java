@@ -13,6 +13,34 @@ import java.util.function.Function;
 import static org.assertj.core.api.Assertions.*;
 
 class BookingWaitingTests {
+    @Test void pageIdOrderCannotBypassAnEarlierQueueNumberOnAnotherPage() {
+        var first=fixture(1,1);register(first);
+        var second=another(first,1,false);register(second);
+        tx(em -> {
+            em.createQuery("select q from WaitingQueue q where q.requestGroup.id=:group",WaitingQueue.class)
+                    .setParameter("group",first.group()).getResultList().forEach(q -> q.setZoneQueueNumber(3));
+            return null;
+        });
+        var dispatcher=dispatcher(CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(dispatcher,"dispatchBatchSize",1);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isEqualTo(1);
+        assertThat(state(second).items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(state(first).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+    }
+    @Test void boundedDispatchContinuesPastAnUnallocatableHeadAndPreservesEligiblePriority() {
+        var first=fixture(3,2);register(first);
+        var second=another(first,2,false);register(second);
+        var third=another(first,2,false);register(third);
+        var dispatcher=dispatcher(CLOCK);
+        org.springframework.test.util.ReflectionTestUtils.setField(dispatcher,"dispatchBatchSize",1);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isEqualTo(1);
+        assertThat(state(second).items().getFirst().status()).isEqualTo(QueueStatus.HOLDING);
+        assertThat(state(first).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(dispatcher.dispatch(first.shows().getFirst())).isZero();
+        assertThat(state(third).items().getFirst().status()).isEqualTo(QueueStatus.WAITING);
+    }
     @Test void dispatcherAllocatesAllPermittedSplitPatternsAtomically() {
         for (int[] parts : List.of(new int[]{2,2}, new int[]{2,3}, new int[]{2,2,2}, new int[]{3,3}, new int[]{2,4})) {
             int party = Arrays.stream(parts).sum(); var f = fixture(party,party);
@@ -49,7 +77,7 @@ class BookingWaitingTests {
     }
     static BookingWaitingDispatcher dispatcher(Clock clock) {
         var em=SharedEntityManagerCreator.createSharedEntityManager(db.factory());
-        return new BookingWaitingDispatcher(em,holds(em,clock),service(em,clock),new JpaTransactionManager(db.factory()));
+        return new BookingWaitingDispatcher(em,holds(em,clock),service(em,clock),db.transactions());
     }
     static Fixture fixture(int party, int seats) {
         return tx(em -> {
@@ -87,6 +115,17 @@ class BookingWaitingTests {
     static WaitingResponse state(Fixture f) { return state(f,CLOCK); }
     static void statuses(Fixture f,QueueStatus... statuses) { assertThat(state(f).items()).extracting(WaitingResponse.Item::status).containsExactly(statuses); }
     static List<ShowtimeSeat> inventory(EntityManager em,Long show) { return BookingSmartTests.inventory(em,show); }
+
+    @Test void activeWaitingReadSkipsHoldLookupAndPreservesOwnership() {
+        var f = fixture(2,2); register(f);
+        readStatements.clear();
+        var response = state(f);
+        assertThat(response.items()).hasSize(2);
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("from booking_group_holds"));
+        var other = another(f,2,false);
+        assertThatThrownBy(() -> tx(em -> service(em,CLOCK).get(other.user(),f.group())))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    }
 
     @Test void smartWaitingReadsBatchRanksAndDoNotAddQueriesForEveryGroup() {
         var f=fixture(2,2); register(f);
@@ -280,6 +319,60 @@ class BookingWaitingTests {
         assertThat(d.dispatch(f.shows.getFirst())).isEqualTo(1); statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
     }
 
+    @Test void oneZoneSnapshotServesMultipleAllocationsWithOnlyChosenSeatsLocked() {
+        var first=fixture(2,6);
+        var second=another(first,2,false); var third=another(first,2,false); var last=another(first,2,false);
+        register(first); register(second); register(third); register(last);
+        readStatements.clear();
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(3);
+        assertThat(readStatements.stream().filter(sql -> sql.toLowerCase(Locale.ROOT).contains("from showtime_seats")
+                && sql.toLowerCase(Locale.ROOT).contains("for update")).count()).isEqualTo(3);
+        statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(third,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(last,QueueStatus.WAITING,QueueStatus.WAITING);
+        tx(em -> {
+            var rows=inventory(em,first.shows.getFirst());
+            assertThat(rows).hasSize(6).allMatch(i -> i.getStatus()==SeatStatus.HOLDING);
+            assertThat(rows.stream().map(i -> i.getReservation().getId()).distinct()).hasSize(3);
+            assertThat(em.find(Showtime.class,first.shows.getFirst()).getAvailableSeats()).isZero();
+            return null;
+        });
+        long reservation=state(first).activeReservationId();
+        tx(em -> BookingPaymentTests.service(em,CLOCK,true).cancel(first.user,reservation,key()));
+        // A separate dispatch must fetch a fresh inventory and see the committed release.
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(1);
+        statuses(last,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void pausedOnlyShowDoesNotLockGroupsOrInventory() {
+        var f=fixture(2,2); register(f);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+        readStatements.clear();
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getLast())).isZero();
+        assertThat(readStatements).noneMatch(sql -> sql.toLowerCase(Locale.ROOT).contains("for update"));
+        statuses(f,QueueStatus.HOLDING,QueueStatus.PAUSED);
+    }
+
+    @Test void simultaneousDispatchOnSameShowPreservesQueueOrderAndSingleSeatOwnership() throws Exception {
+        var first=fixture(2,4); var second=another(first,2,false); var third=another(first,2,false);
+        tx(em -> { BookingSmartTests.partition(inventory(em,first.shows.getFirst()),new int[]{2,2}); return null; });
+        register(first); register(second); register(third);
+        BookingPaymentTests.race(() -> dispatcher(CLOCK).dispatch(first.shows.getFirst()),
+                () -> dispatcher(CLOCK).dispatch(first.shows.getFirst()));
+        statuses(first,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(second,QueueStatus.HOLDING,QueueStatus.PAUSED);
+        statuses(third,QueueStatus.WAITING,QueueStatus.WAITING);
+        tx(em -> {
+            var rows=inventory(em,first.shows.getFirst());
+            assertThat(rows).hasSize(4).allMatch(i -> i.getStatus()==SeatStatus.HOLDING);
+            assertThat(rows.stream().map(i -> i.getReservation().getId()).distinct()).hasSize(2);
+            assertThat(em.createQuery("select count(r) from Reservation r where r.showtime.id=:show",Long.class)
+                    .setParameter("show",first.shows.getFirst()).getSingleResult()).isEqualTo(2);
+            return null;
+        });
+    }
+
     @Test void fullShowsSkipWriteLocksAndReturnToRecoveryAfterSeatRelease() {
         var f=fixture(1,1); register(f); long show=f.shows.getFirst();
         tx(em -> { inventory(em,show).forEach(i -> i.setStatus(SeatStatus.BLOCKED)); return null; });
@@ -359,16 +452,30 @@ class BookingWaitingTests {
         statuses(f,QueueStatus.COMPLETED,QueueStatus.CANCELLED);
     }
 
-    @Test void snapshotOlderThanRegistrationRollsBackRatherThanLockingShowsOutOfOrder() {
+    @Test void registrationCommittedBeforeGroupLockIsIncludedInZoneScopes() {
         var f=fixture(2,2);
-        assertThatThrownBy(() -> tx(em -> {
+        var result = tx(em -> {
             em.createQuery("select count(q) from WaitingQueue q",Long.class).getSingleResult();
             register(f);
             var ids=inventory(em,f.shows.getFirst()).stream().map(i -> i.getSeat().getId()).toList();
             return holds(em,CLOCK).hold(f.user,f.group,key(),BookingHoldService.Source.SMART,new BookingHoldService.Candidate(f.shows.getFirst(),ids));
-        })).isInstanceOf(org.springframework.dao.TransientDataAccessResourceException.class);
-        assertThat(state(f).activeReservationId()).isNull();
-        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isEqualTo(1);
+        });
+        assertThat(result.status()).isEqualTo(201);
+        statuses(f, QueueStatus.HOLDING, QueueStatus.PAUSED);
+        assertThat(dispatcher(CLOCK).dispatch(f.shows.getFirst())).isZero();
+    }
+
+    @Test void concurrentRegistrationsInDifferentZonesKeepIndependentNumbers() throws Exception {
+        var first = fixture(1, 2); var second = another(first, 1, false);
+        tx(em -> { inventory(em, first.shows.getFirst()).getLast().getSeat().setSeatPosition(SeatPosition.SIDE_FRONT); return null; });
+        var results = BookingPaymentTests.race(
+                () -> tx(em -> service(em, CLOCK).register(first.user, first.group, key(), new WaitingRequest(List.of(first.shows.getFirst()), SeatPosition.MIDDLE_MIDDLE))),
+                () -> tx(em -> service(em, CLOCK).register(second.user, second.group, key(), new WaitingRequest(List.of(second.shows.getFirst()), SeatPosition.SIDE_FRONT))));
+        assertThat(results).allSatisfy(result -> assertThat(((BookingResult) result).status()).isEqualTo(201));
+        assertThat(state(first).items().getFirst().queueNumber()).isEqualTo(1);
+        assertThat(state(second).items().getFirst().queueNumber()).isEqualTo(1);
+        assertThat(dispatcher(CLOCK).dispatch(first.shows.getFirst())).isEqualTo(2);
+        tx(em -> { assertThat(em.find(Showtime.class, first.shows.getFirst()).getAvailableSeats()).isZero(); return null; });
     }
 
     @Test void theaterScopeAndChangedAudienceAreRecheckedWithoutPartialRegistration() {

@@ -50,7 +50,8 @@ export function TheaterBooking({ booking }) {
     const brands = { FAVORITES: '선호극장', CGV: 'CGV', LOTTE_CINEMA: '롯데시네마', MEGABOX: '메가박스' };
     const chart = useCatalog(theaterId ? 'main' : null, {});
     const rank = new Map((chart.data?.nowShowing || []).map((m, index) => [m.id, index]));
-    const sortedMovies = [...(movies.data?.items || [])]
+    // Publish the list only after its ranking arrives, so rows never jump from ID order.
+    const sortedMovies = [...(chart.data ? movies.data?.items || [] : [])]
         .sort((a, b) => (rank.get(a.movieId) ?? 999) - (rank.get(b.movieId) ?? 999));
     return (<>
         <section className={styles.theaterSelector} aria-label="극장 선택">
@@ -82,6 +83,7 @@ export function TheaterBooking({ booking }) {
             {!dateValid && <p role="alert">오늘부터 7일 안의 날짜를 다시 선택해주세요.</p>}
             <div className={styles.sectionHeading}><h2>상영 영화</h2><span>{movies.data?.items.length ?? 0}편</span></div>
             <QueryStatus query={movies} empty={movies.data?.items.length === 0} />
+            {movies.data?.items.length > 0 && <QueryStatus query={chart} />}
             {movieId && movies.data && !selectedMovieExists && <p role="alert">해당 날짜의 영화를 다시 선택해주세요.</p>}
             <section aria-label="상영 회차"><ul className={styles.movieList}>{sortedMovies.map(m => <TheaterMovieRow key={m.movieId} movie={m} booking={booking} />)}</ul></section>
             {movies.data?.items.length > 0 && <>

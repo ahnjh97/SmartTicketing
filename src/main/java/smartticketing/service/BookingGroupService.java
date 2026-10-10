@@ -10,7 +10,7 @@ import smartticketing.entity.enums.*;
 import static smartticketing.service.BookingHoldService.reject;
 
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class BookingGroupService {
     private final EntityManager em;
     private final BookingHoldService holds;
@@ -49,7 +49,7 @@ public class BookingGroupService {
             group.setEntryPoint(request.entryPoint()); group.setViewingDate(request.viewingDate()); group.setPartySize(request.partySize());
             group.setStartTimeFrom(request.startTimeFrom()); group.setStartTimeTo(request.startTimeTo());
             if (request.selectedShowtimeId() != null) {
-                var show = em.find(Showtime.class, request.selectedShowtimeId(), LockModeType.PESSIMISTIC_WRITE);
+                var show = em.find(Showtime.class, request.selectedShowtimeId());
                 BookingHoldService.validateShow(show, holds.now()); group.setSelectedShowtime(show);
                 BookingHoldService.validateGroupShow(group, show);
             }

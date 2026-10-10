@@ -1,42 +1,72 @@
-# Linux k6 실행
+# WSL Docker 테스트 실행
+
+WSL Ubuntu에 Docker Engine, Compose v2, Python 3.12 이상, OpenSSL, Git이 필요하다. Docker 데몬을 시작한 뒤 저장소 루트에서 실행한다. 개발 서버와 `local.cmd`는 필요 없다.
 
 ```powershell
+# 번호로 비교 목적·커밋·시나리오·규모 선택
 .\scripts\benchmark\run-linux.ps1
+# 현재 코드: 입장 → 조회 → 스마트/일반 예매 → 모의결제 → 취소 → 로그인 기능 확인
+.\scripts\benchmark\run-linux.ps1 -Smoke
+# 같은 경로로 동시 사용자 100명, 3분 부하
+.\scripts\benchmark\run-linux.ps1 -Users 100 -Clients 10 -Duration 3m
+# 아래 이름은 예시이며 실제 브랜치/커밋으로 바꾼다
+.\scripts\benchmark\run-linux.ps1 -Mode compare -Comparison db -Refs before,final -Smoke
+.\scripts\benchmark\run-linux.ps1 -Mode compare -Comparison redis -Refs final -Smoke
+.\scripts\benchmark\run-linux.ps1 -Mode compare -Comparison overall -Refs before,final -Smoke
+.\scripts\benchmark\run-linux.ps1 -Mode compare -Comparison all -Refs before,final -Users 100 -Duration 3m -Repeats 3
+# 단계별 부하: 각 단계에서 지연·오류 기준을 통과한 최고 관측 처리량
+.\scripts\benchmark\run-linux.ps1 -Mode compare -Comparison overall -Refs before,final -UserLevels 25,50,100,200 -P95LimitMs 1000 -Duration 3m -Repeats 3
 ```
 
-테스트와 Redis 모드를 번호로 고른다. `local.cmd`나 개발 백엔드를 켤 필요가 없다.
+비교는 **DB 개선(개선 전 OFF ↔ 최종 OFF), Redis 효과(같은 최종 이미지 OFF ↔ ON), 종합 효과(개선 전 OFF ↔ 최종 ON)**로 나눈다. 세 비교 모두 실행할 때도 개선 전·최종 두 커밋이면 된다. Redis OFF는 업무 캐시 설정이며 입장 대기열 Redis는 계속 켜진다. DB 비교에는 Redis 외 코드 차이도 포함되므로 다른 변경이 섞인 커밋을 순수 SQL 튜닝 효과라고 단정하지 않는다.
+
+메뉴에서는 로컬·원격 브랜치 목록, 최근 30개 커밋, SHA·태그 직접 입력 중 선택한다. 원격 브랜치는 마지막 fetch 기준이다. 선택 결과는 SHA로 고정한다. 브랜치를 생성하거나 현재 작업 폴더를 전환하지 않으며, 지정한 커밋을 별도 폴더에 추출한다. 커밋하지 않은 변경은 `-Refs` 실행에 포함되지 않는다. 기존 브랜치에 공통 API·DB 스키마가 없으면 실패로 표시하므로 비교 전에 계약을 맞춰야 한다. 인자가 있으면 명령행 모드이며 `-Menu`로 메뉴를 강제할 수 있다.
+
+기본 실행은 루트 `docker-compose.yml`을 읽어 **MySQL, 업무 Redis, 입장 대기열 Redis, 백엔드, 프런트엔드, Nginx**를 함께 실행한다. k6는 HTTPS/Nginx와 실제 입장 절차를 거친다. CPU·메모리 상한은 추가하지 않는다. `-Clients`는 요청을 보내는 별도 k6 컨테이너 수이며, 사용자 수를 이 컨테이너들에 나눈다. 배포 Nginx의 IP별 요청 제한도 적용된다.
+
+현재 코드나 각 브랜치의 배포 Dockerfile로 이미지를 빌드한다. AWS에 배포한 이미지 파일을 Docker에 미리 로드했다면 다음처럼 그 이미지 자체를 사용할 수 있다.
 
 ```powershell
-# 전체 항목의 짧은 기능 확인
-.\scripts\benchmark\run-linux.ps1 -Suite all -Smoke
-# 메인 조회 ON/OFF 비교
-.\scripts\benchmark\run-linux.ps1 -Suite main -Rate 100 -Duration 60s
-# Redis ON만 실행
-.\scripts\benchmark\run-linux.ps1 -Suite booking -CacheMode on
+.\scripts\benchmark\run-linux.ps1 -BackendImage smartticketing-backend:COMMIT -FrontendImage smartticketing-frontend:COMMIT -Smoke
 ```
 
-결과는 `benchmark-results/index.html`에서 항목 탭과 실행 기록을 선택해서 본다.
-`update-dashboard.ps1`로 기존 결과만 다시 모을 수도 있다.
+서비스 구성은 배포 Compose 기준이지만 운영 `.env`는 읽지 않는다. 테스트 DB·인증 키·합성 데이터·자체 서명 인증서를 사용하며 외부 수집과 자동 시딩을 끈다. 실제 배포의 별도 환경변수 override, 외부 OAuth·지도 API, EC2 하드웨어는 재현하지 않는다. 프런트 HTML 제공은 확인하지만 브라우저 UI 자동화는 아니다. 기본 `-CacheMode branch`는 **현재 배포 Compose의 기본값**을 쓰며 브랜치의 `.env`를 읽는 옵션이 아니다. 필요하면 `-CacheMode on`을 지정한다.
 
-## 배포 구성과 맞춘 부분
+결과는 출력된 `benchmark-results/site-*/index.html`과 `comparison.json`, 각 실행의 로그에 남는다. 이미지 ID, JAR 체크섬, 실행 커밋과 설정을 기록한다. 실패·스모크 실행으로 성능 개선을 주장하지 않는다. p95/p99는 모든 클라이언트의 원시 표본을 합산한다. 별도 예열 없이 시작한 혼합 사용자 흐름이며 순수 API 최대 처리량과 다르다. 반복 실행에서는 브랜치 순서를 교대로 바꾼다. 임시 컨테이너와 DB 볼륨은 종료 시 정리하고 이미지·결과는 보관한다.
 
-- 현재 체크아웃을 Java 21로 빌드한 `bootJar`를 루트 `Dockerfile`의 `prebuilt` 타깃에 넣는다. AWS CI와 같은 이미지 구성 방식이다.
-- 이미지의 원래 `deploy/backend-entrypoint.sh`가 `java -jar app.jar`를 실행한다. 테스트 클래스가 서버를 직접 실행하지 않는다.
-- 빌드한 JAR와 이미지 속 JAR의 SHA-256 일치를 확인한다. 결과 폴더에 체크섬과 이미지 ID를 저장한다.
-- 백엔드, k6, MySQL, Redis, 데이터 준비 도구는 별도 컨테이너다. Docker 소켓을 컨테이너에 제공하지 않고 호스트에서 수명 주기를 관리한다.
-- MySQL 8.4, Redis 7 및 Redis AOF 활성화를 배포 구성과 맞춘다.
-- 각 항목·모드마다 백엔드 컨테이너와 임시 DB를 새로 만든다. 이 실행이 소유한 Redis만 초기화한 뒤 동일하게 예열한다.
-- Redis 공통 스위치만 ON/OFF로 바꾼다. 로컬 캐시 500ms, Redis 조회 TTL 2초는 동일하다. 일반 비교는 OFF→ON→ON→OFF, 스모크는 OFF→ON이다.
-- 백엔드 준비 실패, k6 실패 및 비교 조건 불일치는 실패로 남긴다. 종료 시 해당 실행의 컨테이너·볼륨을 제거한다.
+SQL 수는 [MySQL Performance Schema digest](https://dev.mysql.com/doc/refman/8.4/en/performance-schema-statement-digests.html)의 부하 전후 차이로 수집한다. 시딩은 제외하지만 백그라운드 워커 SQL은 포함된다. SQL/요청은 구간 합계 비율이며 요청별 추적값이 아니다. digest 누락·초기화가 감지되면 숫자를 표시하지 않는다. 성공 업무 요청/s는 k6 클라이언트별 성공 요청률의 합이다.
 
-## 해석 범위
+메뉴의 **단계별 부하** 또는 `-UserLevels`로 사용자 수를 늘려 측정한다. 각 단계마다 새 DB를 사용하며 지정된 반복이 모두 성공하고 업무 p95가 `-P95LimitMs` 이하인 단계만 통과한다. k6의 업무·입장 오류율 기준도 적용된다. 통과 단계의 반복 처리량 중앙값 중 가장 큰 값을 `capacity.variants.*.bestObservedPassingRate`에 기록한다. 이는 **선택 범위 내 최고 관측 통과 처리량**이며 절대 최대 처리량이 아니다. 가장 높은 사용자 단계도 통과했다면 한계를 찾지 못한 상태다. WSL·부하 생성기 병목, 입장 대기 시간도 별도로 해석해야 한다. 스모크나 단일 부하는 capacity를 `not-measured`로 표시한다.
 
-현재 작업 내용으로 만든 이미지이므로 **현재 AWS에 배포된 이미지와 바이트까지 동일하다는 뜻은 아니다.** 운영 이미지의 정확한 재현에는 해당 이미지 digest가 필요하다.
+## 기존 개별 기능 테스트
 
-백엔드는 기본 프로필을 사용한다. 테스트 데이터 보존을 위해 외부 수집·자동 시딩을 끄고, 임시 DB·인증 키·고정 기준일을 사용한다. JPA는 이미 준비한 스키마를 validate한다. OAuth와 외부 API는 측정 범위에서 제외한다.
+```powershell
+# Redis ON/OFF, 대기순번·취소표 배정 등을 포함하는 기존 테스트
+.\scripts\benchmark\run-linux.ps1 -Mode components -Suite all -Smoke
+.\scripts\benchmark\run-linux.ps1 -Mode components -Suite booking -CacheMode compare
+.\scripts\benchmark\run-linux.ps1 -Mode components -Suite main -Rate 100 -Duration 60s
+```
 
-k6는 `http://backend:8080`으로 요청하므로 Nginx·HTTPS·외부 네트워크는 포함하지 않는다. 백엔드 4 CPU/4 GiB, k6 2 CPU/2 GiB, MySQL 2 CPU/1.5 GiB, Redis 1 CPU/256 MiB의 로컬 상한이며 실제 EC2 사양을 재현하지 않는다. 컨테이너를 분리해도 PC의 물리 자원은 공유한다.
+이 모드는 기존 백엔드 직접 호출 테스트이므로 입장 대기열·Nginx 경로를 포함하지 않는다. 결과는 기존 `benchmark-results/index.html` 대시보드에서 확인한다. 전체 서비스 실행 결과와 섞어서 비교하지 않는다. `run-redis.ps1`, `run-waiting-rank.ps1`도 이 모드로 연결된다.
 
-DB 버퍼 풀과 OS 캐시는 강제로 비우지 않는다. 예열 후 ON/OFF 상대 비교이며, 스모크 결과로 성능 향상을 판단하지 않는다. JVM 내부 CPU·Tomcat 연결 수는 현재 컨테이너 외부에서 수집하지 않아 빈 지표로 표시한다.
+## 대기순위 개선 전후 브랜치 비교
 
-기존 `run-redis.ps1`은 Docker 방식의 예매 테스트로 연결한다. Windows 전용 k6/Java 경로 인자는 더 이상 지원하지 않는다.
+PowerShell에서 저장소 루트 기준으로 다음을 실행합니다.
+
+```powershell
+.\scripts\benchmark\run-waiting-rank-comparison.ps1
+```
+
+스크립트가 origin의 `feature/jusang`(개선 전)과 `improve/waiting-rank-redis-v2`(개선 후)를 fetch한 다음, 각 커밋을 별도 임시 Git worktree에 체크아웃하고 같은 `booking` 부하 테스트를 실행합니다. 현재 작업 중인 브랜치를 checkout/switch하지 않으며, `main`과 `feature/jusang`에 커밋하지 않습니다. 각 worktree의 실행이 끝나면 로그와 JSON/HTML 산출물을 본 저장소의 비교 실행 폴더에 복사하고 worktree를 정리합니다.
+
+생성 파일:
+
+- `benchmark-results/waiting-rank-comparison.html` — 전용 브랜치 비교 리포트
+- `benchmark-results/waiting-rank-comparison.json` — 최신 비교 데이터
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/baseline/` — 개선 전 원본 로그/산출물
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/improved/` — 개선 후 원본 로그/산출물
+- `benchmark-results/waiting-rank-comparison/<실행 ID>/comparison.json` — 해당 실행의 전체 비교 데이터
+
+기존 `benchmark-results/index.html` 통합 대시보드는 변경하지 않습니다. 한쪽 빌드나 테스트가 실패하면 실패 상태를 기록하고 성능 향상으로 판정하지 않습니다. DB COUNT 쿼리 수와 Outbox→Redis 전파 시간 등 현재 벤치마크가 수집하지 않는 값은 임의로 계산하지 않고 '측정 안 됨'으로 둡니다.
+
+첫 실행은 Docker 이미지와 Gradle 의존성 다운로드 때문에 시간이 걸릴 수 있습니다. 다운로드/빌드 실패 시 HTML 리포트에 성능 결과가 있는 것처럼 보지 말고 해당 실행 폴더의 `runner.log`를 확인하세요.

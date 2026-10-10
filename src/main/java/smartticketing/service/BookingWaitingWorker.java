@@ -13,20 +13,26 @@ public class BookingWaitingWorker {
     private static final Logger log = LoggerFactory.getLogger(BookingWaitingWorker.class);
     private final BookingWaitingDispatcher dispatcher;
     private final AdminMaintenanceGate gate;
+    private long after;
 
     public BookingWaitingWorker(BookingWaitingDispatcher dispatcher, AdminMaintenanceGate gate) { this.dispatcher = dispatcher; this.gate = gate; }
 
     @EventListener(ApplicationReadyEvent.class)
     @Scheduled(fixedDelayString="${booking.waiting.delay-ms:3000}")
-    public void sweep() {
+    public synchronized void sweep() {
         gate.background(this::sweepAvailable);
     }
 
     private void sweepAvailable() {
-        for (var show : dispatcher.pendingShows()) {
+        long start=System.nanoTime();
+        var shows=dispatcher.pendingShows(after,100);
+        for (var show : shows) {
             try { dispatcher.dispatch(show); }
             catch (BookingDispatchGate.Busy busy) { /* Another worker owns this show; the next scan can retry. */ }
             catch (RuntimeException failure) { log.warn("Waiting allocation deferred: show={}, error={}", show, failure.getClass().getSimpleName()); }
+            after=show;
+            if(System.nanoTime()-start>1_000_000_000L) return;
         }
+        if(shows.size()<100) after=0;
     }
 }
