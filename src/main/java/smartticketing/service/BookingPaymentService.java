@@ -65,8 +65,15 @@ public class BookingPaymentService {
                 || r.getTotalAmount() == null || prices.stream().mapToLong(Integer::longValue).sum() != r.getTotalAmount())
             throw new IllegalStateException("저장된 예매 금액이 일치하지 않습니다.");
         var p = payment(reservationId);
-        if (p != null && p.getPaymentMethod() != PaymentMethod.TOSS)
-            reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
+        if (p != null && p.getPaymentMethod() != PaymentMethod.TOSS) {
+            if (p.getPaymentMethod() == PaymentMethod.MOCK && p.getStatus() == PaymentStatus.FAILED) {
+                p.setPaymentMethod(PaymentMethod.TOSS);
+                p.setTossOrderId(null);
+                p.setTossPaymentKey(null);
+            } else {
+                reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
+            }
+        }
         if (p != null && p.getStatus() == PaymentStatus.SUCCESS)
             reject(409, "이미 결제가 완료된 예약입니다.");
         var retryOrder = p != null && p.getStatus() == PaymentStatus.FAILED;
@@ -173,8 +180,16 @@ public class BookingPaymentService {
                 || r.getTotalAmount() == null || prices.stream().mapToLong(Integer::longValue).sum() != r.getTotalAmount())
             throw new IllegalStateException("저장된 예매 금액이 일치하지 않습니다.");
         var payment = payment(id);
-        if (payment != null && payment.getPaymentMethod() != request.paymentMethod())
-            reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
+        if (payment != null && payment.getPaymentMethod() != request.paymentMethod()) {
+            if (payment.getPaymentMethod() == PaymentMethod.TOSS && request.paymentMethod() == PaymentMethod.MOCK
+                    && payment.getStatus() == PaymentStatus.READY && payment.getTossPaymentKey() == null) {
+                // Closing an uncompleted Toss checkout must not disable the existing mock-payment path.
+                payment.setPaymentMethod(PaymentMethod.MOCK);
+                payment.setTossOrderId(null);
+            } else {
+                reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
+            }
+        }
         if (payment != null && payment.getStatus() != PaymentStatus.FAILED && payment.getStatus() != PaymentStatus.READY)
             throw new IllegalStateException("결제와 예약 상태가 일치하지 않습니다.");
         var now = holds.now();
