@@ -41,7 +41,8 @@ export async function openTossPayment(order, reservationId, userId) {
     const successUrl = returnUrl.toString();
     const failUrl = new URL(successUrl);
     failUrl.searchParams.set('tossFailed', '1');
-    paymentWindow.on('paymentRequest', () => widgets.requestPayment({
+    paymentWindow.on('paymentRequest', ({ paymentMethod }) => widgets.requestPayment({
+        paymentMethod,
         orderId: order.orderId,
         orderName: order.orderName,
         successUrl,
