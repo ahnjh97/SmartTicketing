@@ -33,6 +33,12 @@ public class Payment {
     @Column(nullable = false)
     private Integer amount;
 
+    @Column(name = "toss_order_id", unique = true, length = 64)
+    private String tossOrderId;
+
+    @Column(name = "toss_payment_key", unique = true, length = 200)
+    private String tossPaymentKey;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
