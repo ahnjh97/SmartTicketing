@@ -94,8 +94,27 @@ public class TossPaymentService {
                     throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "토스 결제 승인 응답을 검증하지 못했습니다.");
                 }
             } catch (RestClientResponseException error) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                        "토스 결제 승인이 거절되었습니다. 테스트 결제 상태를 확인하고 다시 시도해주세요.");
+                // The provider may have approved the payment before a network timeout. Reconcile by orderId.
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> reconciled = client.get()
+                            .uri("/v1/payments/orders/{orderId}", request.orderId())
+                            .headers(headers -> headers.setBasicAuth(secretKey, ""))
+                            .retrieve()
+                            .body(Map.class);
+                    if (reconciled == null
+                            || !"DONE".equals(reconciled.get("status"))
+                            || !Objects.equals(reconciled.get("orderId"), request.orderId())
+                            || !(reconciled.get("totalAmount") instanceof Number total)
+                            || total.intValue() != request.amount()
+                            || !Objects.equals(reconciled.get("paymentKey"), request.paymentKey())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                                "토스 결제 승인이 거절되었습니다. 테스트 결제 상태를 확인하고 다시 시도해주세요.");
+                    }
+                } catch (RestClientResponseException queryError) {
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                            "토스 결제 승인 상태를 확인하지 못했습니다. 예약 상태를 새로고침한 뒤 다시 확인해주세요.");
+                }
             }
         }
         return bookings.payTossConfirmed(userId, reservationId, idempotencyKey,
