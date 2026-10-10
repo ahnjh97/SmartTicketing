@@ -28,5 +28,9 @@ export const bookingApi = {
     pay: (id, key, simulateFailure = false) => request(`/api/reservations/${id}/mock-payments`, {
         method: 'POST', body: { paymentMethod: 'MOCK', simulateFailure }, idempotencyKey: key,
     }),
+    createTossOrder: id => request(`/api/reservations/${id}/toss-orders`, { method: 'POST' }),
+    confirmToss: (id, body, key) => request(`/api/reservations/${id}/toss-confirmations`, {
+        method: 'POST', body, idempotencyKey: key,
+    }),
     cancel: (id, key) => request(`/api/reservations/${id}/cancel`, { method: 'POST', idempotencyKey: key }),
 };
