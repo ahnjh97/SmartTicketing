@@ -53,6 +53,7 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
                 <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.1 8a8 8 0 1 0 .5 7"/></svg>
             </button>
         </div>
+        {flow.error && <p className={styles.error} role="alert">결제 요청 실패: {flow.error.message || '알 수 없는 오류'} </p>}
         {failed && pending && <p className={styles.error} role="alert">모의결제에 실패했습니다. 남은 시간 안에 다시 결제할 수 있습니다.</p>}
         {tossResult === 'success' && confirmed && <p role="status">토스 테스트 결제가 승인되었습니다.</p>}
         {tossResult === 'failed' && <p className={styles.error} role="alert">토스 결제가 취소되었거나 실패했습니다. 남은 시간 안에 다시 시도할 수 있습니다.</p>}
