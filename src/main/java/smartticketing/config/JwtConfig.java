@@ -9,6 +9,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import smartticketing.repository.UsersRepository;
+import smartticketing.entity.enums.UserStatus;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -36,10 +42,26 @@ public class JwtConfig {
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
-        return NimbusJwtDecoder
+    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey, UsersRepository users) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
                 .withSecretKey(jwtSecretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(),
+                token -> {
+                    try {
+                        if (users.findById(Long.valueOf(token.getSubject()))
+                                .filter(user -> user.getStatus() == UserStatus.ACTIVE).isPresent()) {
+                            return OAuth2TokenValidatorResult.success();
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // A signed token must still identify an existing, active member.
+                    }
+                    return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                            "invalid_token", "활성 상태의 회원이 아닙니다.", null));
+                }
+        ));
+        return decoder;
     }
 }
