@@ -47,7 +47,7 @@ public class TossPaymentService {
                     .retrieve()
                     .body(Map.class);
             cancelled = response != null && "CANCELED".equals(response.get("status"));
-        } catch (RestClientResponseException ignored) {
+        } catch (RestClientException ignored) {
             // A timeout may happen after Toss processed the refund; query before deciding.
         }
         if (!cancelled) {
@@ -59,7 +59,7 @@ public class TossPaymentService {
                         .retrieve()
                         .body(Map.class);
                 cancelled = status != null && "CANCELED".equals(status.get("status"));
-            } catch (RestClientResponseException ignored) {
+            } catch (RestClientException ignored) {
                 // Do not release seats when the provider state cannot be verified.
             }
         }
@@ -93,7 +93,7 @@ public class TossPaymentService {
                         || !Objects.equals(response.get("paymentKey"), request.paymentKey())) {
                     throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "토스 결제 승인 응답을 검증하지 못했습니다.");
                 }
-            } catch (RestClientResponseException error) {
+            } catch (RestClientException error) {
                 // The provider may have approved the payment before a network timeout. Reconcile by orderId.
                 try {
                     @SuppressWarnings("unchecked")
@@ -111,7 +111,7 @@ public class TossPaymentService {
                         throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                                 "토스 결제 승인이 거절되었습니다. 테스트 결제 상태를 확인하고 다시 시도해주세요.");
                     }
-                } catch (RestClientResponseException queryError) {
+                } catch (RestClientException queryError) {
                     throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                             "토스 결제 승인 상태를 확인하지 못했습니다. 예약 상태를 새로고침한 뒤 다시 확인해주세요.");
                 }
