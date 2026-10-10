@@ -65,7 +65,7 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
         {!pending && !confirmed && <div className={styles.resultActions}><GlassButton onClick={onRestart}>다시 예매하기</GlassButton></div>}
         {confirmCancel && cancellable && <CancelDialog busy={busy} onClose={() => setConfirmCancel(false)}>
             <h2 id="reservation-cancel-title">{pending ? '선점을 취소할까요?' : '예매를 취소할까요?'}</h2>
-            <p>{pending ? '선점한 모든 좌석이 해제됩니다.' : '모든 좌석이 취소되고 결제 금액은 모의 전액 환불됩니다.'}</p>
+            <p>{pending ? '선점한 모든 좌석이 해제됩니다.' : '모든 좌석이 취소되고 결제 방식에 따라 취소 또는 환불 처리됩니다.'}</p>
             <p>부분 취소는 지원하지 않으며, 취소한 좌석의 재확보는 보장되지 않습니다.</p>
             <div className={styles.resultActions}><GlassButton disabled={busy} onClick={() => setConfirmCancel(false)}>유지하기</GlassButton>
                 <button className={ui.primary} disabled={busy} onClick={async () => { await cancel(); setConfirmCancel(false); }}>전체 취소 확정</button></div>
