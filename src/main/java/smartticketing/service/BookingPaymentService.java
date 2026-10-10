@@ -46,6 +46,96 @@ public class BookingPaymentService {
                 new Intent(reservationId, normalized), holds.now(), () -> payLocked(userId, reservationId, normalized));
     }
 
+    /** Creates a server-priced Toss order while the existing reservation hold is valid. */
+    public TossOrderResponse createTossOrder(Long userId, Long reservationId) {
+        holds.requireUser(userId);
+        var locked = lock(userId, reservationId);
+        var r = locked.reservation();
+        if (r.getStatus() != ReservationStatus.PENDING) reject(409, "결제할 수 없는 예약 상태입니다.");
+        if (r.getExpiresAt() == null || !r.getExpiresAt().isAfter(holds.now())) {
+            holds.expireLockedGroup(locked.group());
+            reject(409, "좌석 선점 시간이 만료되었습니다.");
+        }
+        BookingHoldService.validateShow(locked.show(), holds.now());
+        var inventory = holds.lockSelectedInventory(locked.show().getId(), holds.reservationSeatIds(reservationId));
+        validateInventory(locked, inventory, SeatStatus.HOLDING);
+        var prices = em.createQuery("select s.price from ReservationSeat s where s.reservation.id=:id", Integer.class)
+                .setParameter("id", reservationId).getResultList();
+        if (prices.isEmpty() || prices.stream().anyMatch(p -> p == null || p <= 0)
+                || r.getTotalAmount() == null || prices.stream().mapToLong(Integer::longValue).sum() != r.getTotalAmount())
+            throw new IllegalStateException("저장된 예매 금액이 일치하지 않습니다.");
+        var p = payment(reservationId);
+        if (p != null && p.getPaymentMethod() != PaymentMethod.TOSS)
+            reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
+        if (p != null && p.getStatus() == PaymentStatus.SUCCESS)
+            reject(409, "이미 결제가 완료된 예약입니다.");
+        var now = holds.now();
+        if (p == null) {
+            p = new Payment();
+            p.setReservation(r);
+            p.setPaymentMethod(PaymentMethod.TOSS);
+            p.setStatus(PaymentStatus.READY);
+            p.setAmount(r.getTotalAmount());
+            p.setCreatedAt(now);
+            em.persist(p);
+        } else if (p.getStatus() == PaymentStatus.FAILED) {
+            p.setStatus(PaymentStatus.READY);
+            p.setTossPaymentKey(null);
+        }
+        if (p.getTossOrderId() == null || p.getStatus() == PaymentStatus.FAILED) {
+            p.setTossOrderId("st_" + UUID.randomUUID().toString().replace("-", ""));
+        }
+        p.setAmount(r.getTotalAmount());
+        p.setUpdatedAt(now);
+        return new TossOrderResponse(p.getTossOrderId(), r.getMovieTitle(), r.getTotalAmount());
+    }
+
+    /** Returns true when this exact Toss payment has already been finalized locally. */
+    public boolean validateTossConfirmation(Long userId, Long reservationId, String orderId, Integer amount, String paymentKey) {
+        holds.requireUser(userId);
+        var locked = lock(userId, reservationId);
+        var r = locked.reservation();
+        var p = payment(reservationId);
+        if (p == null || p.getPaymentMethod() != PaymentMethod.TOSS
+                || !Objects.equals(p.getTossOrderId(), orderId)
+                || !Objects.equals(p.getAmount(), amount)
+                || !Objects.equals(r.getTotalAmount(), amount))
+            reject(400, "주문번호 또는 결제 금액이 일치하지 않습니다.");
+        if (r.getStatus() == ReservationStatus.CONFIRMED && p.getStatus() == PaymentStatus.SUCCESS
+                && Objects.equals(p.getTossPaymentKey(), paymentKey)) return true;
+        if (r.getStatus() != ReservationStatus.PENDING || p.getStatus() != PaymentStatus.READY)
+            reject(409, "결제할 수 없는 예약 상태입니다.");
+        if (r.getExpiresAt() == null || !r.getExpiresAt().isAfter(holds.now()))
+            reject(409, "좌석 선점 시간이 만료되었습니다.");
+        if (paymentKey == null || paymentKey.isBlank()) reject(400, "토스 결제 키가 없습니다.");
+        return false;
+    }
+
+    /** Called only after the server has confirmed the payment with Toss Payments. */
+    public BookingResult payTossConfirmed(Long userId, Long reservationId, String key,
+            String orderId, String paymentKey, Integer amount) {
+        BookingIdempotency.key(key);
+        holds.requireUser(userId);
+        var request = new MockPaymentRequest(PaymentMethod.TOSS, false);
+        return operations.execute(userId, BookingOperationType.CONFIRM_PAYMENT, key,
+                new Intent(reservationId, request), holds.now(), () -> {
+                    var p = payment(reservationId);
+                    if (p == null || p.getPaymentMethod() != PaymentMethod.TOSS
+                            || !Objects.equals(p.getTossOrderId(), orderId)
+                            || !Objects.equals(p.getAmount(), amount))
+                        reject(400, "토스 주문 정보가 일치하지 않습니다.");
+                    if (p.getStatus() == PaymentStatus.SUCCESS) {
+                        if (!Objects.equals(p.getTossPaymentKey(), paymentKey))
+                            reject(409, "이미 다른 결제 정보로 승인된 예약입니다.");
+                        var r = lock(userId, reservationId).reservation();
+                        return paymentResponse(r, p, true);
+                    }
+                    p.setTossPaymentKey(paymentKey);
+                    p.setUpdatedAt(holds.now());
+                    return payLocked(userId, reservationId, request);
+                });
+    }
+
     private PaymentResponse payLocked(Long userId, Long id, MockPaymentRequest request) {
         var locked = lock(userId, id);
         var r = locked.reservation();
@@ -70,6 +160,8 @@ public class BookingPaymentService {
                 || r.getTotalAmount() == null || prices.stream().mapToLong(Integer::longValue).sum() != r.getTotalAmount())
             throw new IllegalStateException("저장된 예매 금액이 일치하지 않습니다.");
         var payment = payment(id);
+        if (payment != null && payment.getPaymentMethod() != request.paymentMethod())
+            reject(409, "이미 다른 결제 방식으로 시작한 예약입니다.");
         if (payment != null && payment.getStatus() != PaymentStatus.FAILED && payment.getStatus() != PaymentStatus.READY)
             throw new IllegalStateException("결제와 예약 상태가 일치하지 않습니다.");
         var now = holds.now();
