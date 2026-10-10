@@ -32,10 +32,11 @@ export default function TossPaymentReturnHandler() {
         }
 
         const confirmation = { paymentKey, orderId, amount };
-        bookingApi.confirmToss(reservationId, confirmation, crypto.randomUUID()).catch(error => {
+        const idempotencyKey = crypto.randomUUID();
+        bookingApi.confirmToss(reservationId, confirmation, idempotencyKey).catch(error => {
             // Recover once if the provider may have approved but the local response was lost.
             if (error.status === 0 || error.status >= 500)
-                return bookingApi.confirmToss(reservationId, confirmation, crypto.randomUUID());
+                return bookingApi.confirmToss(reservationId, confirmation, idempotencyKey);
             throw error;
         }).then(() => {
             returnToBooking('success');
