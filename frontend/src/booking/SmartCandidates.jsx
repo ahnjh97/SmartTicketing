@@ -99,8 +99,9 @@ export default function SmartCandidates({ booking }) {
             <section className={styles.candidateDetail} aria-label="선택한 후보 상세">
                 {selected ? <>
                     {selected.payment?.reservation ? <ReservationPanel key={selected.groupId} candidateLabel={titles[selected.kind]} flow={{ reservation: selected.payment.reservation,
-                        payment: selected.payment, receivedAt: flow.receivedAt, busy: flow.busy,
-                        pay: fail => flow.mutate(selected, 'pay', fail), cancel: () => flow.mutate(selected, 'cancel'), refresh: flow.refresh }} onRestart={back}/>
+                        payment: selected.payment, receivedAt: flow.receivedAt, busy: flow.busy, error: flow.error,
+                        pay: fail => flow.mutate(selected, 'pay', fail), payToss: () => flow.payToss(selected),
+                        cancel: () => flow.mutate(selected, 'cancel'), refresh: flow.refresh }} onRestart={back}/>
                         : <CandidateWaiting key={selected.groupId} candidate={selected} flow={flow}/>}
                 </> : <div className={styles.notice}>현재 남아 있는 후보가 없습니다. 새 조건으로 다시 찾아주세요.</div>}
             </section>
