@@ -118,7 +118,6 @@ export default function useManualHold({ smart = false } = {}) {
     }
     async function payToss() {
         const id = current?.reservation?.id;
-        console.info('[Toss payment] clicked', { userId: user?.id, reservationId: id, gate: gate.current, busy, identity, liveIdentity: live.current });
         if (gate.current) {
             setFailure({ identity, error: new Error('다른 예약 작업이 진행 중입니다. 예약 상태를 새로고침한 뒤 다시 시도해주세요.') });
             return;
