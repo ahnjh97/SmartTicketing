@@ -54,7 +54,10 @@ export default function SmartCandidates({ booking }) {
     const sidebarGroups = batchIds.map(ids => sidebar.filter(candidate => ids.some(id => String(id) === String(candidate.groupId))))
         .concat([sidebar.filter(candidate => !groupedIds.has(String(candidate.groupId)))])
         .filter(items => items.length);
-    const selected = candidates.find(c => String(c.groupId) === flow.selectedId) || (!flow.selectedId ? sidebarGroups[0]?.[0] : null);
+    const reservationId = booking.params.get('reservation');
+    const selected = candidates.find(c => String(c.payment?.reservation?.id) === reservationId)
+        || candidates.find(c => String(c.groupId) === flow.selectedId)
+        || (!flow.selectedId ? sidebarGroups[0]?.[0] || candidates[0] : null);
     const step = selected?.payment?.reservation?.status === 'CONFIRMED' ? 2 : selected?.payment?.reservation ? 1 : 0;
     const back = () => booking.update({ entry: null, smart: null, plan: null, candidate: null, candidates: null, group: null, reservation: null });
     return <div className={styles.smart}>
