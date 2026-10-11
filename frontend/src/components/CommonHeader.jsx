@@ -320,7 +320,18 @@ function HeaderContent({ user, disabled, setupRequired }) {
             <>
                 {user?.admin === true && (
                     <button type="button" className="common-header-icon-trigger" aria-label="데이터 관리" title="데이터 관리" disabled={disabled} onClick={() => { if (!disabled) { setOpenPanel(null); setOpenLocation(null); navigate(PAGE_PATHS.adminData); } }}>
-                        <span className="common-header-trigger-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9.5 3-.5 2a8 8 0 0 0-1.5.9l-2-.6L3 9.5l2.5 4.2 2-.6A8 8 0 0 0 9 19l.5 2h5l.5-2a8 8 0 0 0 1.5-.9l2 .6 2.5-4.2-1.5-1.4a8 8 0 0 0 0-2.2L21 9.5l-2.5-4.2A8 8 0 0 0 15 5l-.5-2Z" /><circle cx="12" cy="12" r="3" /></svg></span>
+                        <span className="common-header-trigger-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M10.08 4.85 10.26 2.15h3.48l.18 2.7
+                                    A7.4 7.4 0 0 1 17.23 6.77L19.66 5.57 21.4 8.58 19.15 10.08
+                                    A7.4 7.4 0 0 1 19.15 13.92L21.4 15.42 19.66 18.43 17.23 17.23
+                                    A7.4 7.4 0 0 1 13.92 19.15L13.74 21.85h-3.48l-.18-2.7
+                                    A7.4 7.4 0 0 1 6.77 17.23L4.34 18.43 2.6 15.42 4.85 13.92
+                                    A7.4 7.4 0 0 1 4.85 10.08L2.6 8.58 4.34 5.57 6.77 6.77
+                                    A7.4 7.4 0 0 1 10.08 4.85Z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </span>
                     </button>
                 )}
 

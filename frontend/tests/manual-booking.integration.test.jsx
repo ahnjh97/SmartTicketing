@@ -1,20 +1,28 @@
-import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode, useState } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, beforeEach, vi } from 'vitest';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { HashRouter, MemoryRouter, useLocation } from 'react-router-dom';
 import App from '../src/App.jsx';
 import { seoulDate } from '../src/booking/state.js';
 import SeatPicker from '../src/booking/SeatPicker.jsx';
 import { secondsRemaining } from '../src/booking/useReservationClock.js';
+import { openTossPayment } from '../src/booking/tossPayments.js';
+import { bookingApi } from '../src/api/booking.js';
+
+// The provider window is external; exercise our order and confirmation APIs around it.
+vi.mock('../src/booking/tossPayments.js', () => ({ openTossPayment: vi.fn() }));
 
 const nativeShowModal = HTMLDialogElement.prototype.showModal;
 const nativeClose = HTMLDialogElement.prototype.close;
 beforeEach(() => {
+    window.history.replaceState({}, '', '/');
+    openTossPayment.mockReset().mockResolvedValue(undefined);
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
     HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
 });
 afterEach(() => {
     cleanup();
+    window.history.replaceState({}, '', '/');
     if (nativeShowModal) HTMLDialogElement.prototype.showModal = nativeShowModal;
     else delete HTMLDialogElement.prototype.showModal;
     if (nativeClose) HTMLDialogElement.prototype.close = nativeClose;
@@ -61,6 +69,7 @@ function payment() { return { paymentId: paymentStatus ? 601 : null, status: pay
 async function api(url, options = {}) {
     if(url==='/api/booking-groups/401/waiting-queues') return response({groupId:401,groupStatus:'HOLDING',activeReservationId:saved?.id,items:[],choices:[]});
     if (url === '/api/users/me') return response(member);
+    if (url === '/api/main') return response({ nowShowing: [{ id: 41 }], comingSoon: [] });
     if (url === '/api/auth/login') return response({ accessToken: 'test-token' });
     if (url.startsWith('/api/theaters?')) return response({ items: [], totalElements: 0 });
     if (url === '/api/theaters/71') return response({ id: 71, name: '서울 극장' });
@@ -71,8 +80,15 @@ async function api(url, options = {}) {
     if (url === '/api/booking-groups/401') return response({ ...group, activeReservationId: saved?.id });
     if (url === '/api/booking-groups/401/manual-hold') { saved = { ...reservation }; return response(saved); }
     if (url === '/api/reservations/501/payment') return response(payment());
-    if (url === '/api/reservations/501/mock-payments') { attempts++; paymentStatus = attempts === 1 ? 'FAILED' : 'SUCCESS';
-        saved = { ...saved, status: attempts === 1 ? 'PENDING' : 'CONFIRMED' }; return response(payment()); }
+    if (url === '/api/reservations/501/toss-orders') {
+        attempts++;
+        if (attempts === 1) return new Response(JSON.stringify({ message: '결제 준비에 실패했습니다.' }), { status: 503 });
+        return response({ orderId: 'st-manual', orderName: saved.movieTitle, amount: saved.totalAmount });
+    }
+    if (url === '/api/reservations/501/toss-confirmations') {
+        expect(JSON.parse(options.body)).toEqual({ orderId: 'st-manual', paymentKey: 'test-payment', amount: 18000 });
+        paymentStatus = 'SUCCESS'; saved = { ...saved, status: 'CONFIRMED' }; return response(payment());
+    }
     if (url === '/api/reservations/501/cancel') { saved = { ...saved, status: 'CANCELLED' }; paymentStatus = 'CANCELLED'; return response(saved); }
     if (url === '/api/tickets') return response([]);
     throw new Error(`Unexpected API ${url}`);
@@ -91,6 +107,65 @@ async function selectAndHold() {
     fireEvent.click(screen.getByRole('button',{ name: '예매하기' }));
     await screen.findByRole('heading',{ name: '좌석을 선점했습니다' });
 }
+
+test.each([
+    ['success', false],
+    ['success', true],
+    ['failed', false],
+    ['invalid', false],
+])('manual payment Back restores conditions without another hold: %s, saved route %s', async (result, useStorage) => {
+    saved = { ...reservation };
+    group = { id: 401, audience: { adultCount: 1, youthCount: 1 } };
+    vi.stubGlobal('fetch', vi.fn(api));
+    const savedRoute = `#${initial}&group=401&reservation=501&seats=1,2`;
+    const callback = new URL('/', window.location.origin);
+    callback.searchParams.set('tossReservationId', '501');
+    if (useStorage) sessionStorage.setItem('toss.return-to.501', savedRoute);
+    else callback.searchParams.set('tossReturnTo', savedRoute);
+    if (result === 'success') {
+        callback.searchParams.set('orderId', 'st-manual');
+        callback.searchParams.set('paymentKey', 'test-payment');
+        callback.searchParams.set('amount', '18000');
+    } else if (result === 'failed') callback.searchParams.set('tossFailed', '1');
+    callback.hash = savedRoute;
+    window.history.replaceState({}, '', callback);
+    const mountBrowser = () => render(<StrictMode><HashRouter><App /><Probe /></HashRouter></StrictMode>);
+    const newBookingRequests = () => fetch.mock.calls.filter(([url, options]) => options?.method === 'POST'
+        && (url === '/api/booking-groups' || url === '/api/smart-booking-candidates'
+            || /\/(manual-hold|smart-hold|waiting-queues)$/.test(url)));
+    mountBrowser();
+    const heading = result === 'success' ? '예매가 완료되었습니다' : '좌석을 선점했습니다';
+    await screen.findByRole('heading', { name: heading });
+    expect(window.location.search).toBe('');
+    const resultPath = window.location.hash;
+    expect(newBookingRequests()).toHaveLength(0);
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByTestId('path').textContent).not.toContain('entry='));
+    const conditions = new URL(screen.getByTestId('path').textContent, window.location.origin);
+    expect(Object.fromEntries(conditions.searchParams)).toEqual({
+        theater: '71', movie: '41', showtime: '91', date: day, adult: '1', youth: '1',
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    expect(newBookingRequests()).toHaveLength(0);
+
+    // Reloading this history entry must also remain passive.
+    cleanup(); mountBrowser();
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    expect(newBookingRequests()).toHaveLength(0);
+    await act(async () => { window.history.forward(); });
+    await waitFor(() => expect(window.location.hash).toBe(resultPath));
+    await screen.findByRole('heading', { name: heading });
+    expect(newBookingRequests()).toHaveLength(0);
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/toss-confirmations'))).toHaveLength(result === 'success' ? 1 : 0);
+
+    await act(async () => { window.history.back(); });
+    await waitFor(() => expect(screen.getByRole('button', { name: '일반예매', exact: true }).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: '일반예매', exact: true }));
+    expect((await screen.findByRole('button', { name: 'A1 좌석' })).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: '예매하기', exact: true }).disabled).toBe(true);
+    expect(newBookingRequests()).toHaveLength(0);
+});
 test('real route connects audience, seats, hold, reload, payment failure/retry and whole cancellation', async () => {
     vi.stubGlobal('fetch',vi.fn(api)); mount(); await selectAndHold();
     const create = fetch.mock.calls.find(([url])=>url==='/api/booking-groups');
@@ -98,14 +173,23 @@ test('real route connects audience, seats, hold, reload, payment failure/retry a
     expect(create[1].headers['Idempotency-Key']).toMatch(/^[a-z0-9-]{16,64}$/);
     const path = screen.getByTestId('path').textContent; cleanup(); mount(path);
     await screen.findByRole('timer');
-    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
-    await screen.findByText(/모의결제에 실패했습니다/);
-    fireEvent.click(screen.getByRole('button',{ name:'모의결제' }));
+    fireEvent.click(screen.getByRole('button',{ name:'결제', exact: true }));
+    await screen.findAllByText(/결제 준비에 실패했습니다/);
+    expect(openTossPayment).not.toHaveBeenCalled();
+    expect(saved.status).toBe('PENDING');
+    fireEvent.click(screen.getByRole('button',{ name:'결제', exact: true }));
+    await waitFor(() => expect(openTossPayment).toHaveBeenCalledWith(
+        { orderId: 'st-manual', orderName: saved.movieTitle, amount: 18000 }, 501, 1));
+    await bookingApi.confirmToss(501, { orderId: 'st-manual', paymentKey: 'test-payment', amount: 18000 }, crypto.randomUUID());
+    // A provider redirect loads the persisted reservation again, rather than paying optimistically.
+    cleanup(); mount(path + '&tossResult=success');
     await screen.findByRole('heading',{ name:'예매가 완료되었습니다' });
     expect(screen.getByText('ST-TEST')).toBeTruthy();
-    const pays = fetch.mock.calls.filter(([url])=>url.endsWith('/mock-payments'));
-    expect(pays[0][1].headers['Idempotency-Key']).not.toBe(pays[1][1].headers['Idempotency-Key']);
-    expect(JSON.parse(pays[0][1].body)).toEqual({paymentMethod:'MOCK',simulateFailure:false});
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/toss-orders'))).toHaveLength(2);
+    const confirms = fetch.mock.calls.filter(([url]) => url.endsWith('/toss-confirmations'));
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0][1].headers['Idempotency-Key']).toMatch(/^[a-z0-9-]{16,64}$/);
+    expect(fetch.mock.calls.some(([url]) => url.endsWith('/mock-payments'))).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'예매 전체 취소'}));
     expect(screen.getByRole('dialog', { name: '예매를 취소할까요?' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '유지하기' }));
@@ -133,7 +217,7 @@ test('expired restored reservation offers restart and never offers payment', asy
     saved={...reservation,status:'EXPIRED'}; group={id:401}; vi.stubGlobal('fetch',vi.fn(api));
     mount('/theaters?entry=THEATER_NORMAL&group=401&reservation=501');
     await screen.findByRole('heading',{name:'선점 시간이 만료되었습니다'});
-    expect(screen.queryByRole('button',{name:'모의결제'})).toBeNull();
+    expect(screen.queryByRole('button',{name:'결제', exact: true})).toBeNull();
 });
 test('foreign reservation restoration shows the server ownership error without details', async () => {
     vi.stubGlobal('fetch',vi.fn((url,options)=>url==='/api/booking-groups/401' ? Promise.resolve(new Response(JSON.stringify({message:'관람 요청을 찾을 수 없습니다.'}),{status:404})) : api(url,options)));

@@ -54,7 +54,10 @@ export default function SmartCandidates({ booking }) {
     const sidebarGroups = batchIds.map(ids => sidebar.filter(candidate => ids.some(id => String(id) === String(candidate.groupId))))
         .concat([sidebar.filter(candidate => !groupedIds.has(String(candidate.groupId)))])
         .filter(items => items.length);
-    const selected = candidates.find(c => String(c.groupId) === flow.selectedId) || (!flow.selectedId ? sidebarGroups[0]?.[0] : null);
+    const reservationId = booking.params.get('reservation');
+    const selected = candidates.find(c => String(c.payment?.reservation?.id) === reservationId)
+        || candidates.find(c => String(c.groupId) === flow.selectedId)
+        || (!flow.selectedId ? sidebarGroups[0]?.[0] || candidates[0] : null);
     const step = selected?.payment?.reservation?.status === 'CONFIRMED' ? 2 : selected?.payment?.reservation ? 1 : 0;
     const back = () => booking.update({ entry: null, smart: null, plan: null, candidate: null, candidates: null, group: null, reservation: null });
     return <div className={styles.smart}>
@@ -98,10 +101,13 @@ export default function SmartCandidates({ booking }) {
             </aside>
             <section className={styles.candidateDetail} aria-label="선택한 후보 상세">
                 {selected ? <>
-                    {selected.payment?.reservation ? <ReservationPanel key={selected.groupId} candidateLabel={titles[selected.kind]} flow={{ reservation: selected.payment.reservation,
-                        payment: selected.payment, receivedAt: flow.receivedAt, busy: flow.busy,
-                        pay: fail => flow.mutate(selected, 'pay', fail), cancel: () => flow.mutate(selected, 'cancel'), refresh: flow.refresh }} onRestart={back}/>
-                        : <CandidateWaiting key={selected.groupId} candidate={selected} flow={flow}/>}
+                    {booking.params.get('tossResult') === 'success' && selected.payment?.reservation?.status !== 'CONFIRMED'
+                        ? <div className={styles.notice} role="status">토스 결제 승인 결과와 예매 상태를 확인하고 있습니다…</div>
+                        : selected.payment?.reservation ? <ReservationPanel key={selected.groupId} candidateLabel={titles[selected.kind]} flow={{ reservation: selected.payment.reservation,
+                            payment: selected.payment, receivedAt: flow.receivedAt, busy: flow.busy, error: flow.error,
+                            pay: fail => flow.mutate(selected, 'pay', fail), payToss: () => flow.payToss(selected),
+                            cancel: () => flow.mutate(selected, 'cancel'), refresh: flow.refresh }} onRestart={back}/>
+                            : <CandidateWaiting key={selected.groupId} candidate={selected} flow={flow}/>}
                 </> : <div className={styles.notice}>현재 남아 있는 후보가 없습니다. 새 조건으로 다시 찾아주세요.</div>}
             </section>
         </div>}

@@ -12,6 +12,8 @@ const coreTests = [
     'foreign reservation restoration shows the server ownership error without details',
     'movie smart creates three independent zone candidates once and persists the plan URL',
     'paying the side retains the center queue, then center can be paid and only the side cancelled',
+    'payment return Back opens conditions without creating candidates again: .*',
+    'manual payment Back restores conditions without another hold: .*',
     'uncertain registration retries with the same idempotency key without optimistic success',
     'paused and holding are distinct and server allocation refreshes the shared reservation flow',
     'group cancellation is explicit and leaves terminal rows visible',

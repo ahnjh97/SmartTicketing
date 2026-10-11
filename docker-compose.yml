@@ -79,6 +79,7 @@ services:
       ADMIN_KEY: ${ADMIN_KEY}
       ADMIN_LOGIN_ID: ${ADMIN_LOGIN_ID:-admin}
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
       TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN:-}
       KAKAO_MAP_REST_API_KEY: ${KAKAO_MAP_REST_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -114,6 +115,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ""
+        VITE_TOSS_CLIENT_KEY: ${VITE_TOSS_CLIENT_KEY:-}
         VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:?VITE_KAKAO_MAP_JS_KEY must be set}
         VITE_BASE_PATH: /
     container_name: smartticketing-frontend

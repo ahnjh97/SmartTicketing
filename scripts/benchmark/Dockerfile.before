@@ -1,0 +1,9 @@
+FROM eclipse-temurin:21-jdk-jammy
+WORKDIR /app
+COPY gradlew build.gradle settings.gradle ./
+COPY gradle ./gradle
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
+COPY src/main ./src/main
+COPY src/benchmark ./src/benchmark
+RUN printf '\nsourceSets.main.java.srcDir "src/benchmark/java"\n' >> build.gradle
+RUN ./gradlew bootJar --no-daemon --console=plain -Dorg.gradle.jvmargs=-Xmx512m

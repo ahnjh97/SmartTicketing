@@ -1,5 +1,6 @@
 import { formatShowDate } from '../utils/showtimeFormat.js';
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
 import useAuth from "../hooks/useAuth.js";
@@ -8,27 +9,58 @@ import SeatPreferenceMap from "../components/SeatPreferenceMap.jsx";
 import GlassButton from "../components/GlassButton.jsx";
 import styles from "./ProfilePage.module.css";
 
+function WithdrawDialog({ pending, error, onClose, onConfirm }) {
+    const dialog = useRef(null);
+    useEffect(() => {
+        const previous = document.activeElement;
+        const overflow = document.body.style.overflow;
+        dialog.current.showModal();
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = overflow;
+            previous?.focus();
+        };
+    }, []);
+
+    return createPortal(
+        <dialog ref={dialog} className={styles.withdrawDialog} aria-labelledby="withdraw-title"
+            aria-describedby="withdraw-description" aria-busy={pending}
+            onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
+            <h2 id="withdraw-title">정말 탈퇴하시겠습니까?</h2>
+            <p id="withdraw-description">탈퇴 후에는 이 계정으로 다시 로그인할 수 없습니다.</p>
+            {error && <p className="error-message" role="alert">{error}</p>}
+            <div className={styles.dialogActions}>
+                <button type="button" autoFocus disabled={pending} onClick={onClose}>취소</button>
+                <button type="button" className={styles.confirmWithdraw} disabled={pending} onClick={onConfirm}>
+                    {pending ? "탈퇴 처리 중…" : "탈퇴하기"}
+                </button>
+            </div>
+        </dialog>, document.body
+    );
+}
+
 export default function ProfilePage() {
     const { user, logout: logoutSession, withdraw: withdrawSession } = useAuth();
     const [message, setMessage] = useState(useLocation().state?.message ?? "");
     const { error, setError, pending, run } = useAsyncAction();
+    const [withdrawOpen, setWithdrawOpen] = useState(false);
     const routeNavigate = useNavigate();
     const navigate = (page) => routeNavigate(PAGE_PATHS[page]);
 
     function renderSocialLogo(provider) {
         const logos = {
             google: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Google_2015_logo.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Google_2015_logo.svg",
                 alt: "Google",
                 className: "social-logo social-wordmark google-logo",
             },
             naver: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Naver_Logotype.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Naver_Logotype.svg",
                 alt: "NAVER",
                 className: "social-logo social-wordmark naver-logo",
             },
             kakao: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/Kakao_CI_yellow.svg",
+                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Kakao_CI_yellow.svg",
                 alt: "Kakao",
                 className: "social-logo social-wordmark kakao-logo",
             },
@@ -53,14 +85,9 @@ export default function ProfilePage() {
     }
 
     function withdraw() {
-        if (!window.confirm("정말 탈퇴하시겠습니까?\n탈퇴 후에는 다시 로그인할 수 없습니다.")) return;
         setMessage("");
         run(async () => {
             await withdrawSession();
-            routeNavigate(PAGE_PATHS.login, {
-                replace: true,
-                state: { message: "회원 탈퇴가 완료되었습니다." },
-            });
         });
     }
 
@@ -121,7 +148,10 @@ export default function ProfilePage() {
                 </div>
 
                 <div className={styles.actions}>
-                    <button type="button" disabled={pending} className={styles.withdraw} onClick={withdraw}>
+                    <button type="button" disabled={pending} className={styles.withdraw} onClick={() => {
+                        setError("");
+                        setWithdrawOpen(true);
+                    }}>
                         회원 탈퇴
                     </button>
                     <GlassButton disabled={pending} onClick={() => {
@@ -133,7 +163,9 @@ export default function ProfilePage() {
                     </GlassButton>
                 </div>
 
-                {error && <p className="error-message">{error}</p>}
+                {withdrawOpen && <WithdrawDialog pending={pending} error={error}
+                    onClose={() => { setWithdrawOpen(false); setError(""); }} onConfirm={withdraw} />}
+                {error && !withdrawOpen && <p className="error-message">{error}</p>}
                 {message && <p className="success-message">{message}</p>}
             </div>
         </div>

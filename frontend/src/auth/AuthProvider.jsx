@@ -145,7 +145,10 @@ export default function AuthProvider({ children }) {
             clearAccessToken();
             setUser(null);
             setSessionError("");
-            navigate("/login", { replace: true });
+            navigate("/login", {
+                replace: true,
+                state: { message: "회원 탈퇴가 완료되었습니다." },
+            });
         },
         [navigate]
     );
