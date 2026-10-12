@@ -1,5 +1,16 @@
 # Toss Payments integration plan for SmartTicketing
 
+## GitHub Actions deployment keys
+
+In the repository's **Settings → Secrets and variables → Actions**, register:
+
+- `VITE_TOSS_CLIENT_KEY`: the client key, passed into the frontend Docker build. It is embedded in browser JavaScript; changing it requires a new build and deployment.
+- `TOSS_SECRET_KEY`: the matching secret key, passed through SSH standard input into the deployment shell and then only into the backend container's environment. It is not a Docker build argument or a frontend variable.
+
+Use keys from the same Toss environment. Non-PR image builds require the client key, and deployment requires the secret key. Fork PR checks can run without these secrets. This wiring does not call Toss during CI.
+
+The deployment does not write the secret key into the EC2 `.env` file. Ordinary container restarts retain the container environment; manually recreating the backend with Compose requires supplying `TOSS_SECRET_KEY` again (or using the GitHub deployment workflow).
+
 > Status: initial test integration implemented on `feature/toss-payments`. It is not yet locally built or end-to-end verified. Use test keys only; do not merge to production until the verification checklist passes.
 >
 > Base branch: `feature/jusang`  

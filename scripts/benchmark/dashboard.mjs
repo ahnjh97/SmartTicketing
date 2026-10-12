@@ -56,6 +56,8 @@ export async function buildDashboard(root) {
                     record.rows.push({category,id,label:labels[id]??categories.find(c=>c[0]===category)?.[1]??'기존 통합 조회',
                         run:row.run??'',mode:row.mode??'N/A',p95:number(row.p95),p99:number(row.p99),requests:number(row.requests),
                         rps:number(row.rps),errorRate,failure,dropped,wrong,valid,raw,
+                        performanceEligible:result.pairs?.find(p=>(p.id??p.scenario)===id)?.performanceEligible===true,
+                        performanceSummary:result.pairs?.find(p=>(p.id??p.scenario)===id)??null,
                         load:row.load?`${row.load.rate}/s · ${row.load.duration} · ${row.load.preAllocatedVUs}~${row.load.maxVUs} VU`:null});
                 }
             } else if(env && (section==='booking'||!env.suite)) {

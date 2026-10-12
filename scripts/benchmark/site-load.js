@@ -2,6 +2,13 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 const fixture = JSON.parse(open('/results/fixture.json'));
+const commonStart = Number(__ENV.START_MS || 0);
+const measurementStart = commonStart + Number(__ENV.WARMUP_SECONDS || 0) * 1000;
+const measurementEnd = measurementStart + Number(__ENV.MEASUREMENT_SECONDS || 0) * 1000;
+export function setup() {
+  if (commonStart && Date.now() >= commonStart) throw new Error('Generator missed common start barrier');
+  if (commonStart > Date.now()) sleep((commonStart - Date.now()) / 1000);
+}
 const failures = new Rate('business_failures');
 const latency = new Trend('business_latency', true);
 const gateErrors = new Rate('admission_errors');
@@ -11,9 +18,10 @@ const bookings = new Counter('completed_bookings');
 const successfulRequests = new Counter('successful_business_requests');
 export const options = {
   vus: Number(__ENV.USERS), duration: __ENV.DURATION,
+  setupTimeout: `${Math.max(180, Math.ceil((commonStart - Date.now()) / 1000) + 30)}s`,
   insecureSkipTLSVerify: true, noCookiesReset: true,
   summaryTrendStats: ['avg', 'p(95)', 'p(99)', 'max'],
-  thresholds: { business_failures: ['rate<0.01'], admission_errors: ['rate<0.01'],
+  thresholds: { business_failures: ['rate==0'], admission_errors: ['rate==0'],
     completed_journeys: ['count>0'] },
 };
 const base = 'https://nginx';
@@ -21,14 +29,17 @@ let sequence = 0;
 let token;
 let firstFailure = false;
 function request(method, path, body, user) {
+  const startedMs = Date.now();
+  const endpoint = method + ' ' + path.split('?')[0].replace(/\d+/g, ':id');
+  const phase = startedMs < measurementStart ? 'warmup' : startedMs < measurementEnd ? 'measurement' : 'drain';
   const r = http.request(method, base + path, body == null ? null : JSON.stringify(body), {
     headers: { Authorization: 'Bearer ' + (token || fixture.tokens[user]), 'Content-Type': 'application/json',
       'Idempotency-Key': `bench-${user}-${__ITER}-${++sequence}-${Date.now()}` },
     timeout: '8s', tags: { name: path.replace(/\d+/g, ':id') },
   });
   const bad = r.status < 200 || r.status >= 300;
-  if (!bad) successfulRequests.add(1);
-  failures.add(bad); latency.add(r.timings.duration);
+  if (!bad) successfulRequests.add(1, {endpoint});
+  failures.add(bad, {endpoint, phase}); latency.add(r.timings.duration, {endpoint, phase});
   if (bad && !firstFailure) { console.log(`Failed ${method} ${path}: HTTP ${r.status}`); firstFailure = true; }
   return r;
 }

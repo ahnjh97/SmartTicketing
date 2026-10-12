@@ -40,7 +40,7 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
                 </div>
                 <div className={styles.paymentCheckout}>
                     <div className={styles.total} aria-label="예약 금액"><strong>{r.totalAmount.toLocaleString('ko-KR')}<small>원</small></strong></div>
-                    {pending && <button type="button" className={`${ui.primary} ${styles.pay} ${styles.tossPay}`} disabled={busy || remaining === 0}
+                    {pending && <button type="button" className={`${ui.primary} ${styles.pay}`} disabled={busy || remaining === 0}
                         onClick={payToss}>{busy ? '결제 준비 중…' : '결제'}</button>}
                     {confirmed && <Link className={`${ui.primary} ${styles.pay} ${styles.ticketLink}`} to="/tickets">내 티켓에서 확인</Link>}
                 </div>

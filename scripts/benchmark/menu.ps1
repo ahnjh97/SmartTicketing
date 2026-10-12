@@ -58,7 +58,7 @@ function Read-BenchmarkMenu([string]$Root) {
         $suites = @('all','browse','smart','manual','login')
         $settings.Suite = $suites[(Read-BenchmarkChoice '측정 시나리오' @('전체 흐름', '조회', '스마트예매', '일반예매', '로그인')) - 1]
     }
-    $defaultProfile = if ($settings.Mode -eq 'components') { '기존 시나리오의 기본 부하' } else { '기본 부하 (사용자 100명, 60초)' }
+    $defaultProfile = if ($settings.Mode -eq 'components') { '조회 반복 측정 (구성별 4회) / 예매 진단 부하' } else { '반복 측정 (사용자 100명, 예열 30초 + 측정 120초, 구성별 4회)' }
     $profiles = @('빠른 기능 확인 (스모크)', $defaultProfile, '직접 설정')
     if ($settings.Mode -ne 'components') { $profiles += '단계별 부하 (지연·오류 기준을 통과한 최고 관측 처리량)' }
     $profile = Read-BenchmarkChoice '실행 규모' $profiles
@@ -93,7 +93,7 @@ function Read-BenchmarkMenu([string]$Root) {
             $limit = 0
         } until ([int]::TryParse($raw,[ref]$limit) -and $limit -ge 1 -and $limit -le 100000)
         $settings.P95LimitMs = $limit
-        Write-Host '각 사용자 단계에서 구성별로 60초씩 실행합니다. 각 실행은 새 DB로 시작합니다.'
+        Write-Host '각 사용자 단계에서 구성별 기본 4회, 예열 30초 후 측정합니다(기본 120초). 각 실행은 새 DB로 시작합니다.'
     }
     Write-Host "`n실행: $($settings.Mode) / $($settings.Comparison) / $($settings.Suite) / 스모크=$($settings.Smoke)"
     Write-Host '단계별 부하도 지정 범위 내 관측치입니다. 부하 생성기와 WSL 자원을 포함한 결과이며 절대 최대치를 확정하지 않습니다.'

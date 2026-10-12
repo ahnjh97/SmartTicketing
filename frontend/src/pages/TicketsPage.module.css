@@ -144,6 +144,37 @@
 .ticketCardInfo strong { display: block; color: #171717; font-size: 15px; line-height: 1.5; word-break: break-word; }
 .ticketQrPlaceholder { position: relative; display: flex; width: 220px; aspect-ratio: 1; align-items: center; justify-content: center; box-sizing: border-box; border: 1px solid #d5d5d5; border-radius: 2px; background: #fff; overflow: hidden; padding: 0; }
 .ticketQrPlaceholder svg { display: block; width: 220px; height: 220px; }
+.qrProcessingOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-content: center;
+    gap: 8px;
+    text-align: center;
+    background: rgb(0 0 0 / 62%);
+    color: #fff;
+    backdrop-filter: blur(2px);
+}
+.qrProcessingOverlay strong { font-size: 18px; }
+.qrProcessingOverlay span { font-size: 13px; font-weight: 700; }
+.ticketUsedStamp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 5;
+    transform: translate(-50%, -50%) rotate(-12deg);
+    padding: 8px 18px;
+    border: 5px solid #d00000;
+    border-radius: 7px;
+    color: #d00000;
+    background: rgb(255 255 255 / 72%);
+    box-shadow: 0 2px 0 #8b0000;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    pointer-events: none;
+}
 .ticketNumber { width: 100%; padding-top: 2px; text-align: center; }
 .ticketNumber strong { display: block; overflow: hidden; font-size: 11px; letter-spacing: .12em; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -157,6 +188,7 @@
     .ticketCardRight { padding: 24px 14px; }
     .ticketQrPlaceholder { width: 170px; height: 170px; flex-shrink: 0; }
     .ticketQrPlaceholder svg { width: 170px; height: 170px; }
+    .ticketUsedStamp { font-size: 30px; border-width: 4px; }
 }
 @media (max-width: 480px) {
     .ticketCardContent { grid-template-columns: minmax(0, 1fr); }
