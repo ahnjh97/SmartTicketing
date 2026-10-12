@@ -35,10 +35,12 @@ function render(){
     const rows=record.rows.filter(r=>active==='all'||r.category===active),failed=rows.filter(r=>!r.valid).length;
     const errors=rows.some(r=>r.errorRate>0),requests=sum(rows,'requests');
     const groups=[...new Set(rows.map(r=>r.id))].map(id=>{
-        const cells=rows.filter(r=>r.id===id),off=mean(cells.filter(r=>r.mode==='OFF')),on=mean(cells.filter(r=>r.mode==='ON'));
-        const valid=!record.smoke&&!record.failed&&cells.every(r=>r.valid)&&off>0&&on!=null;
-        const reason=record.smoke?'동작 확인용':cells.some(r=>!r.valid)||record.failed?'비교 보류':id==='login'?'비교 대상 아님':off==null||on==null?'단독 측정':'—';
-        return {label:cells[0].label,off,on,valid,change:valid?(on/off-1)*100:null,reason};
+        const cells=rows.filter(r=>r.id===id),comparison=cells[0].performanceSummary;
+        const off=comparison?.performanceEligible?comparison.off:mean(cells.filter(r=>r.mode==='OFF')),on=comparison?.performanceEligible?comparison.on:mean(cells.filter(r=>r.mode==='ON'));
+        const valid=!record.smoke&&!record.failed&&cells.every(r=>r.valid&&r.performanceEligible)&&off>0&&on!=null;
+        const reason=record.smoke?'동작 확인용':cells.some(r=>!r.valid)||record.failed?'비교 보류':id==='login'?'비교 대상 아님':off==null||on==null?'단독 측정':'비교 보류 — 성능 비교 조건 미달';
+        const mixed=comparison?.pairedP95ChangesPercent?.some(n=>n<=0)&&comparison?.pairedP95ChangesPercent?.some(n=>n>=0);
+        return {label:cells[0].label,off,on,valid:valid&&!mixed,change:valid?comparison.change:null,reason:mixed?'반복 방향 다름 — 결론 보류':reason};
     });
     const links=record.reports.map(r=>`<a href="${esc(r.href)}" target="_blank" rel="noopener">${esc(r.name)} ↗</a>`).join('')+(record.log?`<a href="${esc(record.log)}" target="_blank" rel="noopener">실행 로그 ↗</a>`:'');
     $('panel').innerHTML=`<div><span class="tag">${esc(record.os||'환경 미기록')}</span><span class="tag">Java ${esc(record.java||'미기록')}</span><span class="tag">Redis ${mode(record)}</span><span class="tag ${record.smoke?'warn':''}">${record.smoke?'빠른 동작 확인':'부하 측정'}</span><span class="tag">${record.isolated?'항목별 JVM·DB 격리':'이전 실행 조건'}</span></div>

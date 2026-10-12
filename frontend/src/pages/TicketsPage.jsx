@@ -60,7 +60,6 @@ export default function TicketsPage() {
     const selectedTicket = tickets.find(ticket => ticket.ticketId === selectedTicketId);
     const expandedTicketId = selectedTicket && !["EXPIRED", "CANCELLED"].includes(selectedTicket.status) ? selectedTicketId : null;
     const [verificationPhase, setVerificationPhase] = useState("idle");
-    const [verificationSeconds, setVerificationSeconds] = useState(5);
     const [selectedDate, setSelectedDate] = useState("ALL");
     const [cancellingTicketId, setCancellingTicketId] = useState(null);
 
@@ -113,16 +112,6 @@ export default function TicketsPage() {
         } catch (e) { setError(e?.message ?? "추가 티켓을 불러오지 못했습니다."); }
         finally { setLoadingMore(false); }
     }
-
-    useEffect(() => {
-        if (!expandedTicketId || verificationPhase !== "processing") return;
-
-        const timer = window.setInterval(() => {
-            setVerificationSeconds((current) => Math.max(0, current - 1));
-        }, 1000);
-
-        return () => window.clearInterval(timer);
-    }, [verificationPhase, expandedTicketId]);
 
     useEffect(() => {
         if (!expandedTicketId) return;
@@ -197,7 +186,6 @@ export default function TicketsPage() {
 
         setExpandedTicketId(id);
         setVerificationPhase(selected?.status === "USED" ? "used" : "idle");
-        setVerificationSeconds(5);
     }
 
     const ticketDates = [...new Set(tickets.map((ticket) => ticket.startTime ? dateKey(ticket.startTime) : null).filter(Boolean))].sort((a, b) => b.localeCompare(a));
@@ -362,16 +350,15 @@ export default function TicketsPage() {
                                                 title={`티켓 QR - ${selectedTicket.ticketNumber}`}
                                             />
                                             {verificationPhase === "processing" && (
-                                                <div className={styles.qrProcessingOverlay}>
+                                                <div className={styles.qrProcessingOverlay} role="status">
                                                     <strong>처리 중입니다...</strong>
-                                                    <span>{verificationSeconds}초</span>
+                                                    <span>잠시만 기다려 주세요</span>
                                                 </div>
                                             )}
+                                            {verificationPhase === "used" && (
+                                                <div className={styles.ticketUsedStamp} role="status" aria-label="티켓 사용 완료">USED</div>
+                                            )}
                                         </div>
-
-                                        {verificationPhase === "used" && (
-                                            <div className={styles.ticketUsedStamp}>USED</div>
-                                        )}
 
                                         <div className={styles.ticketNumber}>
                                             <span>TICKET NO.</span>
