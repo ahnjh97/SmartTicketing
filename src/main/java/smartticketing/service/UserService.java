@@ -277,8 +277,14 @@ public class UserService {
     }
 
     public void withdraw(Long id) {
-        findActive(id)
-                .setStatus(UserStatus.WITHDRAWN);
+        Users user = findActive(id);
+        user.setStatus(UserStatus.WITHDRAWN);
+        user.setEmail(null);
+        user.setEmailVerified(false);
+        user.setLoginId(null);
+        user.setPassword(null);
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        social.deleteAllByUserId(id);
     }
 
     private void replaceTheaters(

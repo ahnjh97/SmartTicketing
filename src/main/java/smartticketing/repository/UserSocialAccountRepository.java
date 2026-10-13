@@ -11,4 +11,5 @@ public interface UserSocialAccountRepository extends JpaRepository<UserSocialAcc
     Optional<UserSocialAccount> findByUserIdAndProvider(Long userId, SocialProvider provider);
     List<UserSocialAccount> findByUserId(Long userId);
     boolean existsByEmailIgnoreCase(String email);
+    void deleteAllByUserId(Long userId);
 }

@@ -27,10 +27,9 @@ function WithdrawDialog({ pending, error, onClose, onConfirm }) {
 
     return createPortal(
         <dialog ref={dialog} className={styles.withdrawDialog} aria-labelledby="withdraw-title"
-            aria-describedby="withdraw-description" aria-busy={pending}
+            aria-busy={pending}
             onCancel={event => { event.preventDefault(); if (!pending) onClose(); }}>
             <h2 id="withdraw-title">정말 탈퇴하시겠습니까?</h2>
-            <p id="withdraw-description">탈퇴 후에는 이 계정으로 다시 로그인할 수 없습니다.</p>
             {error && <p className="error-message" role="alert">{error}</p>}
             <div className={styles.dialogActions}>
                 <button type="button" autoFocus disabled={pending} onClick={onClose}>취소</button>

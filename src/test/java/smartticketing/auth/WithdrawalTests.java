@@ -28,6 +28,8 @@ class WithdrawalTests {
         user.setId(7L);
         user.setLoginId("member");
         user.setPassword("encoded");
+        user.setEmail("member@example.com");
+        user.setEmailVerified(true);
         when(users.findById(7L)).thenReturn(Optional.of(user));
         when(users.findByLoginId("member")).thenReturn(Optional.of(user));
         var config = new JwtConfig();
@@ -48,6 +50,11 @@ class WithdrawalTests {
         assertEquals(204, new UserController(service, new CurrentUser())
                 .withdraw(principal, request).getStatusCode().value());
         assertEquals(UserStatus.WITHDRAWN, user.getStatus());
+        assertNull(user.getEmail());
+        assertNull(user.getLoginId());
+        assertNull(user.getPassword());
+        assertFalse(user.isEmailVerified());
+        verify(social).deleteAllByUserId(7L);
         assertNull(request.getSession(false));
         assertThrows(JwtException.class, () -> decoder.decode(token));
         assertThrows(JwtException.class, () -> decoder.decode(otherSessionToken));
