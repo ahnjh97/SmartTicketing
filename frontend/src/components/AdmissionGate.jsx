@@ -6,12 +6,9 @@ import styles from './AdmissionGate.module.css';
 export default function AdmissionGate({ children }) {
     const [status, setStatus] = useState(null);
     const [error, setError] = useState('');
-    const [cancelled, setCancelled] = useState(false);
-    const [leaving, setLeaving] = useState(false);
     const [generation, setGeneration] = useState(0);
 
     useEffect(() => {
-        if (cancelled) return;
         let stopped = false;
         let timer;
         const poll = async (enter = false) => {
@@ -36,7 +33,7 @@ export default function AdmissionGate({ children }) {
         };
         poll(true);
         return () => { stopped = true; window.clearTimeout(timer); };
-    }, [cancelled, generation]);
+    }, [generation]);
 
     useEffect(() => {
         const required = () => { setStatus(null); setGeneration(n => n + 1); };
@@ -44,33 +41,22 @@ export default function AdmissionGate({ children }) {
         return () => window.removeEventListener('admission-required', required);
     }, []);
 
-    async function leave() {
-        setLeaving(true);
-        // Stop polling before releasing the place so an in-flight check cannot re-enter.
-        setCancelled(true);
-        try { await admissionApi.leave(); setError(''); setStatus(null); }
-        catch (e) { setError(e.message); }
-        finally { setLeaving(false); }
-    }
-    if (!cancelled && !error && ['ADMITTED', 'DISABLED'].includes(status?.state)) return children;
+    if (!error && ['ADMITTED', 'DISABLED'].includes(status?.state)) return children;
     // Keep the initial admission check invisible without mounting the application's API callers.
-    if (!cancelled && !error && !status) return null;
+    if (!error && !status) return null;
     const waiting = status?.state === 'WAITING';
+    const showPosition = waiting && !error;
     return <div className={`app-layout ${styles.page}`}>
         <CommonHeader user={null} disabled />
         <main className={styles.main}>
             <div className={styles.intro}>
-                <h1>{cancelled ? '대기를 취소했어요' : waiting ? '잠시만 기다려 주세요' : status?.state === 'FULL' ? '지금 접속이 많이 몰리고 있어요' : error ? '접속 안내를 다시 연결하고 있어요' : '입장 가능 여부를 확인하고 있어요'}</h1>
+                <div className={styles.stateLabel} role={error ? 'alert' : 'status'}><span className={`${styles.stateDot} ${error ? styles.reconnecting : styles.waiting}`} aria-hidden="true" />{error ? '연결 확인 중' : '접속 대기 중'}</div>
             </div>
             <section className={styles.ticket} aria-label="사이트 접속 대기 안내">
                 <div className={styles.position} role="status" aria-live="polite" aria-atomic="true">
-                    {waiting && !cancelled ? <><span className={styles.caption}>내 앞 대기 인원</span><div className={styles.number}>{Number(status.ahead).toLocaleString('ko-KR')}<small>명</small></div><p>순서가 되면 자동으로 입장합니다.</p></> : <p>{cancelled ? '다시 대기하면 새로운 순서로 안내합니다.' : '잠시 후 자동으로 다시 확인합니다.'}</p>}
-                </div>
-                <div className={styles.instructions}>
-                    {waiting && !cancelled && <p className={styles.refreshNote}>새로고침해도 대기 순서는 유지됩니다.</p>}
-                    {error && <p className={styles.error} role="alert">{error}</p>}
-                    {cancelled ? <button className={styles.primary} disabled={leaving} onClick={() => { setError(''); setStatus(null); setCancelled(false); }}>다시 대기하기</button>
-                        : <button className={styles.secondary} disabled={leaving} onClick={leave}>대기 취소</button>}
+                    {showPosition ? <><span className={styles.caption}>내 앞 대기 인원</span><div className={styles.number}><span>{Number(status.ahead).toLocaleString('ko-KR')}</span><small>명</small></div></> : <>
+                        {error && <svg className={styles.reconnect} viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M37 17a15 15 0 0 0-26-3l-3 4m0-10v10h10M11 31a15 15 0 0 0 26 3l3-4m0 10V30H30" /></svg>}
+                    </>}
                 </div>
             </section>
         </main>
