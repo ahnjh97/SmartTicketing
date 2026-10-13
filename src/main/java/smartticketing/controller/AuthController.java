@@ -59,7 +59,7 @@ public class AuthController {
             @Valid @RequestBody FindLoginIdsRequest request
     ) {
         return ResponseEntity.ok(
-                auth.findLoginIds(request.name())
+                auth.findLoginIds(request.email(), request.verificationToken())
         );
     }
 
@@ -68,8 +68,8 @@ public class AuthController {
             @Valid @RequestBody PasswordResetRequest request
     ) {
         auth.resetPassword(
-                request.name(),
-                request.loginId(),
+                request.email(),
+                request.verificationToken(),
                 request.newPassword()
         );
 

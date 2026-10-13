@@ -52,7 +52,8 @@ public class JwtConfig {
                 token -> {
                     try {
                         if (users.findById(Long.valueOf(token.getSubject()))
-                                .filter(user -> user.getStatus() == UserStatus.ACTIVE).isPresent()) {
+                                .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                                .filter(user -> user.getTokenVersion() == (token.getClaim("version") instanceof Number v ? v.longValue() : 0L)).isPresent()) {
                             return OAuth2TokenValidatorResult.success();
                         }
                     } catch (NumberFormatException ignored) {

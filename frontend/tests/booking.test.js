@@ -68,7 +68,7 @@ test('public API passes exact midnight bounds; nearby still requires auth', asyn
 test('login return rejects external or unrelated URLs', () => {
     const previous = globalThis.sessionStorage;
     try {
-        for (const url of ['https://evil.example', '//evil.example', '/profile', '/movies-evil']) {
+        for (const url of ['https://evil.example', '//evil.example', '/signup', '/movies-evil']) {
             globalThis.sessionStorage = { getItem: () => url }; assert.equal(bookingReturn(), null);
         }
         globalThis.sessionStorage = { getItem: () => '/movies?movie=41&party=6' };

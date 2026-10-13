@@ -24,7 +24,7 @@ export default function CommonHeader(props) {
 }
 
 function HeaderContent({ user, disabled, setupRequired }) {
-    const { pathname } = useLocation();
+    const { pathname, search } = useLocation();
     const navigate = useNavigate();
     const headerRef = useRef(null);
     const innerRef = useRef(null);
@@ -148,6 +148,7 @@ function HeaderContent({ user, disabled, setupRequired }) {
         return (
             <NavLink
                 to={PAGE_PATHS.login}
+                state={{ returnTo: pathname + search }}
                 className="common-header-icon-trigger"
                 aria-label="로그인"
                 title="로그인"

@@ -40,7 +40,8 @@ export function needsPreferenceSetup(user) {
             !user.birthDate
             || !user.address?.trim()
             || (user.preferredTheaters ?? []).length < 3
-            || (user.preferredSeats ?? []).length < 1
+            || (user.preferredTheaters ?? []).length > 5
+            || (user.preferredSeats ?? []).length !== 6
         )
     );
 }

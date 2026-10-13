@@ -18,6 +18,8 @@ public record SocialSignupRequest(
         String password,
 
         @NotNull(message = "생년월일은 필수입니다.")
-        LocalDate birthDate
+        LocalDate birthDate,
+        @NotBlank @Email @Size(max=255) String email,
+        @NotBlank @Size(max=100) String verificationToken
 ) {
 }

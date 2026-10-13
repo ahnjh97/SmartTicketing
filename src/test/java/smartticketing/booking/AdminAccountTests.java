@@ -17,8 +17,8 @@ class AdminAccountTests {
         var users = mock(UsersRepository.class);
         var encoder = mock(PasswordEncoder.class);
         var access = new AdminAccess(users, "admin");
-        var auth = new AuthService(users, mock(UserSocialAccountRepository.class), encoder, mock(JwtService.class), access);
-        assertThatThrownBy(() -> auth.signup(new SignupRequest("name", LocalDate.of(2000, 1, 1), "ADMIN", "password1234")))
+        var auth = new AuthService(users, mock(UserSocialAccountRepository.class), encoder, mock(JwtService.class), access, mock(smartticketing.auth.EmailVerificationService.class));
+        assertThatThrownBy(() -> auth.signup(new SignupRequest("name", LocalDate.of(2000, 1, 1), "ADMIN", "password1234", "test@example.com", "proof")))
                 .isInstanceOf(IllegalArgumentException.class);
         var admin = new Users(); admin.setLoginId("admin");
         when(users.findByNameAndLoginId("name", "admin")).thenReturn(Optional.of(admin));

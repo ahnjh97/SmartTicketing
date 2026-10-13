@@ -1,6 +1,8 @@
 import { apiUrl, request } from "./client.js";
 
 export const authApi = {
+    sendEmail: body => request('/api/auth/email/send', { method: 'POST', body, authenticated: false }),
+    verifyEmail: body => request('/api/auth/email/verify', { method: 'POST', body, authenticated: false }),
 
 
     signup: (body) =>

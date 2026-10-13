@@ -88,12 +88,27 @@ public class OAuth2SuccessHandler
             getRedirectStrategy().sendRedirect(
                     request,
                     response,
-                    frontend + "/profile"
+                    frontend + "/#/profile"
             );
 
             return;
         }
 
+        String providerUserId = String.valueOf(oauth.getPrincipal().getAttributes().get("providerUserId"));
+        try {
+            var token = authService.socialLogin(provider, providerUserId);
+            if (token != null) {
+                session.invalidate();
+                getRedirectStrategy().sendRedirect(request, response,
+                        frontend + "/#/oauth2/callback?token=" + token.accessToken());
+                return;
+            }
+        } catch (IllegalArgumentException error) {
+            session.invalidate();
+            getRedirectStrategy().sendRedirect(request, response,
+                    frontend + "/#/oauth2/callback?error=" + java.net.URLEncoder.encode(error.getMessage(), java.nio.charset.StandardCharsets.UTF_8));
+            return;
+        }
         getRedirectStrategy().sendRedirect(
                 request,
                 response,

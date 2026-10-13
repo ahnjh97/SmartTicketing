@@ -1,8 +1,9 @@
+import LoginLink from "../components/LoginLink.jsx";
 import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { useState } from 'react';
 import { getSeatLabel } from '../utils/seatLabels.js';
 import InlineDetails from '../components/InlineDetails.jsx';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import GlassButton from '../components/GlassButton.jsx';
 import { QueryStatus } from './BookingComponents.jsx';
 import useCatalog from './useCatalog.js';
@@ -62,7 +63,7 @@ export default function ManualBooking({ booking }) {
             const step = flow.reservation?.status === 'CONFIRMED' ? 2 : flow.reservation ? 1 : 0;
             return <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}>{label}</li>;
         })}</ol>
-        {!flow.user ? <section className={styles.empty}><h3>로그인 후 좌석을 선택할 수 있습니다</h3><p>선택한 회차를 저장해두었습니다.</p><Link to="/login">로그인하고 계속하기</Link></section>
+        {!flow.user ? <section className={styles.empty}><h3>로그인 후 좌석을 선택할 수 있습니다</h3><p>선택한 회차를 저장해두었습니다.</p><LoginLink>로그인하고 계속하기</LoginLink></section>
             : flow.loading ? null
             : flow.reservation ? <ReservationPanel flow={flow} onRestart={reset} />
             : flow.reservationId || flow.groupId && !flow.group ? null

@@ -464,7 +464,8 @@ public class UserService {
                 pts,
                 ps,
                 providers,
-                adminAccess.isAdmin(u)
+                adminAccess.isAdmin(u),
+                u.isEmailVerified()
         );
     }
 

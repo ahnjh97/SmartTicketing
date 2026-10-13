@@ -10,7 +10,7 @@ vi.mock("../src/components/ResidencePreference.jsx", () => ({
     default: ({ user, onSaved }) => <button onClick={() => onSaved({
         ...user, birthDate: "2000-01-01", address: "서울",
         preferredTheaters: [{ theaterId: 1 }, { theaterId: 2 }, { theaterId: 3 }],
-        preferredSeats: [{ position: "MIDDLE_MIDDLE", priority: 1 }],
+        preferredSeats: ["SIDE_FRONT", "MIDDLE_FRONT", "SIDE_MIDDLE", "MIDDLE_MIDDLE", "SIDE_REAR", "MIDDLE_REAR"].map((position, i) => ({ position, priority: i + 1 })),
     })}>선호정보 저장 테스트</button>,
 }));
 
@@ -18,7 +18,7 @@ const completedUser = {
     id: 1, name: "테스터", nickname: "테스터", email: "test@example.com",
     birthDate: "2000-01-01", address: "서울", linkedProviders: ["LOCAL"],
     preferredTheaters: [{ theaterId: 1 }, { theaterId: 2 }, { theaterId: 3 }],
-    preferredSeats: [{ position: "MIDDLE_MIDDLE", priority: 1 }],
+    preferredSeats: ["SIDE_FRONT", "MIDDLE_FRONT", "SIDE_MIDDLE", "MIDDLE_MIDDLE", "SIDE_REAR", "MIDDLE_REAR"].map((position, i) => ({ position, priority: i + 1 })),
 };
 
 function LocationProbe() {
@@ -47,6 +47,8 @@ beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
         if (url === "/api/main") return new Response(JSON.stringify({ nowShowing: [], comingSoon: [] }));
         if (url.startsWith("/api/movies?") || url.startsWith("/api/theaters?")) return new Response(JSON.stringify({ items: [], page: 0, size: 20, totalElements: 0 }));
+        if (url === '/api/auth/email/send') return new Response(null, { status: 200 });
+        if (url === '/api/auth/email/verify') return new Response(JSON.stringify({ verificationToken: 'email-proof' }));
         if (url === "/api/auth/login") return new Response(JSON.stringify({ accessToken: "login-token" }));
         if (url.startsWith("/api/auth/check-login-id?")) return new Response(JSON.stringify({ available: true }));
         if (url === "/api/auth/signup") return new Response(JSON.stringify(completedUser));
@@ -185,16 +187,12 @@ test("tickets load the paged API for members and redirect guests to login", asyn
 });
 
 test("signup accepts a non-email login ID and opens preference setup with its issued token", async () => {
-    const originalWindow = window;
-    const assign = vi.fn();
-    const testWindow = Object.create(originalWindow);
-    Object.defineProperty(testWindow, "location", { value: {
-        get href() { return originalWindow.location.href; }, assign,
-    } });
-    vi.stubGlobal("window", testWindow);
-    fetch.mockImplementation(async (url) => new Response(JSON.stringify(
-        url === "/api/auth/signup" ? { accessToken: "signup-token" } : { available: true },
-    )));
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+        if (url === '/api/auth/signup') return new Response(JSON.stringify({ accessToken: 'signup-token' }));
+        if (url === '/api/users/me') return new Response(JSON.stringify({ ...completedUser, address: null, preferredTheaters: [] }));
+        return originalFetch(url, options);
+    }));
     mount("/signup");
     fireEvent.change(await screen.findByLabelText("이름"), { target: { value: "테스터" } });
     fireEvent.change(screen.getByLabelText("생년월일"), { target: { value: "2000-01-01" } });
@@ -203,12 +201,13 @@ test("signup accepts a non-email login ID and opens preference setup with its is
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
     await screen.findByText("사용 가능한 아이디입니다.");
+    await verifyEmail();
     fireEvent.click(screen.getByRole("button", { name: "회원가입", exact: true }));
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("/setup/preferences"));
+    await at("/setup/preferences");
     expect(localStorage.getItem("accessToken")).toBe("signup-token");
     expect(fetch.mock.calls[0][0]).toBe("/api/auth/check-login-id?loginId=tester");
-    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
-        name: "테스터", birthDate: "2000-01-01", loginId: "tester", password: "password123",
+    expect(JSON.parse(fetch.mock.calls.find(([url]) => url === '/api/auth/signup')[1].body)).toEqual({
+        name: "테스터", birthDate: "2000-01-01", loginId: "tester", password: "password123", email: "verified@example.com", verificationToken: "email-proof",
     });
 });
 
@@ -225,11 +224,12 @@ test("signup requires matching passwords and rechecking a changed login ID", asy
     expect(submit.disabled).toBe(true);
     expect(screen.getByText("비밀번호가 일치하지 않습니다.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "password123" } });
+    await verifyEmail();
     expect(submit.disabled).toBe(false);
     fireEvent.change(screen.getByLabelText("아이디"), { target: { value: "different@example.com" } });
     expect(submit.disabled).toBe(true);
     expect(screen.queryByText("사용 가능한 아이디입니다.")).toBe(null);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
 });
 
 test("an already taken login ID keeps signup disabled", async () => {
@@ -262,6 +262,7 @@ test("a late availability response cannot approve an edited login ID", async () 
     fireEvent.click(screen.getByRole("button", { name: "중복확인" }));
     await screen.findByText("사용 가능한 아이디입니다.");
     expect(fetch.mock.calls[1][0]).toBe("/api/auth/check-login-id?loginId=changed%40example.com");
+    await verifyEmail();
     expect(screen.getByRole("button", { name: "회원가입", exact: true }).disabled).toBe(false);
 });
 
@@ -327,4 +328,34 @@ test("logout clears the session and leaves member routes", async () => {
     const logoutRequests = fetch.mock.calls.filter(([url]) => url === '/api/auth/logout');
     expect(logoutRequests).toHaveLength(1);
     expect(logoutRequests[0][1].method).toBe('POST');
+});
+
+async function verifyEmail() {
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'verified@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '인증번호 발송' }));
+    fireEvent.change(await screen.findByLabelText('인증번호'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: '인증 확인' }));
+    await screen.findByText(/이메일 인증이 완료되었습니다/);
+}
+
+test('protected profile returns once after login and does not leak into another login', async () => {
+    mount('/profile');
+    await at('/login');
+    fireEvent.change(screen.getByLabelText('아이디'), { target: { value: 'tester' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인', exact: true }));
+    await at('/profile');
+    expect(sessionStorage.getItem('booking.return')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '로그아웃' }));
+    await at('/login');
+    fireEvent.change(screen.getByLabelText('아이디'), { target: { value: 'tester' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: '로그인', exact: true }));
+    await at('/');
+});
+
+test.each(['/login', '/signup', '/setup/preferences'])('completed member leaves %s without a loop', async path => {
+    localStorage.setItem('accessToken', 'saved-token');
+    mount(path);
+    await at('/');
 });

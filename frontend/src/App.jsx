@@ -37,13 +37,13 @@ export default function App() {
             </main> : <Routes>
                 <Route path="/ticket/verify/:qrCode" element={<TicketVerifyPage />} />
                 <Route element={<AppLayout />}>
+                    <Route element={<RouteGuard />}>
                     <Route path={PAGE_PATHS.login} element={<LoginPage />} />
                     <Route path={PAGE_PATHS.findAccount} element={<FindAccountPage />} />
                     <Route path={PAGE_PATHS.signup} element={<SignupPage />} />
                     <Route path={PAGE_PATHS.socialSignup} element={<SocialSignupPage />} />
                     <Route path={PAGE_PATHS.callback} element={<OAuthCallbackPage />} />
 
-                    <Route element={<RouteGuard />}>
                         <Route path={PAGE_PATHS.adminData} element={<AdminRouteGuard><AdminDataPage /></AdminRouteGuard>} />
                         <Route path={PAGE_PATHS.home} element={<HomePage />} />
                         <Route path={PAGE_PATHS.movies} element={<BookingPage key="movies" mode="movie" />} />

@@ -82,5 +82,5 @@ test("Kakao users only need the same preference information as other members", (
     const user = { id: 1, linkedProviders: ["KAKAO"], email: null };
     assert.equal(needsPreferenceSetup(user), true);
     assert.equal(needsPreferenceSetup({ ...user, birthDate: "2000-01-01", address: "서울",
-        preferredTheaters: [{}, {}, {}], preferredSeats: ["MIDDLE_MIDDLE"] }), false);
+        preferredTheaters: [{}, {}, {}], preferredSeats: Array(6).fill("MIDDLE_MIDDLE") }), false);
 });

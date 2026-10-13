@@ -2440,3 +2440,20 @@ input:focus {
 .theater-item-main {
     grid-template-columns: minmax(0, 1fr) auto;
 }
+
+.email-verification { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; }
+.email-verification .login-id-row input { min-width: 0; flex: 1; }
+.email-verification .login-id-row button { flex-shrink: 0; }
+
+.email-verification .email-action { width: auto; min-width: 112px; padding: 10px 12px; font-size: 12px; white-space: nowrap; }
+.email-verification .email-action:disabled { opacity: .5; cursor: not-allowed; }
+.email-verification input:read-only { color: #aaa; }
+.email-verification .email-retry { width: auto; align-self: flex-start; padding: 4px 0; margin-top: 4px; font-size: 12px; }
+.email-verification .success-message, .email-verification .error-message, .auth-help { font-size: 12px; line-height: 1.6; text-align: left; margin: 8px 0 0; overflow-wrap: anywhere; }
+.auth-help { color: #aaa; }
+.account-find-tabs button:focus-visible, .email-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (max-width: 380px) {
+    .email-verification .login-id-row { flex-wrap: wrap; }
+    .email-verification .login-id-row input { flex-basis: 100%; }
+    .email-verification .email-action { width: 100%; min-height: 40px; }
+}

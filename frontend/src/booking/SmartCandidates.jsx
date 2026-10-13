@@ -1,6 +1,6 @@
+import LoginLink from "../components/LoginLink.jsx";
 import { formatShowDate, formatShowTime, formatShowtime as time } from '../utils/showtimeFormat.js';
 import WaitingRuleDialog from './WaitingRuleDialog.jsx';
-import { Link } from 'react-router-dom';
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import GlassButton from '../components/GlassButton.jsx';
 import InlineDetails from '../components/InlineDetails.jsx';
@@ -66,7 +66,7 @@ export default function SmartCandidates({ booking }) {
             <GlassButton disabled={flow.busy} onClick={back}>선택 수정</GlassButton></header>
         <ol className={ui.steps} aria-label="스마트예매 진행 단계">{['좌석 선정', '결제', '나의 티켓'].map((label,index) =>
             <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}>{label}</li>)}</ol>
-        {!booking.authLoading && !booking.user ? <div className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><Link to="/login">로그인하고 이 선택으로 돌아오기</Link></div>
+        {!booking.authLoading && !booking.user ? <div className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><LoginLink>로그인하고 이 선택으로 돌아오기</LoginLink></div>
             : !flow.data && !flow.error ? <div className={styles.notice} role="status">{flow.managing || ready || flow.busy ? '조건에 맞는 후보와 구역별 대기를 확인하고 있습니다…' : '영화, 날짜, 시간과 인원을 확인해주세요.'}</div> : null}
         {flow.error && <div className={styles.failure} role="alert"><p>{flow.error.message}</p>
             <GlassButton disabled={flow.busy} onClick={flow.managing ? flow.refresh : flow.create}>다시 확인</GlassButton></div>}

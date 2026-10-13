@@ -10,7 +10,7 @@ import { bookingApi } from '../src/api/booking.js';
 vi.mock('../src/booking/tossPayments.js', () => ({ openTossPayment: vi.fn() }));
 
 const day=seoulDate(new Date(Date.now()+86400000));
-const member={id:1,nickname:'관객',birthDate:'1990-01-01',address:'서울',preferredTheaters:[71,72,73].map(theaterId=>({theaterId})),preferredSeats:[{position:'MIDDLE_MIDDLE',priority:1}]};
+const member={id:1,nickname:'관객',birthDate:'1990-01-01',address:'서울',preferredTheaters:[71,72,73].map(theaterId=>({theaterId})),preferredSeats:['MIDDLE_MIDDLE','MIDDLE_FRONT','MIDDLE_REAR','SIDE_MIDDLE','SIDE_FRONT','SIDE_REAR'].map((position, i) => ({ position, priority: i + 1 }))};
 const movie={id:41,movieId:41,title:'서울의 밤',rating:'ALL',backdropUrl:'/wide.jpg'};
 const show={id:91,movieId:41,theaterId:71,screenName:'1관',startTime:`${day}T23:00:00+09:00`,endTime:`${day}T23:59:00+09:00`,layoutComplete:true,availableSeats:0,totalSeats:18,maxContiguousSeats:0};
 const moviePath=`/movies?movie=41&date=${day}&adult=2&youth=0&from=22:00&until=02:00&entry=MOVIE_SMART`;

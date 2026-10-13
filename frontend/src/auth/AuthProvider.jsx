@@ -15,6 +15,7 @@ import {
 } from "./session.js";
 
 export default function AuthProvider({ children }) {
+    const [logoutLocationKey, setLogoutLocationKey] = useState(null);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [sessionError, setSessionError] = useState("");
@@ -22,6 +23,14 @@ export default function AuthProvider({ children }) {
     const bootstrap = useRef(null);
     const location = useLocation();
     const navigate = useNavigate();
+
+    const redirectingToLogin = logoutLocationKey === location.key && location.pathname !== '/login';
+
+    useEffect(() => {
+        if (!loading && !user && ['/', '/movies', '/theaters'].includes(location.pathname)) {
+            clearBookingSession();
+        }
+    }, [loading, user, location.pathname]);
 
     useEffect(() => {
         let active = true;
@@ -82,51 +91,33 @@ export default function AuthProvider({ children }) {
         navigate
     ]);
 
-    const login = useCallback(
-        async (credentials) => {
-            setSessionError("");
-
-            const response =
-                await authApi.login(credentials);
-
-            if (!response?.accessToken) {
-                throw new ApiError(
-                    "로그인 응답을 처리할 수 없습니다.",
-                    502
-                );
-            }
-
-            setAccessToken(
-                response.accessToken
-            );
-
-            const data =
-                await userApi.me(
-                    response.accessToken
-                );
-
-            if (
-                getAccessToken()
-                !== response.accessToken
-            ) {
-                throw new ApiError(
-                    "로그인이 만료되었습니다.",
-                    401
-                );
-            }
-
+    const completeAuthentication = useCallback(async (response) => {
+        setSessionError("");
+        if (!response?.accessToken) throw new ApiError("인증 응답을 처리할 수 없습니다.", 502);
+        setAccessToken(response.accessToken);
+        try {
+            const data = await userApi.me(response.accessToken);
+            if (getAccessToken() !== response.accessToken) throw new ApiError("로그인이 만료되었습니다.", 401);
             setUser(data);
-
+            navigate('/oauth2/callback', { replace: true });
             return data;
-        },
-        []
-    );
+        } catch (error) {
+            if (getAccessToken() === response.accessToken) clearAccessToken();
+            setUser(null);
+            throw error;
+        }
+    }, [navigate]);
+
+    const login = useCallback(async credentials => {
+        return completeAuthentication(await authApi.login(credentials));
+    }, [completeAuthentication]);
 
     const logout = useCallback(
         async () => {
             try {
                 await authApi.logout();
             } finally {
+                setLogoutLocationKey(location.key);
                 clearBookingSession();
                 clearAccessToken();
                 setUser(null);
@@ -134,13 +125,14 @@ export default function AuthProvider({ children }) {
                 navigate("/login", { replace: true });
             }
         },
-        [navigate]
+        [navigate, location.key]
     );
 
     const withdraw = useCallback(
         async () => {
             await userApi.withdraw();
 
+            setLogoutLocationKey(location.key);
             clearBookingSession();
             clearAccessToken();
             setUser(null);
@@ -150,7 +142,7 @@ export default function AuthProvider({ children }) {
                 state: { message: "회원 탈퇴가 완료되었습니다." },
             });
         },
-        [navigate]
+        [navigate, location.key]
     );
 
     const updateUser = useCallback(
@@ -172,6 +164,8 @@ export default function AuthProvider({ children }) {
                 loading,
                 sessionError,
                 login,
+                completeAuthentication,
+                redirectingToLogin,
                 logout,
                 withdraw,
                 updateUser,

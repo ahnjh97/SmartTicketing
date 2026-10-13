@@ -57,7 +57,7 @@ test('countdown uses server time plus elapsed monotonic time and clamps expirati
     expect(secondsRemaining(reservation, 1000, 999000)).toBe(0);
 });
 
-const member = { id: 1, nickname: '관객', birthDate: '1990-01-01', address: '서울', preferredTheaters: [1,2,3].map(theaterId => ({ theaterId })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] };
+const member = { id: 1, nickname: '관객', birthDate: '1990-01-01', address: '서울', preferredTheaters: [1,2,3].map(theaterId => ({ theaterId })), preferredSeats: ['MIDDLE_MIDDLE','MIDDLE_FRONT','MIDDLE_REAR','SIDE_MIDDLE','SIDE_FRONT','SIDE_REAR'].map((position, i) => ({ position, priority: i + 1 })) };
 const day = seoulDate(new Date(Date.now()+86400000));
 const show = { id: 91, movieId: 41, theaterId: 71, screenName: '1관', startTime: `${day}T23:00:00+09:00`, endTime: `${day}T23:59:00+09:00`, availableSeats: 2, totalSeats: 4, pricePerPerson: 10000, layoutComplete: true };
 const reservation = { id: 501, groupId: 401, status: 'PENDING', movieTitle: '서울의 밤', theaterName: '서울 극장', screenName: '1관', startTime: show.startTime, endTime: show.endTime,

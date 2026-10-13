@@ -51,7 +51,7 @@ class WithdrawalTests {
         assertNull(request.getSession(false));
         assertThrows(JwtException.class, () -> decoder.decode(token));
         assertThrows(JwtException.class, () -> decoder.decode(otherSessionToken));
-        var auth = new AuthService(users, social, mock(PasswordEncoder.class), issuer, admin);
+        var auth = new AuthService(users, social, mock(PasswordEncoder.class), issuer, admin, mock(EmailVerificationService.class));
         assertThrows(IllegalArgumentException.class, () -> auth.login(new LoginRequest("member", "password")));
         assertThrows(JwtException.class, () -> decoder.decode(issuer.issueAccessToken(999L)));
     }

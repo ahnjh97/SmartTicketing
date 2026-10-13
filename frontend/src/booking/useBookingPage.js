@@ -5,7 +5,7 @@ import useAuth from '../hooks/useAuth.js';
 import useCatalog from './useCatalog.js';
 import useTheaterCatalog from './useTheaterCatalog.js';
 import useMovieTimeDefaults from './useMovieTimeDefaults.js';
-import { dates, positive, rememberBooking, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
+import { dates, positive, seoulDate, validRange, validParty, futureRange, halfHour } from './state.js';
 
 export default function useBookingPage(mode) {
     const theaterMode = mode === 'theater';
@@ -47,7 +47,6 @@ export default function useBookingPage(mode) {
         window.addEventListener('resize', resize);
         return () => { clearInterval(timer); window.removeEventListener('resize', resize); window.removeEventListener('focus', refreshClock); document.removeEventListener('visibilitychange', refreshClock); };
     }, []);
-    useEffect(() => { rememberBooking(`${theaterMode ? '/theaters' : '/movies'}?${params}`); }, [params, theaterMode]);
     const theater = useCatalog(theaterMode && theaterId ? `theaters/${theaterId}` : null);
     const brands = ['CGV', 'LOTTE_CINEMA', 'MEGABOX'];
     const requestedBrand = params.get('brand');

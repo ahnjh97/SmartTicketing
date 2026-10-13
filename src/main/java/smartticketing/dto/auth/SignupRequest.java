@@ -21,6 +21,8 @@ public record SignupRequest(
 
         @NotBlank(message = "비밀번호는 필수입니다.")
         @Size(min = 8, max = 100, message = "비밀번호는 8~100자로 입력해주세요.")
-        String password
+        String password,
+        @NotBlank @Email @Size(max = 255) String email,
+        @NotBlank @Size(max = 100) String verificationToken
 ) {
 }

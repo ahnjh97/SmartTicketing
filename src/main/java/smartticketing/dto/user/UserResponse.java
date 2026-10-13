@@ -19,7 +19,8 @@ public record UserResponse(
         List<PreferredTheaterResponse> preferredTheaters,
         List<PreferredSeatResponse> preferredSeats,
         List<SocialProvider> linkedProviders,
-        boolean admin
+        boolean admin,
+        boolean emailVerified
 ) {
 
     public record PreferredTheaterResponse(

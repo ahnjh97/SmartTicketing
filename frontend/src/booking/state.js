@@ -34,19 +34,25 @@ export function availability(show, party) {
     if (party > 1 && show.maxContiguousSeats < party) return '연속좌석 부족';
     return party ? '조회상 선택 가능' : `최대 연속 ${show.maxContiguousSeats}석 (인원 선택 후 확인)`;
 }
+const RETURN_PATH = /^\/(movies|theaters|bookings|booking\/restore|tickets|notifications|profile|preferences|admin\/data)(\?|$)/;
 export function rememberBooking(url) {
-    if (!/^\/(movies|theaters|bookings|booking\/restore)(\?|$)/.test(url)) return;
-    try { sessionStorage.setItem('booking.return', url); } catch { /* URL remains usable without storage. */ }
+    if (typeof url !== 'string' || !RETURN_PATH.test(url) || /[\\\r\n]/.test(url)) return;
+    try {
+        sessionStorage.setItem('booking.return', url);
+        sessionStorage.setItem('booking.return.at', String(Date.now()));
+    } catch { /* Navigation still works when session storage is unavailable. */ }
 }
 export function bookingReturn() {
     try {
         const url = sessionStorage.getItem('booking.return');
-        return /^\/(movies|theaters|bookings|booking\/restore)(\?|$)/.test(url ?? '') ? url : null;
+        const at = Number(sessionStorage.getItem('booking.return.at'));
+        if (at && Date.now() - at > 30 * 60 * 1000) { clearBookingSession(); return null; }
+        return RETURN_PATH.test(url ?? '') && !/[\\\r\n]/.test(url) ? url : null;
     } catch { return null; }
 }
-
 export function clearBookingSession() {
     try {
         sessionStorage.removeItem('booking.return');
+        sessionStorage.removeItem('booking.return.at');
     } catch { /* Session storage may be unavailable. */ }
 }

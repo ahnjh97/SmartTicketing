@@ -26,14 +26,17 @@ public class AuthService {
     private final UserSocialAccountRepository social;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final EmailVerificationService verification;
 
     public AuthService(
             UsersRepository users,
             UserSocialAccountRepository social,
             PasswordEncoder encoder,
             JwtService jwt,
-            AdminAccess adminAccess
+            AdminAccess adminAccess,
+            EmailVerificationService verification
     ) {
+        this.verification = verification;
         this.adminAccess = adminAccess;
         this.users = users;
         this.social = social;
@@ -54,55 +57,28 @@ public class AuthService {
                 java.util.List.of(),
                 java.util.List.of(),
                 java.util.List.of(),
-                false
+                false,
+                user.isEmailVerified()
         );
     }
 
-    @Transactional(readOnly = true)
-    public FindLoginIdsResponse findLoginIds(String name) {
-        String normalizedName = name.trim();
-
-        java.util.List<String> loginIds =
-                users.findAllByNameAndStatusOrderByIdAsc(
-                                normalizedName,
-                                UserStatus.ACTIVE
-                        )
-                        .stream()
-                        .map(Users::getLoginId)
-                        .filter(java.util.Objects::nonNull)
-                        .filter(loginId -> !loginId.isBlank())
-                        .toList();
-
-        return new FindLoginIdsResponse(loginIds);
+    public FindLoginIdsResponse findLoginIds(String email, String verificationToken) {
+        verification.consume(email, EmailPurpose.FIND_ID, verificationToken);
+        var ids = users.findByEmailIgnoreCase(EmailVerificationService.normalize(email))
+                .filter(u -> u.isEmailVerified() && u.getStatus() == UserStatus.ACTIVE)
+                .map(Users::getLoginId).filter(id -> !adminAccess.isReserved(id))
+                .map(java.util.List::of).orElse(java.util.List.of());
+        return new FindLoginIdsResponse(ids);
     }
 
-    public void resetPassword(
-            String name,
-            String loginId,
-            String newPassword
-    ) {
-        String normalizedName = name.trim();
-        String normalizedLoginId = loginId.trim();
-
-        Users user = users.findByNameAndLoginId(
-                        normalizedName,
-                        normalizedLoginId
-                )
-                .filter(value -> value.getStatus() == UserStatus.ACTIVE)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "이름과 아이디가 일치하는 가입 계정을 찾을 수 없습니다."
-                        )
-                );
-
-        if (adminAccess.isReserved(user.getLoginId())) {
-            throw new IllegalArgumentException("관리자 계정은 일반 비밀번호 재설정을 사용할 수 없습니다.");
-        }
-
-        user.setPassword(
-                encoder.encode(newPassword)
-        );
-
+    public void resetPassword(String email, String verificationToken, String newPassword) {
+        verification.consume(email, EmailPurpose.RESET_PASSWORD, verificationToken);
+        Users user = users.findByEmailIgnoreCase(EmailVerificationService.normalize(email))
+                .filter(u -> u.isEmailVerified() && u.getStatus() == UserStatus.ACTIVE)
+                .filter(u -> !adminAccess.isReserved(u.getLoginId()))
+                .orElseThrow(() -> new IllegalArgumentException("인증된 이메일로 가입한 계정을 찾을 수 없습니다."));
+        user.setPassword(encoder.encode(newPassword));
+        user.setTokenVersion(user.getTokenVersion() + 1);
         users.save(user);
     }
 
@@ -119,7 +95,14 @@ public class AuthService {
             );
         }
 
+        String email = EmailVerificationService.normalize(request.email());
+        if (users.findByEmailIgnoreCase(email).isPresent() || social.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+        verification.consume(email, EmailPurpose.SIGNUP, request.verificationToken());
         Users user = new Users();
+        user.setEmail(email);
+        user.setEmailVerified(true);
 
         user.setName(request.name().trim());
         user.setBirthDate(request.birthDate());
@@ -172,6 +155,15 @@ public class AuthService {
         return users.existsByLoginId(normalizedLoginId)
                 || users.findByEmailIgnoreCase(normalizedLoginId).isPresent()
                 || social.existsByEmailIgnoreCase(normalizedLoginId);
+    }
+
+    @Transactional(readOnly = true)
+    public TokenResponse socialLogin(SocialProvider provider, String providerUserId) {
+        return social.findByProviderAndProviderUserId(provider, providerUserId).map(account -> {
+            Users user = account.getUser();
+            if (user.getStatus() != UserStatus.ACTIVE) throw new IllegalArgumentException("탈퇴한 계정입니다.");
+            return createTokenResponse(user);
+        }).orElse(null);
     }
 
     public TokenResponse completeSocialSignup(
@@ -265,17 +257,19 @@ public class AuthService {
             );
         }
 
+        String verifiedEmail = EmailVerificationService.normalize(request.email());
+        if (!verifiedEmail.equalsIgnoreCase(loginId)) {
+            throw new IllegalArgumentException("소셜 가입 아이디와 인증한 이메일이 일치해야 합니다.");
+        }
+        if (users.findByEmailIgnoreCase(verifiedEmail).isPresent() || social.existsByEmailIgnoreCase(verifiedEmail)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+        verification.consume(verifiedEmail, EmailPurpose.SIGNUP, request.verificationToken());
         Users user = new Users();
-
         user.setName(oauthName.trim());
         user.setLoginId(loginId);
-
-        user.setEmail(
-                oauthEmail == null
-                        || oauthEmail.isBlank()
-                        ? null
-                        : oauthEmail.trim()
-        );
+        user.setEmail(verifiedEmail);
+        user.setEmailVerified(true);
 
         user.setPassword(
                 encoder.encode(
@@ -399,7 +393,7 @@ public class AuthService {
             Users user
     ) {
         return new TokenResponse(
-                jwt.issueAccessToken(user.getId()),
+                jwt.issueAccessToken(user.getId(), user.getTokenVersion()),
                 "Bearer",
                 jwt.getExpirationSeconds()
         );

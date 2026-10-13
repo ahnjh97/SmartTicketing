@@ -1,3 +1,4 @@
+import LoginLink from "../components/LoginLink.jsx";
 import WaitingRuleDialog from './WaitingRuleDialog.jsx';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
@@ -58,7 +59,7 @@ function LegacySmartBooking({ booking }) {
         <ol className={ui.steps} aria-label="스마트예매 진행 단계">{['좌석 선정', '결제', '나의 티켓'].map((label,index) =>
             <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}>{label}</li>)}</ol>
         {booking.authLoading ? null
-            : !flow.user ? <section className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><p>로그인하면 선택한 조건으로 바로 좌석을 찾습니다.</p><Link to="/login">로그인하고 이 선택으로 돌아오기</Link></section>
+            : !flow.user ? <section className={styles.notice}><h3>로그인하고 스마트예매를 시작하세요</h3><p>로그인하면 선택한 조건으로 바로 좌석을 찾습니다.</p><LoginLink>로그인하고 이 선택으로 돌아오기</LoginLink></section>
             : flow.loading ? null
             : flow.reservation ? <ReservationPanel flow={flow} onRestart={back}/>
             : !flow.error && flow.group && !flow.busy ? <section className={styles.notice}><p>현재 확보된 좌석이 없습니다.</p><GlassButton disabled={!valid} onClick={hold}>다시 좌석 찾기</GlassButton></section>

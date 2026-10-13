@@ -20,8 +20,12 @@ public class JwtService {
     }
 
     public String issueAccessToken(Long userId) {
+        return issueAccessToken(userId, 0);
+    }
+
+    public String issueAccessToken(Long userId, long tokenVersion) {
         Instant now = Instant.now();
-        JwtClaimsSet c = JwtClaimsSet.builder().issuer("SmartTicketing").subject(String.valueOf(userId)).issuedAt(now).expiresAt(now.plusSeconds(expirationSeconds)).claim("type", "access").build();
+        JwtClaimsSet c = JwtClaimsSet.builder().issuer("SmartTicketing").subject(String.valueOf(userId)).issuedAt(now).expiresAt(now.plusSeconds(expirationSeconds)).claim("type", "access").claim("version", tokenVersion).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), c)).getTokenValue();
     }
 

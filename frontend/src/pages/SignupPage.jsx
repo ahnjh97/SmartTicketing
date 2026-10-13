@@ -9,11 +9,14 @@ import { useNavigate } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
 import { authApi } from "../api/auth.js";
-import { setAccessToken } from "../auth/session.js";
+import useAuth from "../hooks/useAuth.js";
+import EmailVerification from "../components/EmailVerification.jsx";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
 
 export default function SignupPage() {
     const navigate = useNavigate();
+    const { completeAuthentication } = useAuth();
+    const [emailProof, setEmailProof] = useState(null);
 
     const [name, setName] =
         useState("");
@@ -60,7 +63,8 @@ export default function SignupPage() {
         password === passwordConfirm;
 
     const canSubmit =
-        Boolean(name.trim())
+        Boolean(emailProof)
+        && Boolean(name.trim())
         && Boolean(birthDate)
         && loginIdCheckStatus === "available"
         && checkedLoginId === loginId.trim()
@@ -178,6 +182,7 @@ export default function SignupPage() {
     function handleSubmit(event) {
         event.preventDefault();
 
+        if (!emailProof) { setError("이메일 인증을 완료해주세요."); return; }
         if (!birthDate) {
             setError("생년월일을 입력해주세요.");
             return;
@@ -217,7 +222,8 @@ export default function SignupPage() {
                     birthDate,
                     loginId:
                         loginId.trim(),
-                    password
+                    password,
+                    ...emailProof
                 });
 
             if (
@@ -228,13 +234,7 @@ export default function SignupPage() {
                 );
             }
 
-            setAccessToken(
-                response.accessToken
-            );
-
-            window.location.assign(
-                PAGE_PATHS.preferenceSetup
-            );
+            await completeAuthentication(response);
         });
     }
 
@@ -343,6 +343,8 @@ export default function SignupPage() {
                         </p>
                     )
                 }
+
+                <EmailVerification purpose="SIGNUP" onChange={setEmailProof} disabled={pending} />
 
                 <label htmlFor="signup-password">
                     비밀번호

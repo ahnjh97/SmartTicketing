@@ -9,12 +9,12 @@ vi.mock('../src/maps/theaterMarkerImages.js', () => ({
     getTheaterMarkerImage: async brand => ({ brand }),
 }));
 vi.mock('../src/components/ResidencePreference.jsx', () => ({
-    default: ({ user, onSaved }) => <button onClick={() => onSaved({ ...user, birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3].map(theaterId => ({ theaterId })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] })}>선호 설정 완료</button>,
+    default: ({ user, onSaved }) => <button onClick={() => onSaved({ ...user, birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3].map(theaterId => ({ theaterId })), preferredSeats: ['MIDDLE_MIDDLE','MIDDLE_FRONT','MIDDLE_REAR','SIDE_MIDDLE','SIDE_FRONT','SIDE_REAR'].map((position, i) => ({ position, priority: i + 1 })) })}>선호 설정 완료</button>,
 }));
 const movie = { id: 41, title: '서울의 밤', rating: '12세', runningTime: 120, description: '영화 소개', posterUrl: '/poster.jpg', backdropUrl: '/wide.jpg', media: { type: 'POSTER', url: '/poster.jpg' } };
 const theater = { id: 71, name: '서울 극장', address: '서울', latitude: null, longitude: null };
 const show = { id: 91, movieId: 41, theaterId: 71, screenName: '1관', startTime: `${seoulDate()}T23:00:00+09:00`, endTime: `${seoulDate()}T01:00:00+09:00`, endsNextDay: true, availableSeats: 20, totalSeats: 108, maxContiguousSeats: 3, layoutComplete: true };
-const member = { id: 1, nickname: '테스터', birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3, 4].map(id => ({ theaterId: id, theaterName: `선호${id}`, priority: id })), preferredSeats: [{ position: 'MIDDLE_MIDDLE', priority: 1 }] };
+const member = { id: 1, nickname: '테스터', birthDate: '2000-01-01', address: '서울', preferredTheaters: [1, 2, 3, 4].map(id => ({ theaterId: id, theaterName: `선호${id}`, priority: id })), preferredSeats: ['MIDDLE_MIDDLE','MIDDLE_FRONT','MIDDLE_REAR','SIDE_MIDDLE','SIDE_FRONT','SIDE_REAR'].map((position, i) => ({ position, priority: i + 1 })) };
 const json = data => new Response(JSON.stringify(data));
 async function baseFetch(url) {
     if (url === '/api/main') return json({ nowShowing: [movie, { ...movie, id: 42, title: '두 번째 영화' }], comingSoon: [] });

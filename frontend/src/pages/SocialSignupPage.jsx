@@ -1,3 +1,4 @@
+import EmailVerification from "../components/EmailVerification.jsx";
 import {
     useCallback,
     useEffect,
@@ -13,7 +14,7 @@ import {
 import { PAGE_PATHS } from "../navigation.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
 import { authApi } from "../api/auth.js";
-import { setAccessToken } from "../auth/session.js";
+import useAuth from "../hooks/useAuth.js";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
 
 const EMAIL_PATTERN =
@@ -27,6 +28,8 @@ const SOCIAL_PROVIDERS = [
 
 export default function SocialSignupPage() {
     const navigate = useNavigate();
+    const { completeAuthentication } = useAuth();
+    const [emailProof, setEmailProof] = useState(null);
 
     const [searchParams] =
         useSearchParams();
@@ -85,6 +88,7 @@ export default function SocialSignupPage() {
 
     const canSubmit =
         isSocial
+        && emailProof?.email === loginId.trim().toLowerCase()
         && Boolean(name.trim())
         && Boolean(birthDate)
         && loginIdCheckStatus === "available"
@@ -283,6 +287,7 @@ export default function SocialSignupPage() {
     ]);
 
     function handleLoginIdChange(event) {
+        setEmailProof(null);
         if (isEmailLocked) {
             return;
         }
@@ -350,13 +355,15 @@ export default function SocialSignupPage() {
             return;
         }
 
+        if (!emailProof || emailProof.email !== loginId.trim().toLowerCase()) { setError("이메일 인증을 완료해주세요."); return; }
         run(async () => {
             const response =
                 await authApi.socialSignup({
                     loginId:
                         loginId.trim(),
                     password,
-                    birthDate
+                    birthDate,
+                    ...emailProof
                 });
 
             if (
@@ -367,13 +374,7 @@ export default function SocialSignupPage() {
                 );
             }
 
-            setAccessToken(
-                response.accessToken
-            );
-
-            window.location.assign(
-                PAGE_PATHS.preferenceSetup
-            );
+            await completeAuthentication(response);
         });
     }
 
@@ -488,6 +489,8 @@ export default function SocialSignupPage() {
                         </p>
                     )
                 }
+
+                <EmailVerification key={loginId} purpose="SIGNUP" fixedEmail={loginId.trim()} onChange={setEmailProof} disabled={pending || loginIdCheckStatus !== "available"} />
 
                 <label htmlFor="signup-password">
                     비밀번호

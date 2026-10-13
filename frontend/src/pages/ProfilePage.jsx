@@ -84,7 +84,6 @@ export default function ProfilePage() {
     async function logout() {
         try { await logoutSession(); }
         catch (error) { console.error("로그아웃 요청 실패", error); }
-        finally { routeNavigate(PAGE_PATHS.login, { replace: true }); }
     }
 
     function withdraw() {

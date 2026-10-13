@@ -1,3 +1,4 @@
+import LoginLink from "../components/LoginLink.jsx";
 import AudiencePicker from './AudiencePicker.jsx';
 import InlineDetails from '../components/InlineDetails.jsx';
 
@@ -67,7 +68,7 @@ export function TheaterBooking({ booking }) {
             </div>
             <div className={styles.branchPanel}>
                 {brand === 'FAVORITES' ? authLoading ? null
-                    : !user ? <p className={styles.emptyBranches}>로그인하면 선호극장을 바로 선택할 수 있습니다. <Link to="/login">로그인</Link></p>
+                    : !user ? <p className={styles.emptyBranches}>로그인하면 선호극장을 바로 선택할 수 있습니다. <LoginLink>로그인</LoginLink></p>
                     : !preferences.length ? <p className={styles.emptyBranches}>등록된 선호극장이 없습니다. <Link to="/preferences">선호극장 설정</Link></p>
                     : <div className={styles.theaters} role="group" aria-label="선호극장 선택">{preferences.map(t => <button type="button" key={t.theaterId} aria-pressed={theaterId === String(t.theaterId)} onClick={() => selectTheater(t.theaterId)}>{t.theaterName || `극장 ${t.theaterId}`}</button>)}</div>
                     : <>

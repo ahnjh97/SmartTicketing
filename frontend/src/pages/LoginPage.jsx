@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PAGE_PATHS } from "../navigation.js";
 import useAuth from "../hooks/useAuth.js";
 import useAsyncAction from "../hooks/useAsyncAction.js";
 import { authApi } from "../api/auth.js";
 import AuthFormLayout from "../components/AuthFormLayout.jsx";
-import { bookingReturn } from '../booking/state.js';
+import { rememberBooking } from '../booking/state.js';
 
 export default function LoginPage() {
     const location = useLocation();
@@ -18,6 +18,10 @@ export default function LoginPage() {
     const { login, sessionError } = useAuth();
     const { error, pending, run } = useAsyncAction();
 
+    useEffect(() => {
+        if (location.state?.returnTo) rememberBooking(location.state.returnTo);
+    }, [location.state]);
+
     function handleSubmit(event) {
         event.preventDefault();
         setMessage("");
@@ -28,10 +32,7 @@ export default function LoginPage() {
                 password
             });
 
-            navigate(
-                bookingReturn() || PAGE_PATHS.home,
-                { replace: true }
-            );
+
         });
     }
 

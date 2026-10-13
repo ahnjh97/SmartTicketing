@@ -61,6 +61,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/signup",
+                                "/api/auth/email/send",
+                                "/api/auth/email/verify",
                                 "/api/auth/login",
                                 "/api/auth/check-login-id",
                                 "/api/auth/find-login-ids",

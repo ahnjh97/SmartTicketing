@@ -36,6 +36,12 @@ public class Users {
     @Column(unique = true, length = 255)
     private String email;
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean emailVerified;
+
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long tokenVersion;
+
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
