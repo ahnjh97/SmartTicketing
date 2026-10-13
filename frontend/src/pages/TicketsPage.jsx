@@ -1,4 +1,5 @@
 import InlineDetails from '../components/InlineDetails.jsx';
+import GlassButton from '../components/GlassButton.jsx';
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { ticketApi } from "../api/tickets.js";
@@ -262,14 +263,14 @@ export default function TicketsPage() {
                                                     <div className={styles.summaryBottom}>
                                                         <span className={styles.summarySeats}><small>좌석</small><strong>{ticket.seats?.join(', ') || '-'}</strong></span>
                                                     {ticket.status === "VALID" && !isShowtimeStarted(ticket) && (
-                                                        <button
+                                                        <GlassButton
                                                             type="button"
                                                             className={styles.cancelButton}
                                                             disabled={cancelling}
                                                             onClick={() => cancelTicket(ticket)}
                                                         >
                                                             {cancelling ? "취소 중..." : "예매 취소"}
-                                                        </button>
+                                                        </GlassButton>
                                                     )}
                                                     </div>
                                                 </article>
