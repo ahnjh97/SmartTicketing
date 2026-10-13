@@ -48,12 +48,16 @@ jobs:
           bash -n deploy/check-backend-container.sh
           bash -n deploy/admin-secret.sh
           bash -n deploy/toss-secret.sh
+          bash -n deploy/mail-secret.sh
           bash -n deploy/reset-theaters.sh
           sh -n deploy/backend-entrypoint.sh
           sh -n frontend/docker/40-runtime-config.sh
       - name: Verify payment secret transport
         working-directory: .
         run: python3 -m unittest discover -s deploy -p 'test_toss_secret.py'
+      - name: Verify mail configuration transport
+        working-directory: .
+        run: python3 -m unittest discover -s deploy -p 'test_mail_secret.py'
       - name: Deployment regression tests (full suite)
         if: ${{ inputs.full_tests }}
         run: python3 -m unittest discover -s deploy -p 'test_*.py'
@@ -202,6 +206,11 @@ jobs:
           AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
           ADMIN_INITIAL_PASSWORD: ${{ secrets.ADMIN_INITIAL_PASSWORD }}
           TOSS_SECRET_KEY: ${{ secrets.TOSS_SECRET_KEY }}
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_PORT: ${{ vars.MAIL_PORT || '587' }}
           DEPLOY_SHA: ${{ github.sha }}
           DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
@@ -212,6 +221,7 @@ jobs:
           # Validate before connecting; never print the generated secret assignment.
           bash deploy/admin-secret.sh > /dev/null
           bash deploy/toss-secret.sh > /dev/null
+          bash deploy/mail-secret.sh > /dev/null
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$DEPLOY_ID" =~ ^[0-9]+-[0-9]+$ ]]
           (cd build/images && sha256sum --check images.tar.gz.sha256)
@@ -248,7 +258,7 @@ jobs:
           ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
             "umask 077; mkdir -p ~/.smartticketing-artifacts && cat > ~/.smartticketing-artifacts/$DEPLOY_ID.tar.gz" \
             < build/images/images.tar.gz
-          { bash deploy/admin-secret.sh; bash deploy/toss-secret.sh; cat deploy/image-fingerprint.sh deploy/deploy.sh; } | \
+          { bash deploy/admin-secret.sh; bash deploy/toss-secret.sh; bash deploy/mail-secret.sh; cat deploy/image-fingerprint.sh deploy/deploy.sh; } | \
             ssh "${ssh_options[@]}" "$AWS_USERNAME@$AWS_HOST" \
             "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_FINGERPRINT' '$FRONTEND_FINGERPRINT'"
       - name: Verify public HTTPS and JSON APIs
