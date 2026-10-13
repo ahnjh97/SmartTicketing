@@ -118,6 +118,11 @@ export default function ResidencePreference({
                                                 user,
                                                 onSaved,
                                             }) {
+    const savedTheaters = [...(user.preferredTheaters ?? [])]
+        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+        .map(t => ({ theaterId: Number(t.theaterId), name: t.theaterName, brand: t.brand }));
+    const confirmedAddress = useRef(user.address?.trim() || '');
+    const locationRevision = useRef(0);
     const mapRef =
         useRef(null);
 
@@ -165,20 +170,20 @@ export default function ResidencePreference({
 
     const [location, setLocation] =
         useState(null);
-    const [locationConfirmed, setLocationConfirmed] = useState(false);
+    const [locationConfirmed, setLocationConfirmed] = useState(Boolean(user.address?.trim()));
 
     const [isMapSelectionMode, setIsMapSelectionMode] =
         useState(false);
 
     const [theaters, setTheaters] =
-        useState([]);
+        useState(savedTheaters);
 
     const [theaterSort, setTheaterSort] =
         useState("DISTANCE");
 
     const [selectedTheaters, setSelectedTheaters] =
         useState(
-            (user.preferredTheaters ?? [])
+            savedTheaters
                 .map((item) => Number(item.theaterId))
                 .filter((theaterId) => Number.isFinite(theaterId))
         );
@@ -344,6 +349,31 @@ export default function ResidencePreference({
                         mapInstanceRef
                     );
 
+                    // Restore saved location without clearing the user's ranked choices.
+                    if (user.address?.trim() && window.kakao.maps.services?.Geocoder) {
+                        const version = locationRevision.current;
+                        const geocoder = new window.kakao.maps.services.Geocoder();
+                        geocoder.addressSearch(user.address, async (results, status) => {
+                            if (!active || version !== locationRevision.current) return;
+                            if (status !== window.kakao.maps.services.Status.OK || !results.length) {
+                                setError('저장된 주소의 지도를 불러오지 못했습니다. 기존 설정은 수정·저장할 수 있습니다.');
+                                return;
+                            }
+                            const latitude = Number(results[0].y), longitude = Number(results[0].x);
+                            setLocation({ latitude, longitude });
+                            mapInstanceRef.current?.setCenter(new window.kakao.maps.LatLng(latitude, longitude));
+                            try {
+                                const nearby = await theaterApi.nearby({ address: user.address, latitude, longitude, sort: 'DISTANCE' });
+                                if (!active || version !== locationRevision.current) return;
+                                if (!Array.isArray(nearby)) throw new Error('invalid nearby response');
+                                setTheaters([...savedTheaters.map(t => nearby.find(n => Number(n.theaterId) === t.theaterId) || t),
+                                    ...nearby.filter(n => !savedTheaters.some(t => t.theaterId === Number(n.theaterId)))]);
+                            } catch {
+                                if (active && version === locationRevision.current) setError('주변 영화관을 불러오지 못했습니다. 기존 선택은 유지됩니다. 위치를 다시 조회해주세요.');
+                            }
+                        });
+                    }
+
                     dragMap = mapInstanceRef.current;
                     window.kakao.maps.event.addListener(
                         dragMap,
@@ -462,6 +492,7 @@ export default function ResidencePreference({
     }, []);
 
     function getCurrentLocation() {
+        locationRevision.current++;
         if (!navigator.geolocation) {
             setError(
                 "현재 브라우저에서 위치 정보를 사용할 수 없습니다."
@@ -720,6 +751,7 @@ export default function ResidencePreference({
     }
 
     function startMapSelection() {
+        locationRevision.current++;
         if (!kakaoReadyRef.current) {
             setError("카카오맵이 아직 준비되지 않았습니다.");
             return;
@@ -734,6 +766,7 @@ export default function ResidencePreference({
 
         setError("");
         setMessage("");
+        setLocationConfirmed(false);
         setIsMapSelectionMode(true);
         isMapSelectionModeRef.current = true;
         clearMapSearchVisuals();
@@ -766,6 +799,7 @@ export default function ResidencePreference({
     }
 
     function searchPlaces() {
+        locationRevision.current++;
         const keyword = placeSearchKeyword.trim();
 
         if (!keyword) {
@@ -810,7 +844,8 @@ export default function ResidencePreference({
                 }
 
                 setPlaceSearchResults(data.slice(0, 5));
-                setIsMapSelectionMode(true);
+                setLocationConfirmed(false);
+        setIsMapSelectionMode(true);
                 isMapSelectionModeRef.current = true;
                 clearMapSearchVisuals();
                 showSelectionPin(true);
@@ -819,6 +854,7 @@ export default function ResidencePreference({
     }
 
     async function selectPlaceSearchResult(place) {
+        locationRevision.current++;
         const map = mapInstanceRef.current;
 
         if (!map) {
@@ -999,7 +1035,8 @@ export default function ResidencePreference({
         resolvedAddress,
         showCurrentLocationMarker = true
     ) {
-        setSelectedTheaters([]);
+        const version = ++locationRevision.current;
+        const sameLocation = resolvedAddress?.trim() === confirmedAddress.current;
         setTheaterLoading(true);
         clearMapSearchVisuals();
         setError("");
@@ -1028,7 +1065,18 @@ export default function ResidencePreference({
                 walkDistance: toNullableNumber(theater.walkDistance),
             }));
 
-            setTheaters(normalized);
+            if (version !== locationRevision.current) return false;
+            if (sameLocation) {
+                setTheaters(previous => [
+                    ...previous.filter(t => selectedTheaters.includes(Number(t.theaterId)))
+                        .map(t => normalized.find(n => Number(n.theaterId) === Number(t.theaterId)) || t),
+                    ...normalized.filter(t => !selectedTheaters.includes(Number(t.theaterId))),
+                ]);
+            } else {
+                setTheaters(normalized);
+                setSelectedTheaters([]);
+            }
+            confirmedAddress.current = resolvedAddress.trim();
 
             // 영화관 마커를 그린 뒤에도 현재 위치 마커를 유지합니다.
             if (
@@ -1053,7 +1101,6 @@ export default function ResidencePreference({
                 e.message ??
                 "주변 영화관 조회에 실패했습니다."
             );
-            setTheaters([]);
             return false;
         } finally {
             setTheaterLoading(false);
@@ -1428,7 +1475,7 @@ export default function ResidencePreference({
     const parsedBirthDate = new Date(`${birthDate}T00:00:00Z`);
     const birthDateValid = Boolean(birthDate && Number.isFinite(parsedBirthDate.getTime())
         && parsedBirthDate.toISOString().slice(0, 10) === birthDate);
-    const canSave = birthDateValid && locationConfirmed && Boolean(location && address.trim())
+    const canSave = birthDateValid && locationConfirmed && Boolean(address.trim())
         && selectedTheaters.length >= 3 && selectedTheaters.length <= 5
         && selectedTheaters.every(id => Number.isInteger(Number(id)) && Number(id) > 0)
         && selectedSeats.length === 6
@@ -1448,7 +1495,7 @@ export default function ResidencePreference({
             return;
         }
 
-        if (!location) {
+        if (!location && address.trim() !== user.address?.trim()) {
             setError(
                 "먼저 현재 위치를 조회해주세요."
             );
@@ -1737,7 +1784,7 @@ export default function ResidencePreference({
                     )}
 
                 <div className="theater-list">
-                    {theaters.slice(0, 12).map(
+                    {theaters.map(
                         (
                             theater
                         ) => {
@@ -1849,7 +1896,7 @@ export default function ResidencePreference({
                                         <span className="theater-priority-number">{selectedTheaters.indexOf(Number(theater.theaterId)) + 1}</span>
                                         <span className="theater-priority-label">순위</span>
                                     </span>}
-                                    <a
+                                    {theater.latitude != null && theater.longitude != null && <a
                                         className="theater-route-button"
                                         href={kakaoDirectionsUrl}
                                         target="_blank"
@@ -1857,7 +1904,7 @@ export default function ResidencePreference({
                                         onClick={(event) => event.stopPropagation()}
                                     >
                                         길찾기
-                                    </a>
+                                    </a>}
                                     </div>
                                 </div>
                             );

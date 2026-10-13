@@ -2,9 +2,9 @@ import { StrictMode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import ResidencePreference from "../src/components/ResidencePreference.jsx";
-import { theaterApi } from "../src/api";
+import { theaterApi, userApi } from "../src/api";
 
-vi.mock("../src/api", () => ({ theaterApi: { nearby: vi.fn() }, userApi: {} }));
+vi.mock("../src/api", () => ({ theaterApi: { nearby: vi.fn() }, userApi: { update: vi.fn() } }));
 
 const user = {
     id: 1,
@@ -42,6 +42,23 @@ afterEach(() => {
     vi.unstubAllEnvs();
 });
 
+test('saved theater priorities survive opening and saving without another location search', async () => {
+    const saved = { ...user, preferredTheaters: [
+        { theaterId: 1, theaterName: '극장 A', priority: 2 },
+        { theaterId: 3, theaterName: '극장 C', priority: 1 },
+        { theaterId: 2, theaterName: '극장 B', priority: 3 },
+    ] };
+    const onSaved = vi.fn();
+    userApi.update.mockResolvedValue(saved);
+    render(<ResidencePreference user={saved} onSaved={onSaved} />);
+    expect(screen.getByText('극장 C')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '선호 정보 저장' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved));
+    expect(userApi.update).toHaveBeenCalledWith(expect.objectContaining({
+        address: '서울', preferredTheaterIds: [3, 1, 2],
+    }));
+});
+
 test.each([true, false])("map confirmation keeps a fixed pin only after successful lookup: %s", async succeeds => {
     const maps = window.kakao.maps;
     maps.LatLng = class {
@@ -64,6 +81,7 @@ test.each([true, false])("map confirmation keeps a fixed pin only after successf
     maps.services = {
         Status: { OK: "OK" },
         Geocoder: class {
+            addressSearch() {}
             coord2Address(_, __, callback) {
                 callback([{ address: { address_name: "선택한 주소" } }], "OK");
             }
@@ -81,7 +99,7 @@ test.each([true, false])("map confirmation keeps a fixed pin only after successf
 
     const { container } = render(<ResidencePreference user={user} onSaved={vi.fn()} />);
     expect(screen.queryByText(/다른 위치를 찾으려면/)).toBe(null);
-    expect(screen.getByRole("button", { name: "선호 정보 저장" }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "선호 정보 저장" }).disabled).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "다른 위치 선택하기" }));
     map.setCenter(new maps.LatLng(37.5, 127.1));
