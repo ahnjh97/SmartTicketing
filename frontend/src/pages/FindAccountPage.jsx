@@ -1,3 +1,4 @@
+import FormButton from '../components/FormButton.jsx';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth.js';
@@ -54,10 +55,10 @@ export default function FindAccountPage() {
                     required value={confirm} onChange={e => setConfirm(e.target.value)} />
                 {confirm && password !== confirm && <p className="error-message field-message" role="alert">비밀번호가 일치하지 않습니다.</p>}
             </>}
-            <button type="submit" className="primary-button" disabled={pending || !proof || (mode === 'RESET_PASSWORD' && (password.length < 8 || password !== confirm))}>
+            <FormButton type="submit" variant="primary" disabled={pending || !proof || (mode === 'RESET_PASSWORD' && (password.length < 8 || password !== confirm))}>
                 {mode === 'FIND_ID' ? '아이디 확인' : '비밀번호 변경'}
-            </button>
+            </FormButton>
         </form>
-        <button type="button" className="text-button" onClick={() => navigate(PAGE_PATHS.login)}>로그인으로 돌아가기</button>
+        <FormButton type="button" variant="quiet" onClick={() => navigate(PAGE_PATHS.login)}>로그인으로 돌아가기</FormButton>
     </AuthFormLayout>;
 }

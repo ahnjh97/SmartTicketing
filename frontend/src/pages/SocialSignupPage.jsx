@@ -1,3 +1,5 @@
+import DatePicker from '../components/DatePicker.jsx';
+import FormButton from '../components/FormButton.jsx';
 import EmailVerification from "../components/EmailVerification.jsx";
 import {
     useCallback,
@@ -411,9 +413,8 @@ export default function SocialSignupPage() {
                     생년월일
                 </label>
 
-                <input
+                <DatePicker
                     id="signup-birth-date"
-                    type="date"
                     value={birthDate}
                     onChange={(event) =>
                         setBirthDate(
@@ -424,7 +425,7 @@ export default function SocialSignupPage() {
                 />
 
                 <label htmlFor="signup-login-id">
-                    이메일
+                    아이디
                 </label>
 
                 <div className="login-id-row">
@@ -435,7 +436,7 @@ export default function SocialSignupPage() {
                         onChange={
                             handleLoginIdChange
                         }
-                        placeholder="이메일을 입력해주세요."
+                        placeholder="아이디"
                         autoComplete="email"
                         readOnly={
                             isEmailLocked
@@ -444,9 +445,9 @@ export default function SocialSignupPage() {
                         className="login-id-input"
                     />
 
-                    <button
+                    <FormButton
                         type="button"
-                        className="logout-button login-id-check-button"
+                        variant="secondary"
                         onClick={
                             handleCheckLoginId
                         }
@@ -463,7 +464,7 @@ export default function SocialSignupPage() {
                                 ? "확인 중..."
                                 : "중복확인"
                         }
-                    </button>
+                    </FormButton>
                 </div>
 
                 {
@@ -547,21 +548,21 @@ export default function SocialSignupPage() {
                     )
                 }
 
-                <button
+                <FormButton
                     type="submit"
                     disabled={
                         pending
                         || !canSubmit
                     }
-                    className="primary-button"
+                    variant="primary"
                 >
                     회원가입
-                </button>
+                </FormButton>
             </form>
 
-            <button
+            <FormButton
                 type="button"
-                className="text-button"
+                variant="quiet"
                 onClick={() =>
                     navigate(
                         PAGE_PATHS.login
@@ -569,7 +570,7 @@ export default function SocialSignupPage() {
                 }
             >
                 로그인으로 돌아가기
-            </button>
+            </FormButton>
         </AuthFormLayout>
     );
 }

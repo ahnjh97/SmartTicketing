@@ -1,3 +1,5 @@
+import DatePicker from '../components/DatePicker.jsx';
+import FormButton from '../components/FormButton.jsx';
 import {
     useCallback,
     useRef,
@@ -270,9 +272,8 @@ export default function SignupPage() {
                     생년월일
                 </label>
 
-                <input
+                <DatePicker
                     id="signup-birth-date"
-                    type="date"
                     value={birthDate}
                     onChange={handleBirthDateChange}
                     min={minimumBirthDate}
@@ -299,9 +300,9 @@ export default function SignupPage() {
                         className="login-id-input"
                     />
 
-                    <button
+                    <FormButton
                         type="button"
-                        className="logout-button login-id-check-button"
+                        variant="secondary"
                         onClick={
                             handleCheckLoginId
                         }
@@ -317,7 +318,7 @@ export default function SignupPage() {
                                 ? "확인 중..."
                                 : "중복확인"
                         }
-                    </button>
+                    </FormButton>
                 </div>
 
                 {
@@ -414,21 +415,21 @@ export default function SignupPage() {
                     )
                 }
 
-                <button
+                <FormButton
                     type="submit"
                     disabled={
                         pending
                         || !canSubmit
                     }
-                    className="primary-button"
+                    variant="primary"
                 >
                     회원가입
-                </button>
+                </FormButton>
             </form>
 
-            <button
+            <FormButton
                 type="button"
-                className="text-button"
+                variant="quiet"
                 onClick={() =>
                     navigate(
                         PAGE_PATHS.login
@@ -436,7 +437,7 @@ export default function SignupPage() {
                 }
             >
                 로그인으로 돌아가기
-            </button>
+            </FormButton>
         </AuthFormLayout>
     );
 }

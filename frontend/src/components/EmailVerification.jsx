@@ -1,3 +1,4 @@
+import FormButton from './FormButton.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { authApi } from '../api/auth.js';
 
@@ -44,16 +45,16 @@ export default function EmailVerification({ purpose, onChange, disabled = false,
     }
 
     return <fieldset disabled={disabled || pending} className="email-verification">
-        <label htmlFor={`email-${purpose}`}>{fixedEmail !== null ? "인증할 이메일" : "이메일"}</label>
+        <label htmlFor={`email-${purpose}`}>이메일</label>
         <div className="login-id-row">
             <input id={`email-${purpose}`} type="email" autoComplete="email" maxLength={255}
-                placeholder="인증받을 이메일" readOnly={fixedEmail !== null} value={email} required onChange={event => {
+                placeholder="이메일" readOnly={fixedEmail !== null} value={email} required onChange={event => {
                     revision.current++;
                     setEmail(event.target.value); setCode(''); setSent(false); setVerified(false); setError('');
                     onChange(null);
                 }} />
-            <button type="button" className="logout-button email-action" disabled={verified || cooldown > 0 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())}
-                onClick={() => submit(false)}>{cooldown ? `${cooldown}초 후 재발송` : sent ? '인증번호 재발송' : '인증번호 발송'}</button>
+            <FormButton type="button" variant="secondary" disabled={verified || cooldown > 0 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())}
+                onClick={() => submit(false)}>{cooldown ? `${cooldown}초 후 재발송` : sent ? '인증번호 재발송' : '인증번호 발송'}</FormButton>
         </div>
         {sent && !verified && <>
             <p role="status" className="auth-help">메일로 받은 인증번호를 10분 안에 입력해주세요.</p>
@@ -61,12 +62,12 @@ export default function EmailVerification({ purpose, onChange, disabled = false,
             <div className="login-id-row">
                 <input id={`code-${purpose}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
                     placeholder="6자리 인증번호" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} />
-                <button type="button" className="logout-button email-action" disabled={code.length !== 6} onClick={() => submit(true)}>인증 확인</button>
+                <FormButton type="button" variant="secondary" disabled={code.length !== 6} onClick={() => submit(true)}>인증 확인</FormButton>
             </div>
         </>}
         {verified && <>
             <p role="status" className="success-message">이메일 인증이 완료되었습니다. 10분 안에 진행해주세요.</p>
-            <button type="button" className="text-button email-retry" onClick={() => { setVerified(false); setSent(false); setCode(''); onChange(null); }}>다시 인증하기</button>
+            <FormButton type="button" variant="quiet" onClick={() => { setVerified(false); setSent(false); setCode(''); onChange(null); }}>다시 인증하기</FormButton>
         </>}
         {error && <p role="alert" className="error-message">{error}</p>}
     </fieldset>;

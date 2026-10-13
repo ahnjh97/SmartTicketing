@@ -1,0 +1,17 @@
+.root { position: relative; min-width: 0; color-scheme: dark; }
+.field { position: relative; }
+.field input { min-height: 46px; padding-right: 52px; }
+.field input::-webkit-calendar-picker-indicator { display: none; }
+.trigger { position: absolute; right: 4px; top: 2px; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 7px; background: transparent; color: var(--color-accent); }
+.calendar { position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(100%, 340px); padding: 16px; border: 1px solid #494337; border-radius: 16px; background: #202124; box-shadow: 0 18px 48px rgb(0 0 0 / 55%); }
+.heading { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; }
+.heading select { min-width: 0; flex: 1; border: 1px solid #404145; border-radius: 8px; padding: 9px 4px; color: #f5f5f5; background: #2b2c30; font: inherit; font-size: 14px; text-align: center; text-align-last: center; }
+.heading button { flex: 0 0 32px; font-size: 24px; }
+.calendar button { min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: #eee; }
+.days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center; font-size: 14px; }
+.weekday { padding-bottom: 10px; font-size: 12px; color: #aaa; }
+.days button[aria-pressed="true"] { background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
+.calendar button:hover:not(:disabled), .trigger:hover { background: rgb(255 196 38 / 15%); color: var(--color-accent); }
+.calendar button:disabled { opacity: .25; cursor: not-allowed; }
+.root button:focus-visible, .root select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.hint { margin: 14px 0 0; border-top: 1px solid #37383b; padding-top: 12px; font-size: 11px; color: #aaa; text-align: center; }

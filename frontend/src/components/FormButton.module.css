@@ -1,0 +1,27 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 11px 24px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.4;
+    white-space: nowrap;
+    transition: background-color 160ms ease, border-color 160ms ease;
+}
+.primary { min-width: 180px; margin-top: 28px; background: var(--color-accent); color: var(--color-on-accent); }
+.primary:hover:not(:disabled) { background: var(--color-accent-hover); }
+.secondary { flex: 0 0 auto; align-self: stretch; min-width: 116px; padding-inline: 14px; color: var(--color-accent); border-color: rgb(255 196 38 / 40%); background: rgb(255 196 38 / 9%); }
+.secondary:hover:not(:disabled) { background: rgb(255 196 38 / 17%); border-color: var(--color-accent); }
+.quiet { display: flex; margin: 10px auto 0; background: transparent; color: #b0b2b8; font-weight: 500; }
+.quiet:hover:not(:disabled) { background: rgb(255 255 255 / 6%); color: #fff; }
+.button:disabled { opacity: .5; cursor: not-allowed; }
+.button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .button { transition: none; } }
