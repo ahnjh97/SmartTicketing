@@ -16,8 +16,6 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
     const tossResult = params.get('tossResult');
     const { remaining, serverNow } = useReservationClock(r, receivedAt);
     const [confirmCancel, setConfirmCancel] = useState(false);
-    const heading = useRef(null);
-    useEffect(() => { heading.current?.focus(); }, [r.status]);
     const pending = r.status === 'PENDING';
     const confirmed = r.status === 'CONFIRMED';
     const ticket = payment?.ticket;
@@ -26,7 +24,7 @@ export default function ReservationPanel({ flow, onRestart, candidateLabel }) {
     const cancellable = (pending || confirmed) && Date.parse(r.startTime) > serverNow;
     return <section className={styles.reservation} aria-label="예약 및 결제">
         <div className={styles.resultIcon} data-success={confirmed} aria-hidden="true">{confirmed ? '✓' : pending ? '◷' : '—'}</div>
-        <h2 ref={heading} tabIndex={-1}>{labels[r.status] || r.status}</h2>
+        <h2 aria-live="polite" aria-atomic="true">{labels[r.status] || r.status}</h2>
         {pending && <div className={styles.clock} data-urgent={remaining < 60}>
                 <span>결제까지 남은 시간</span><strong role="timer" aria-label={`남은 시간 ${time}`}>{time}</strong>
                 <div className={styles.timeTrack}><i style={{ width: `${Math.min(100, remaining / 3)}%` }} /></div>
