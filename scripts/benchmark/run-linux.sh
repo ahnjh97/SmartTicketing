@@ -17,7 +17,7 @@ export BENCH_CACHE_MODE=${9:-compare}
 export BENCH_BASELINE_REF=${10:-0b40982b2f04db3a0b0cbb996647f5b2fb1d72c6}
 export BENCH_BASELINE_IMAGE="smartticketing-benchmark-before:$run_id"
 [[ "$BENCH_CACHE_MODE" =~ ^(compare|on|off)$ ]] || { echo 'Invalid cache mode' >&2; exit 1; }
-export BENCHMARK_OUTPUT="$project_root/benchmark-results/$run_id"
+export BENCHMARK_OUTPUT="$project_root/.local/benchmark-results/$run_id"
 export BENCH_BACKEND_IMAGE="smartticketing-benchmark-backend:$run_id"
 export BENCH_DB_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 mkdir -p "$BENCHMARK_OUTPUT"

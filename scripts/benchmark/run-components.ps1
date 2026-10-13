@@ -12,7 +12,7 @@ Selects isolated Linux Java 21 k6 scenarios and produces HTML reports.
 .NOTES
 Requires the selected WSL distribution. Docker is installed there on first use.
 The application, k6, MySQL and Redis start automatically; no .env is required.
-Results: benchmark-results/linux-java21-*/index.html. Booking-only smoke omits HTML.
+Results: .local/benchmark-results/linux-java21-*/index.html. Booking-only smoke omits HTML.
 Rate/Duration/PreAllocatedVUs/MaxVUs apply to query tests; LoginUsers to login.
 Booking retains its existing 100/400/800 VU load profile.
 Each scenario/mode uses a fresh production-image backend and database, then identical warmup.
@@ -79,7 +79,7 @@ $smokeValue = $Smoke.IsPresent.ToString().ToLowerInvariant()
 $startedAt = [DateTimeOffset]::Now.ToString('o')
 & wsl -d $Distribution -u root -- bash "$linuxRoot/scripts/benchmark/run-components.sh" $runId $smokeValue $Suite $Rate $Duration $PreAllocatedVUs $MaxVUs $LoginUsers $CacheMode
 $result = $LASTEXITCODE
-$output = Join-Path $projectRoot "benchmark-results/$runId"
+$output = Join-Path $projectRoot ".local/benchmark-results/$runId"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 @{ schemaVersion=1; suite=$Suite; cacheMode=$CacheMode; smoke=$Smoke.IsPresent; startedAt=$startedAt; exitCode=$result } |
     ConvertTo-Json | Set-Content (Join-Path $output 'run-info.json') -Encoding utf8

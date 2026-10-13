@@ -98,4 +98,4 @@ export async function buildDashboard(root) {
     console.log(`Dashboard: ${join(root,'index.html')} (${records.length} runs)`);
     return payload;
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))await buildDashboard(process.argv[2]??'benchmark-results');
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))await buildDashboard(process.argv[2]??'.local/benchmark-results');

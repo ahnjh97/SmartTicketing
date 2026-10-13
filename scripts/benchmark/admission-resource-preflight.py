@@ -41,7 +41,7 @@ def main():
     if not jar.is_file() or not (root / 'frontend/dist/index.html').is_file():
         raise RuntimeError('Build bootJar and frontend first')
     run = 'stadmission' + uuid.uuid4().hex[:12]
-    folder = root / 'benchmark-results' / run
+    folder = root / '.local/benchmark-results' / run
     folder.mkdir(parents=True)
     slice_name = run + '.slice'
     cgroup = pathlib.Path('/sys/fs/cgroup') / slice_name

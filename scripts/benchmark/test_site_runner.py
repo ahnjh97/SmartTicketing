@@ -108,7 +108,7 @@ class SiteRunnerTests(unittest.TestCase):
                     patch.object(sys,'argv',['run-site.py','--mode','compare','--comparison','redis','--ref','final','--smoke']):
                 self.assertEqual(runner.main(), 1)
             self.assertEqual(seen, [('abc123','off',None), ('abc123','on',('sha256:backend','sha256:frontend'))])
-            report = next(root.glob('benchmark-results/*/comparison.json'))
+            report = next(root.glob('.local/benchmark-results/*/comparison.json'))
             self.assertEqual(json.loads(report.read_text())['runs'][1]['status'],'failed')
 
     def test_sql_collector_excludes_default_database_and_rejects_disabled_collection(self):

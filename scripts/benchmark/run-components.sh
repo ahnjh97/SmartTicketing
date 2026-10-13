@@ -15,7 +15,7 @@ export BENCH_MAX_VUS=${7:-1000}
 export BENCH_LOGIN_USERS=${8:-100}
 export BENCH_CACHE_MODE=${9:-compare}
 [[ "$BENCH_CACHE_MODE" =~ ^(compare|on|off)$ ]] || { echo 'Invalid cache mode' >&2; exit 1; }
-export BENCHMARK_OUTPUT="$project_root/benchmark-results/$run_id"
+export BENCHMARK_OUTPUT="$project_root/.local/benchmark-results/$run_id"
 export BENCH_BACKEND_IMAGE="smartticketing-benchmark-backend:$run_id"
 export BENCH_DB_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 mkdir -p "$BENCHMARK_OUTPUT"

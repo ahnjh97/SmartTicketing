@@ -35,7 +35,7 @@ services:
     user: "0:0"
     working_dir: /app
     volumes:
-      - ../../k6:/app/k6:ro
+      - ./k6:/app/k6:ro
       - ${BENCHMARK_OUTPUT:?output path required}:/results
   runner:
     image: smartticketing-benchmark:java21-local

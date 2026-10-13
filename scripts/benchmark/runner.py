@@ -453,7 +453,7 @@ def main():
         p.error('Historical comparisons support TRANSIT only; use --comparison current for the current UI flow')
     args.sort = args.sort or ('flow' if args.comparison == 'current' else 'TRANSIT')
     branches = ['HEAD'] if args.comparison == 'current' else (BRANCHES if args.comparison == 'all' else BRANCHES[1:])
-    out = REPO / 'benchmark-results' / (datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6])
+    out = REPO / '.local/benchmark-results' / (datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6])
     out.mkdir(parents=True)
     print(f'Results: {out}', flush=True)
     metadata = dict(mode=args.mode, comparison=args.comparison, sort=args.sort, runs=args.runs, warmup=args.warmup, rounds=args.rounds,
@@ -494,7 +494,7 @@ def main():
                     runs=args.runs, warmup=args.warmup, rounds=args.rounds, planned_upstream_calls=estimates,
                     budgets=limits, note='Current live executes each selected UI action once by default (no duplicate preflight). Stub/historical runs include preflight. Original live assumes up to 45 candidates. Ledger excludes other clients.')
         if args.mode in ('live', 'plan') and env.get('KAKAO_MAP_REST_API_KEY'):
-            ledger = Ledger(REPO / 'benchmark-results/quota.sqlite3', env['KAKAO_MAP_REST_API_KEY'], limits)
+            ledger = Ledger(REPO / '.local/benchmark-results/quota.sqlite3', env['KAKAO_MAP_REST_API_KEY'], limits)
             plan['remaining_today'] = ledger.remaining()
         allowance = plan.get('remaining_today', limits)
         plan['fits_live_budget'] = all(estimates[k] <= allowance[k] for k in limits)

@@ -23,7 +23,7 @@ $startedAt = [DateTimeOffset]::Now.ToString('o')
 Write-Host "Core 4 / $Suite / before=$BaselineRef (OFF), after=current checkout (ON) / smoke=$Smoke"
 & wsl -d $Distribution -u root -- bash "$linuxRoot/scripts/benchmark/run-linux.sh" $runId $Smoke.IsPresent.ToString().ToLowerInvariant() $Suite $Rate $Duration $PreAllocatedVUs $MaxVUs 100 $CacheMode $BaselineRef
 $result = $LASTEXITCODE
-$output = Join-Path $projectRoot "benchmark-results/$runId"
+$output = Join-Path $projectRoot ".local/benchmark-results/$runId"
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 @{schemaVersion=2; suite=$Suite; cacheMode=$CacheMode; baselineRef=$BaselineRef; smoke=$Smoke.IsPresent; startedAt=$startedAt; exitCode=$result} |
     ConvertTo-Json | Set-Content (Join-Path $output 'run-info.json') -Encoding utf8

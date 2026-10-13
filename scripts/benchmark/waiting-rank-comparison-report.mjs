@@ -33,6 +33,6 @@ const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta n
 '<h1>대기순위 Redis 개선 전후 비교</h1><p>비교 ID: ' + esc(data.comparisonId) + ' · 생성: ' + esc(data.generatedAt) + '</p>' +
 '<div class="warn">각 브랜치는 별도 Git worktree에서 실행했습니다. 실행 실패나 누락된 지표를 성능 향상으로 간주하지 않습니다. 현재 벤치마크 산출물에 실제 포함된 값만 표시하며, 없는 값은 측정 안 됨으로 남깁니다.</div>' +
 '<div class="grid">' + baseline.html + improved.html + '</div>' +
-'<section><h2>측정 한계</h2><ul><li>기존 k6 booking 시나리오의 결과를 비교합니다. 동일 부하 프로필과 격리 컨테이너를 사용합니다.</li><li>DB COUNT 쿼리 수, 등록/변경 API 지연, Outbox→Redis 전파 지연은 산출물에 계측값이 있을 때만 표시됩니다. 값이 없으면 이 보고서만으로 해당 항목의 개선을 주장할 수 없습니다.</li><li>두 브랜치 중 하나라도 실패했다면 성능 개선 여부는 확정할 수 없습니다.</li><li>기존 benchmark-results/index.html은 이 스크립트에서 덮어쓰지 않습니다.</li></ul><p class="muted">원본 비교 데이터: ' + esc(data.comparisonId) + '/comparison.json</p></section></body></html>';
+'<section><h2>측정 한계</h2><ul><li>기존 k6 booking 시나리오의 결과를 비교합니다. 동일 부하 프로필과 격리 컨테이너를 사용합니다.</li><li>DB COUNT 쿼리 수, 등록/변경 API 지연, Outbox→Redis 전파 지연은 산출물에 계측값이 있을 때만 표시됩니다. 값이 없으면 이 보고서만으로 해당 항목의 개선을 주장할 수 없습니다.</li><li>두 브랜치 중 하나라도 실패했다면 성능 개선 여부는 확정할 수 없습니다.</li><li>기존 .local/benchmark-results/index.html은 이 스크립트에서 덮어쓰지 않습니다.</li></ul><p class="muted">원본 비교 데이터: ' + esc(data.comparisonId) + '/comparison.json</p></section></body></html>';
 fs.writeFileSync(output, html, 'utf8');
 console.log('Generated waiting-rank comparison report: ' + output);

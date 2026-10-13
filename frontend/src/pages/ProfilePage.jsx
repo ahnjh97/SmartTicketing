@@ -1,3 +1,6 @@
+import googleLogo from '../assets/social/Google_2015_logo.svg';
+import naverLogo from '../assets/social/Naver_Logotype.svg';
+import kakaoLogo from '../assets/social/Kakao_CI_yellow.svg';
 import { formatShowDate } from '../utils/showtimeFormat.js';
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -50,17 +53,17 @@ export default function ProfilePage() {
     function renderSocialLogo(provider) {
         const logos = {
             google: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Google_2015_logo.svg",
+                src: googleLogo,
                 alt: "Google",
                 className: "social-logo social-wordmark google-logo",
             },
             naver: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Naver_Logotype.svg",
+                src: naverLogo,
                 alt: "NAVER",
                 className: "social-logo social-wordmark naver-logo",
             },
             kakao: {
-                src: "https://raw.githubusercontent.com/ahnjh97/SmartTicketing/main/asset/Kakao_CI_yellow.svg",
+                src: kakaoLogo,
                 alt: "Kakao",
                 className: "social-logo social-wordmark kakao-logo",
             },

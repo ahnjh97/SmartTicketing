@@ -4,7 +4,7 @@ Runs the booking waiting-rank benchmark on baseline and improved refs using isol
 .DESCRIPTION
 Does not switch or modify the user's current checkout, and never writes to the existing root index.html.
 Each branch gets its own clean worktree, backend build, temporary MySQL/Redis and k6 run.
-Writes benchmark-results/waiting-rank-comparison.html and .json plus raw artifacts per branch.
+Writes .local/benchmark-results/waiting-rank-comparison.html and .json plus raw artifacts per branch.
 #>
 [CmdletBinding()]
 param(
@@ -15,7 +15,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$resultsRoot = Join-Path $repoRoot 'benchmark-results'
+$resultsRoot = Join-Path $repoRoot '.local/benchmark-results'
 $runId = 'waiting-rank-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,6)
 $comparisonRoot = Join-Path $resultsRoot "waiting-rank-comparison/$runId"
 $worktreeRoot = Join-Path ([IO.Path]::GetTempPath()) "smartticketing-$runId"
@@ -38,7 +38,7 @@ function Run-Branch([string]$Label,[string]$Ref) {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     Write-Host ([Environment]::NewLine + "=== $Label : $Ref ($($sha.Substring(0,12))) ===") -ForegroundColor Cyan
     Invoke-Git @('worktree','add','--detach',$wt,$sha)
-    $benchmarkRoot = Join-Path $wt 'benchmark-results'
+    $benchmarkRoot = Join-Path $wt '.local/benchmark-results'
     $before = @()
     if (Test-Path $benchmarkRoot) {
         $before = @(Get-ChildItem $benchmarkRoot -Directory -Filter 'linux-java21-*' | ForEach-Object Name)
@@ -56,6 +56,8 @@ function Run-Branch([string]$Label,[string]$Ref) {
         Write-Warning "$Label benchmark failed: $_"
     } finally { Pop-Location }
     $runDir = $null
+    # Historical commits still write to the old root-level output directory.
+    if (-not (Test-Path $benchmarkRoot)) { $benchmarkRoot = Join-Path $wt 'benchmark-results' }
     if (Test-Path $benchmarkRoot) {
         $candidates = @(Get-ChildItem $benchmarkRoot -Directory -Filter 'linux-java21-*' | Where-Object { $_.Name -notin $before } | Sort-Object LastWriteTime -Descending)
         if ($candidates.Count -gt 0) { $runDir = $candidates[0].FullName }
@@ -112,7 +114,7 @@ try {
         $Distribution = Resolve-BenchmarkWslDistribution -Distribution $Distribution
         $linuxRoot = (& wsl -d $Distribution -u root -- wslpath -a $repoRoot.Replace('\','/') | Out-String).Trim()
         if ($LASTEXITCODE -ne 0 -or -not $linuxRoot.StartsWith('/')) { throw 'Cannot resolve repo path in WSL to generate HTML.' }
-        $dockerArgs = @('run','--rm','--network','none','--mount',"type=bind,source=$linuxRoot/benchmark-results,target=/results",'--mount',"type=bind,source=$linuxRoot/scripts/benchmark,target=/report-source,readonly",'--entrypoint','node','smartticketing-benchmark:java21-local','/report-source/waiting-rank-comparison-report.mjs',"/results/waiting-rank-comparison/$runId/comparison.json",'/results/waiting-rank-comparison.html')
+        $dockerArgs = @('run','--rm','--network','none','--mount',"type=bind,source=$linuxRoot/.local/benchmark-results,target=/results",'--mount',"type=bind,source=$linuxRoot/scripts/benchmark,target=/report-source,readonly",'--entrypoint','node','smartticketing-benchmark:java21-local','/report-source/waiting-rank-comparison-report.mjs',"/results/waiting-rank-comparison/$runId/comparison.json",'/results/waiting-rank-comparison.html')
         & wsl -d $Distribution -u root -- docker @dockerArgs
         if ($LASTEXITCODE -ne 0) { throw 'HTML report generation failed in WSL container.' }
     }

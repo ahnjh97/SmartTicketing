@@ -531,7 +531,7 @@ def main():
     if args.smoke: levels = [2]
     args.date = (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date() + datetime.timedelta(days=2)).isoformat()
     run = 'site-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6]
-    output = ROOT / 'benchmark-results' / run
+    output = ROOT / '.local/benchmark-results' / run
     output.mkdir(parents=True)
     args.harness = output / 'harness'
     args.harness.mkdir()

@@ -35,7 +35,7 @@ Write-Host 'This does not run the unrelated redis-benchmark query comparison.' -
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
     throw "Waiting-rank benchmark failed with exit code $LASTEXITCODE."
 }
-$latest = Get-ChildItem (Join-Path (Split-Path $PSScriptRoot -Parent | Split-Path -Parent) 'benchmark-results') -Directory -Filter 'linux-java21-*' |
+$latest = Get-ChildItem (Join-Path (Split-Path $PSScriptRoot -Parent | Split-Path -Parent) '.local/benchmark-results') -Directory -Filter 'linux-java21-*' |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($null -eq $latest) { throw 'No benchmark output directory was created.' }
 Write-Host ''

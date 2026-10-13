@@ -1,7 +1,7 @@
 ﻿param([string]$Distribution = 'Ubuntu')
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$resultRoot = Join-Path $projectRoot 'benchmark-results'
+$resultRoot = Join-Path $projectRoot '.local/benchmark-results'
 New-Item -ItemType Directory -Force -Path $resultRoot | Out-Null
 if (Get-Command node -ErrorAction SilentlyContinue) {
     & node (Join-Path $PSScriptRoot 'dashboard.mjs') $resultRoot
@@ -12,7 +12,7 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     $linuxRoot = (& wsl -d $Distribution -u root -- wslpath -a $projectRoot.Replace('\', '/') | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $linuxRoot.StartsWith('/')) { throw 'Cannot access WSL for report generation.' }
     & wsl -d $Distribution -u root -- docker run --rm --network none `
-        --mount "type=bind,source=$linuxRoot/benchmark-results,target=/results" `
+        --mount "type=bind,source=$linuxRoot/.local/benchmark-results,target=/results" `
         --mount "type=bind,source=$linuxRoot/scripts/benchmark,target=/report-source,readonly" `
         --entrypoint node smartticketing-benchmark:java21-local /report-source/dashboard.mjs /results
 }

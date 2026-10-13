@@ -6,11 +6,12 @@
 !settings.gradle
 !src/
 !src/**
-!k6/
-!k6/**
 !scripts/
 !scripts/benchmark/
 !scripts/benchmark/redis-report.mjs
 !scripts/benchmark/container-entrypoint.sh
 !scripts/benchmark/query-report.mjs
 !scripts/benchmark/suites.json
+
+!scripts/benchmark/k6/
+!scripts/benchmark/k6/**
