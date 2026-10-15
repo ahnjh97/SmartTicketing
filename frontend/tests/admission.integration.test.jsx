@@ -12,6 +12,16 @@ function Site() {
 }
 async function show() { await act(async () => render(<MemoryRouter initialEntries={['/reservations/42?recover=1']}><AdmissionGate><Site /></AdmissionGate></MemoryRouter>)); }
 describe('site admission', () => {
+    it.each([5, 3, 1, 0.5])('polls after the server interval of %s seconds', async interval => {
+        admissionApi.enter.mockResolvedValue({state:'WAITING',ahead:0,pollAfterSeconds:interval});
+        admissionApi.status.mockResolvedValue({state:'ADMITTED',ahead:0,pollAfterSeconds:30});
+        await show();
+        await act(async () => vi.advanceTimersByTimeAsync(interval * 1000 - 1));
+        expect(admissionApi.status).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(admissionApi.status).toHaveBeenCalledTimes(1);
+        expect(screen.getByText('사이트 본문')).toBeTruthy();
+    });
     it.each(['ADMITTED', 'DISABLED'])('opens directly without flashing the queue when entry is %s', async state => {
         let resolveEntry;
         admissionApi.enter.mockImplementation(() => new Promise(resolve => { resolveEntry = resolve; }));

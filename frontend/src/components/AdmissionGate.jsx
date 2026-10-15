@@ -20,7 +20,7 @@ export default function AdmissionGate({ children }) {
                 if (stopped) return;
                 setStatus(next);
                 setError('');
-                delay = Math.max(3, Math.min(60, next.pollAfterSeconds || 10));
+                delay = Math.max(0.5, Math.min(60, next.pollAfterSeconds || 10));
                 // A full room must retry registration, not query a token that was never queued.
                 enter = next.state === 'FULL';
             } catch (e) {

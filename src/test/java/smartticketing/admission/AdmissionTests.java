@@ -9,6 +9,18 @@ import static org.assertj.core.api.Assertions.*;
 
 @Tag("core")
 class AdmissionTests {
+    @Test void pollingIntervalFollowsQueuePositionBoundaries() {
+        var intervals = Map.of(0, 0.5, 1, 1.0, 19, 1.0, 20, 3.0, 99, 3.0, 100, 5.0);
+        for (int ahead = 0; ahead <= 100; ahead++) {
+            var entered = store.execute("enter", "poll-" + ahead);
+            if (intervals.containsKey(ahead)) {
+                assertThat(entered.state()).isEqualTo("WAITING");
+                assertThat(entered.ahead()).isEqualTo(ahead);
+                assertThat(entered.pollAfterSeconds()).isEqualTo(intervals.get(ahead));
+                assertThat(store.execute("status", "poll-" + ahead).pollAfterSeconds()).isEqualTo(intervals.get(ahead));
+            }
+        }
+    }
     @Test void fiveThousandConcurrentArrivalsPreserveFifoCapacityAndSharedBatchBudget() throws Exception {
         store=new AdmissionStore(redis,new AdmissionSettings(true,100,10,60,30,6000,false),prefix,()->{});
         redis.opsForValue().set(prefix+":tick","10",java.time.Duration.ofMinutes(1));

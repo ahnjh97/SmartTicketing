@@ -10,7 +10,7 @@ public class AdmissionStore implements AutoCloseable {
     private final AdmissionSettings settings;
     private final List<String> keys;
     private final Runnable close;
-    public record State(String state, long ahead, int pollAfterSeconds) {}
+    public record State(String state, long ahead, double pollAfterSeconds) {}
 
     private static final DefaultRedisScript<List> SCRIPT = new DefaultRedisScript<>("""
         local clock = redis.call('TIME')
@@ -101,8 +101,14 @@ public class AdmissionStore implements AutoCloseable {
         if (result == null || result.size() != 2) throw new IllegalStateException("Admission unavailable");
         int state = ((Number) result.get(0)).intValue();
         long ahead = ((Number) result.get(1)).longValue();
+        double pollAfterSeconds = switch (state) {
+            case 1 -> 30;
+            case 2 -> ahead >= 100 ? 5 : ahead >= 20 ? 3 : ahead > 0 ? 1 : 0.5;
+            case 3 -> 15;
+            default -> 5;
+        };
         return new State(switch (state) { case 1 -> "ADMITTED"; case 2 -> "WAITING"; case 3 -> "FULL"; default -> "EXPIRED"; },
-                ahead, state == 1 ? 30 : state == 3 ? 15 : ahead >= 100 ? 10 : 5);
+                ahead, pollAfterSeconds);
     }
     @Override public void close() { close.run(); }
 }
