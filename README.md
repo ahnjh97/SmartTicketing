@@ -4,7 +4,7 @@
 
 **선호 영화관·좌석 기반 스마트예매와 취소표 자동 선점 서비스**
 
-▶️ **시연 영상 · 준비 중** &nbsp;&nbsp;|&nbsp;&nbsp; 🌐 [**접속 링크**](https://smartticketing.duckdns.org)
+▶️ [**시연 영상**](https://youtu.be/H-EKAsGkqwE) &nbsp;&nbsp;|&nbsp;&nbsp; 🌐 [**접속 링크**](https://smartticketing.duckdns.org)
 
 [프로젝트 소개](#overview) &nbsp;&nbsp;|&nbsp;&nbsp; [기술 스택](#stack) &nbsp;&nbsp;|&nbsp;&nbsp; [주요 구현](#features) &nbsp;&nbsp;|&nbsp;&nbsp; [문제 해결](#troubleshooting)
 
@@ -50,6 +50,13 @@
 | **취소표 대기** | 회차·구역별 대기 등록, 취소·만료 시 자동 선점 및 알림 |
 | **예매 상태 관리** | 5분 선점, 모의결제·취소·만료 처리, 중복 요청 방지 및 예매 복구 |
 | **접속 대기열** | Redis 기반 순차 입장, 동시 입장 정원·초당 입장 한도 제어, 서버 입장권 검증 |
+
+<details>
+<summary><strong>🟡 접속 대기열 시연</strong></summary>
+
+![접속 대기 인원이 줄어든 뒤 자동 입장하는 화면](docs/images/admission-demo.gif)
+
+</details>
 
 <br>
 
