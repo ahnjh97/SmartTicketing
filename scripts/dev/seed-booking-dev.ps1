@@ -31,7 +31,7 @@ try {
     }
     $ids = ($TheaterIds | Sort-Object -Unique) -join ','
     Write-Host "Starting development application with booking seed enabled for theater IDs: $ids"
-    & .\gradlew.bat bootRun "--args=--spring.profiles.include=dev --booking.seed.enabled=true --booking.seed.theater-ids=$ids"
+    & .\backend\gradlew.bat -p backend bootRun "--args=--spring.profiles.include=dev --booking.seed.enabled=true --booking.seed.theater-ids=$ids"
     $seedExitCode = $LASTEXITCODE
 } finally {
     foreach ($key in $previousValues.Keys) {

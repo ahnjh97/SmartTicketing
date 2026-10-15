@@ -2,10 +2,10 @@ FROM node:22-bookworm-slim AS reporttool
 FROM eclipse-temurin:21-jdk-jammy
 WORKDIR /app
 COPY --from=reporttool /usr/local/bin/node /usr/local/bin/node
-COPY gradlew build.gradle settings.gradle ./
-COPY gradle ./gradle
+COPY backend/gradlew backend/build.gradle backend/settings.gradle ./
+COPY backend/gradle ./gradle
 RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
-COPY src ./src
+COPY backend/src ./src
 RUN ./gradlew testClasses bootJar --no-daemon --console=plain -Dorg.gradle.jvmargs=-Xmx512m
 COPY scripts/benchmark/k6 ./k6
 COPY scripts/benchmark/redis-report.mjs scripts/benchmark/query-report.mjs scripts/benchmark/suites.json scripts/benchmark/container-entrypoint.sh ./scripts/benchmark/

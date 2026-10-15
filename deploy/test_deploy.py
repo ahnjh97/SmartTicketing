@@ -95,8 +95,8 @@ fi
         self.assertIn('load --input', run['commands'])
         self.assertIn(f'backend=smartticketing-backend:{REVISION}', run['commands'])
         self.assertIn(f'frontend=smartticketing-frontend:{REVISION}', run['commands'])
-        self.assertIn('compose up -d --no-build --pull never --wait', run['commands'])
-        self.assertNotIn('compose build', run['commands'])
+        self.assertIn('compose --project-directory . -f deploy/docker-compose.yml up -d --no-build --pull never --wait', run['commands'])
+        self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml build', run['commands'])
         self.assertNotIn('{{.Id}}', run['commands'])
         self.assertIn('.RootFS.Layers', run['commands'])
         self.assertIn('.Config.Entrypoint', run['commands'])
@@ -109,7 +109,7 @@ fi
     def test_regular_deployment_preserves_mode_and_records_new_images(self):
         run = self.run_deploy(saved_mode='true')
         self.assertEqual(run['result'].returncode, 0, run['result'].stderr)
-        self.assertIn('compose --env-file .env --env-file .env.deployment up', run['commands'])
+        self.assertIn('compose --project-directory . -f deploy/docker-compose.yml --env-file .env --env-file .env.deployment up', run['commands'])
         self.assertIn('APP_CACHE_ENABLED=true', run['state'])
         self.assertIn(f'BACKEND_IMAGE=smartticketing-backend:{REVISION}', run['state'])
 
@@ -117,7 +117,7 @@ fi
         run = self.run_deploy(payload=b'incomplete-transfer')
         self.assertNotEqual(run['result'].returncode, 0)
         self.assertNotIn('git reset', run['commands'])
-        self.assertNotIn('compose build', run['commands'])
+        self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml build', run['commands'])
         self.assertNotIn('load --input', run['commands'])
         self.assertFalse(run['upload_exists'])
 
@@ -130,14 +130,14 @@ fi
         run = self.run_deploy(latest='b' * 40)
         self.assertNotEqual(run['result'].returncode, 0)
         self.assertNotIn('load --input', run['commands'])
-        self.assertNotIn('compose build', run['commands'])
+        self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml build', run['commands'])
         self.assertFalse(run['upload_exists'])
 
     def test_unhealthy_service_does_not_replace_proxy(self):
         run = self.run_deploy(docker_failure='up -d --no-build')
         self.assertEqual(run['result'].returncode, 42)
         self.assertNotIn('--force-recreate nginx', run['commands'])
-        self.assertIn('compose logs', run['commands'])
+        self.assertIn('compose --project-directory . -f deploy/docker-compose.yml logs', run['commands'])
         self.assertFalse(run['upload_exists'])
 
     def test_invalid_artifact_id_is_rejected_before_commands(self):
@@ -155,16 +155,16 @@ fi
                 run = self.run_deploy(**settings)
                 self.assertNotEqual(run['result'].returncode, 0)
                 self.assertNotIn('git reset', run['commands'])
-                self.assertNotIn('compose up', run['commands'])
+                self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml up', run['commands'])
 
     def test_inspect_failure_does_not_accept_empty_fingerprint(self):
         run = self.run_deploy(docker_failure='image inspect')
         self.assertEqual(run['result'].returncode, 42)
         self.assertNotIn('git reset', run['commands'])
-        self.assertNotIn('compose up', run['commands'])
+        self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml up', run['commands'])
 
     def test_load_failure_stops_before_checkout_and_restart(self):
         run = self.run_deploy(docker_failure='load --input')
         self.assertEqual(run['result'].returncode, 42)
         self.assertNotIn('git reset', run['commands'])
-        self.assertNotIn('compose up', run['commands'])
+        self.assertNotIn('compose --project-directory . -f deploy/docker-compose.yml up', run['commands'])

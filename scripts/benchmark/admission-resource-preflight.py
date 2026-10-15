@@ -37,7 +37,7 @@ def main():
     parser.add_argument('--load-cpu-percent', type=int, default=200, help='Shared CPU quota during load (40 approximates small baseline, not Unlimited mode)')
     args = parser.parse_args()
     root = pathlib.Path(__file__).resolve().parents[2]
-    jar = root / 'build/libs/SmartTicketing-0.0.1-SNAPSHOT.jar'
+    jar = root / 'backend/build/libs/SmartTicketing-0.0.1-SNAPSHOT.jar'
     if not jar.is_file() or not (root / 'frontend/dist/index.html').is_file():
         raise RuntimeError('Build bootJar and frontend first')
     run = 'stadmission' + uuid.uuid4().hex[:12]

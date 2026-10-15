@@ -51,7 +51,7 @@ image_context="$BENCHMARK_OUTPUT/image-context"
 stage='Production image build'
 echo '[3/6] Packaging application and building production image.'
 mkdir -p "$image_context/build/deploy" "$image_context/deploy"
-cp "$project_root/Dockerfile" "$image_context/Dockerfile"
+awk '/^FROM .* AS runtime/{p=1} /^# Keep source/{p=0} p' "$project_root/backend/Dockerfile" > "$image_context/Dockerfile"
 cp "$project_root/deploy/backend-entrypoint.sh" "$image_context/deploy/"
 sed -i 's/\r$//' "$image_context/deploy/backend-entrypoint.sh"
 "${compose[@]}" run --rm -T --no-deps --entrypoint bash runner -c \

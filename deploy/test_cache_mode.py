@@ -118,7 +118,7 @@ class DockerCommandTests(unittest.TestCase):
                 docker = mode.Docker(root, {'BACKEND_IMAGE': 'sha256:abc', 'APP_CACHE_ENABLED': 'true'})
             with patch.object(mode.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
                 docker.compose('config', '--quiet')
-            self.assertEqual(run.call_args.args[0], ['docker', 'compose', '-f', 'docker-compose.yml',
+            self.assertEqual(run.call_args.args[0], ['docker', 'compose', '--project-directory', '.', '-f', 'deploy/docker-compose.yml',
                                                    '--env-file', '.env', '--env-file', '.env.deployment',
                                                    'config', '--quiet'])
             self.assertEqual(run.call_args.kwargs['env']['BACKEND_IMAGE'], 'sha256:abc')

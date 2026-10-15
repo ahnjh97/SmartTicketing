@@ -70,6 +70,12 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+// Local runs keep shared .env, scripts and deployment fixtures at the repository root.
+// Benchmark containers intentionally flatten the backend into /app.
+def workspaceRoot = file('../scripts').isDirectory() ? file('..') : projectDir
+tasks.withType(Test).configureEach { workingDir workspaceRoot }
+tasks.named('bootRun') { workingDir workspaceRoot }
+
 tasks.named('test') {
 	useJUnitPlatform {
 		if (project.hasProperty('coreOnly')) includeTags 'core'
@@ -103,6 +109,7 @@ tasks.register('bookingRedisBenchmark', JavaExec) {
 			into fixtureDir
 		}
 	}
+	workingDir workspaceRoot
 	mainClass = System.getenv('BENCH_SUITE') && System.getenv('BENCH_SUITE') != 'booking' ? 'smartticketing.booking.QueryRedisBenchmark' : 'smartticketing.booking.BookingRedisBenchmark'
 	maxHeapSize = '1536m'
 	// Optional benchmark-only runtime; project compilation and normal bootRun stay on Java 21.

@@ -13,6 +13,38 @@ spec.loader.exec_module(runner)
 
 
 class SiteRunnerTests(unittest.TestCase):
+    def test_build_images_supports_historical_and_backend_directory_layouts(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / 'source'; source.mkdir()
+                backend = source / 'backend' if nested else source
+                backend.mkdir(exist_ok=True)
+                for filename in ('Dockerfile', 'gradlew', 'build.gradle', 'settings.gradle'):
+                    (backend / filename).write_text(filename)
+                for name in ('gradle', 'src'):
+                    (backend / name).mkdir()
+                    (backend / name / 'fixture').write_text('fixture')
+                (source / 'deploy').mkdir()
+                (source / 'deploy/backend-entrypoint.sh').write_text('#!/bin/sh\n')
+                folder = root / 'output'; folder.mkdir()
+                commands = []
+                def command(args, **kwargs):
+                    commands.append(args)
+                    if args[:2] == ['docker', 'cp']:
+                        jars = Path(args[-1]); jars.mkdir()
+                        (jars / 'app.jar').write_bytes(b'jar')
+                    return 'builder-container'
+                with patch.object(runner, 'command', command):
+                    self.assertEqual(runner.build_images(source, folder, 'layout'),
+                                     ('layout:backend', 'layout:frontend'))
+                self.assertEqual(commands[0][3], str(backend / 'Dockerfile'))
+                context = folder / 'image-context'
+                copied = context / 'backend' if nested else context
+                self.assertTrue((copied / 'gradle/fixture').is_file())
+                self.assertTrue((copied / 'src/fixture').is_file())
+                self.assertEqual((context / 'build/deploy/app.jar').read_bytes(), b'jar')
+
     def test_reanalysis_preserves_original_and_refuses_unsynchronized_old_runs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); run = root/'run-1'; run.mkdir()

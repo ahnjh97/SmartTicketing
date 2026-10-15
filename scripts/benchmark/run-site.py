@@ -168,7 +168,9 @@ def build_images(source, folder, name):
     backend = name + ':backend'
     frontend = name + ':frontend'
     with (folder / 'build.log').open('w') as log:
-        command(['docker', 'build', '--target', 'build', '-t', build_image, str(source)], log=log)
+        backend_source = source / 'backend' if (source / 'backend/build.gradle').is_file() else source
+        dockerfile = backend_source / 'Dockerfile'
+        command(['docker', 'build', '-f', str(dockerfile), '--target', 'build', '-t', build_image, str(source)], log=log)
         # Copy the compiled bootJar into the same prebuilt target used by deployment CI.
         container = command(['docker', 'create', build_image])
         jars = folder / 'jars'
@@ -183,12 +185,14 @@ def build_images(source, folder, name):
         (context / 'build/deploy').mkdir(parents=True)
         (context / 'deploy').mkdir()
         shutil.copyfile(candidates[0], context / 'build/deploy/app.jar')
-        shutil.copyfile(source / 'Dockerfile', context / 'Dockerfile')
+        shutil.copyfile(dockerfile, context / 'Dockerfile')
+        build_context = context / 'backend' if backend_source != source else context
+        build_context.mkdir(exist_ok=True)
         # The classic Docker builder also visits earlier stages for --target prebuilt.
         for filename in ('gradlew', 'build.gradle', 'settings.gradle'):
-            shutil.copyfile(source / filename, context / filename)
+            shutil.copyfile(backend_source / filename, build_context / filename)
         for directory in ('gradle', 'src'):
-            shutil.copytree(source / directory, context / directory)
+            shutil.copytree(backend_source / directory, build_context / directory)
         shutil.copyfile(source / 'deploy/backend-entrypoint.sh', context / 'deploy/backend-entrypoint.sh')
         entrypoint = context / 'deploy/backend-entrypoint.sh'
         entrypoint.write_text(entrypoint.read_text().replace('\r\n', '\n'))
@@ -211,7 +215,7 @@ def compose_config(folder, name, backend, frontend, cache):
     env_file.write_text('\n'.join(f'{k}={v}' for k, v in values.items()) + '\n')
     os.chmod(env_file, 0o600)
     try:
-        data = json.loads(command(['docker', 'compose', '--env-file', str(env_file), '-f', str(ROOT / 'docker-compose.yml'),
+        data = json.loads(command(['docker', 'compose', '--env-file', str(env_file), '--project-directory', str(ROOT), '-f', str(ROOT / 'deploy/docker-compose.yml'),
                                    'config', '--format', 'json'], env=env))
     finally:
         env_file.unlink()

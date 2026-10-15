@@ -1,0 +1,14 @@
+**
+!backend/
+!backend/gradlew
+!backend/gradle/
+!backend/gradle/**
+!backend/build.gradle
+!backend/settings.gradle
+!backend/src/
+!backend/src/**
+!deploy/
+!deploy/backend-entrypoint.sh
+!build/
+!build/deploy/
+!build/deploy/app.jar

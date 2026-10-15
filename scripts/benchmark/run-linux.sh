@@ -49,16 +49,21 @@ trap cleanup EXIT
 baseline_context="$BENCHMARK_OUTPUT/baseline-source"
 mkdir -p "$baseline_context"
 "${repo_git[@]}" archive "$BENCH_BASELINE_REF" | tar -x -C "$baseline_context"
+# Normalize newer snapshots to the historical builder layout.
+if [[ -d "$baseline_context/backend" ]]; then
+    cp -r "$baseline_context/backend/." "$baseline_context/"
+fi
 # Measurement-only source is identical in both builds; historical business code is untouched.
-cp -r "$project_root/src/benchmark" "$baseline_context/src/benchmark"
-find "$project_root/src/benchmark" -name '*.java' -exec sha256sum {} \; > "$BENCHMARK_OUTPUT/instrumentation.sha256"
+mkdir -p "$baseline_context/src/benchmark"
+cp -r "$project_root/backend/src/benchmark/." "$baseline_context/src/benchmark/"
+find "$project_root/backend/src/benchmark" -name '*.java' -exec sha256sum {} \; > "$BENCHMARK_OUTPUT/instrumentation.sha256"
 cp "$project_root/scripts/benchmark/Dockerfile.before" "$baseline_context/Dockerfile.benchmark"
 docker build -f "$baseline_context/Dockerfile.benchmark" -t "smartticketing-before-build:$run_id" "$baseline_context"
 before_context="$BENCHMARK_OUTPUT/before-image-context"
 mkdir -p "$before_context/build/deploy" "$before_context/deploy"
 # Keep the deployment runtime/prebuilt stages verbatim; classic Docker otherwise
 # builds the unrelated source stage even when a prebuilt JAR was supplied.
-awk '/^FROM .* AS runtime/{p=1} /^# Keep source/{p=0} p' "$project_root/Dockerfile" > "$before_context/Dockerfile"
+awk '/^FROM .* AS runtime/{p=1} /^# Keep source/{p=0} p' "$project_root/backend/Dockerfile" > "$before_context/Dockerfile"
 cp "$project_root/deploy/backend-entrypoint.sh" "$before_context/deploy/"
 sed -i 's/\r$//' "$before_context/deploy/backend-entrypoint.sh"
 docker run --rm -v "$before_context:/output" "smartticketing-before-build:$run_id" bash -c 'cp /app/build/libs/*-SNAPSHOT.jar /output/build/deploy/app.jar'
@@ -69,7 +74,7 @@ sha256sum "$before_context/build/deploy/app.jar" > "$BENCHMARK_OUTPUT/baseline-j
 # Use a private build context so build/deploy/app.jar in the checkout is never overwritten.
 image_context="$BENCHMARK_OUTPUT/image-context"
 mkdir -p "$image_context/build/deploy" "$image_context/deploy"
-awk '/^FROM .* AS runtime/{p=1} /^# Keep source/{p=0} p' "$project_root/Dockerfile" > "$image_context/Dockerfile"
+awk '/^FROM .* AS runtime/{p=1} /^# Keep source/{p=0} p' "$project_root/backend/Dockerfile" > "$image_context/Dockerfile"
 cp "$project_root/deploy/backend-entrypoint.sh" "$image_context/deploy/"
 sed -i 's/\r$//' "$image_context/deploy/backend-entrypoint.sh"
 "${compose[@]}" run --rm -T --no-deps --entrypoint bash runner -c \

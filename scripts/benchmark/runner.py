@@ -100,8 +100,9 @@ def prepare(out, env, mode='live', branches=None):
         label = branch.rsplit('/', 1)[-1]
         source = out / 'sources' / label
         source.mkdir(parents=True)
-        archive = subprocess.check_output(['git', '-C', str(REPO), 'archive', sha,
-                                          'src', 'build.gradle', 'settings.gradle', 'gradle', 'gradlew', 'gradlew.bat'])
+        nested = bool(git('ls-tree', '--name-only', sha, 'backend/build.gradle'))
+        paths = ['backend'] if nested else ['src', 'build.gradle', 'settings.gradle', 'gradle', 'gradlew', 'gradlew.bat']
+        archive = subprocess.check_output(['git', '-C', str(REPO), 'archive', sha, *paths])
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
             # Do not follow repository symlinks or permit paths outside the export directory.
             for member in tar.getmembers():
@@ -109,6 +110,8 @@ def prepare(out, env, mode='live', branches=None):
                 if not target.is_relative_to(source.resolve()) or member.issym() or member.islnk():
                     raise ValueError('Unsafe Git archive entry')
             tar.extractall(source, filter='data')
+        if nested:
+            source = source / 'backend'
         java = source / 'src/main/java/smartticketing/service/KakaoMapService.java'
         before = java.read_text(encoding='utf-8')
         needle = '.baseUrl("https://dapi.kakao.com")'

@@ -51,7 +51,7 @@ services:
     image: ${BACKEND_IMAGE:-smartticketing-backend:local}
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: backend/Dockerfile
       target: ${BACKEND_BUILD_TARGET:-source}
     container_name: smartticketing-backend
     restart: unless-stopped

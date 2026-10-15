@@ -110,7 +110,7 @@ function Start-LocalBackend([bool]$Enabled) {
         $mode = Get-CacheMode
         Write-Host "Starting backend with cache mode=$mode. Ctrl+C stops this run."
         # Command-line properties also protect this local runner against stale IDE/shell Redis settings.
-        & (Join-Path $projectRoot 'gradlew.bat') bootRun "--args=--app.cache.enabled=$mode --spring.data.redis.host=127.0.0.1 --spring.data.redis.port=6379 --server.port=8080"
+        & (Join-Path $projectRoot 'backend/gradlew.bat') -p (Join-Path $projectRoot 'backend') bootRun "--args=--app.cache.enabled=$mode --spring.data.redis.host=127.0.0.1 --spring.data.redis.port=6379 --server.port=8080"
         if ($LASTEXITCODE -ne 0) { throw "Backend exited with code $LASTEXITCODE" }
     } finally {
         foreach ($key in $previous.Keys) { [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process') }

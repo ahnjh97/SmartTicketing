@@ -25,7 +25,7 @@ compose_options=()
 if [[ -f .env.deployment ]]; then
   compose_options=(--env-file .env --env-file .env.deployment)
 fi
-compose() { docker compose "${compose_options[@]}" "$@"; }
+compose() { docker compose --project-directory . -f deploy/docker-compose.yml "${compose_options[@]}" "$@"; }
 
 diagnostics() {
   result=$?

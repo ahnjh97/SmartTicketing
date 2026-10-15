@@ -2,7 +2,7 @@
 
 ## 구성
 
-- `src/`: Spring Boot 백엔드, 테스트, 측정용 계측 코드
+- `backend/`: Spring Boot 백엔드, 테스트, Gradle 빌드, 측정용 계측 코드
 - `frontend/`: React 웹과 서비스 이미지
 - `deploy/`: 배포 스크립트, Nginx 설정, 배포 검증
 - `scripts/dev/`: 로컬 실행·Redis 설정·개발 데이터 준비
@@ -25,7 +25,7 @@ Java 21, Node.js, MySQL, Redis가 필요하다. 환경변수는 저장소 루트
 | `VITE_TOSS_CLIENT_KEY` | 토스 테스트 결제 클라이언트 키 |
 | `TOSS_SECRET_KEY` | 서버 전용 토스 시크릿 키 |
 
-OAuth 등 추가 연동 설정은 `src/main/resources/application.properties`를 따른다. `VITE_` 변수는 브라우저에 공개되므로 서버 비밀키에는 사용하지 않는다.
+OAuth 등 추가 연동 설정은 `backend/src/main/resources/application.properties`를 따른다. `VITE_` 변수는 브라우저에 공개되므로 서버 비밀키에는 사용하지 않는다.
 
 저장소 루트에서 백엔드 실행:
 
@@ -90,12 +90,19 @@ GitHub Actions 배포 시에는 저장소의 **Settings → Secrets and variable
 
 토스 클라이언트 키와 서버 시크릿 키는 같은 테스트 환경의 키 쌍을 사용한다. 결제 완료는 리다이렉트 화면이 아닌 서버 승인 결과로 확정한다.
 
-배포 설정은 루트 `docker-compose.yml`, `Dockerfile`, `.github/workflows/`, `deploy/`에서 관리한다. 시크릿 키는 백엔드에만 전달한다.
+백엔드 소스와 Gradle 프로젝트는 `backend/`, 프런트엔드는 `frontend/`에서 관리한다. IntelliJ에서는 `backend/build.gradle`을 Gradle 프로젝트로 연결한다. 로컬 `.env`와 `.local/cache-mode.properties`는 저장소 루트에 유지한다.
+
+배포 설정은 `deploy/docker-compose.yml`, `backend/Dockerfile`, `.github/workflows/`, `deploy/`에서 관리한다. 시크릿 키는 백엔드에만 전달한다. 아래 명령은 저장소 루트에서 실행한다.
+
+```bash
+docker compose --project-directory . -f deploy/docker-compose.yml --env-file .env config --quiet
+docker build -f backend/Dockerfile --target source -t smartticketing-backend:local .
+```
 
 ## 검증 및 측정
 
 ```powershell
-.\gradlew.bat test
+.\backend\gradlew.bat -p backend test
 npm --prefix frontend run build
 npm --prefix frontend run test:core
 ```

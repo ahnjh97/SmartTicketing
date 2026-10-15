@@ -104,7 +104,7 @@ class Docker:
         return result.stdout.strip()
 
     def compose(self, *args):
-        options = ['compose', '-f', 'docker-compose.yml', '--env-file', '.env']
+        options = ['compose', '--project-directory', '.', '-f', 'deploy/docker-compose.yml', '--env-file', '.env']
         if (self.root / STATE).exists():
             options += ['--env-file', STATE]
         return self.run(*options, *args)

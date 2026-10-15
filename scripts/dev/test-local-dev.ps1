@@ -26,7 +26,8 @@ try {
     Assert-True ((Get-CacheMode) -eq 'false') 'Mode changed despite a port conflict'
     $script:portBusy = $false
     [IO.File]::WriteAllText((Join-Path $testRoot '.env'), "SMARTTICKETING_TEST_VALUE=temporary`n")
-    [IO.File]::WriteAllText((Join-Path $testRoot 'gradlew.bat'), "@exit /b 42`r`n")
+    [IO.Directory]::CreateDirectory((Join-Path $testRoot 'backend')) | Out-Null
+    [IO.File]::WriteAllText((Join-Path $testRoot 'backend/gradlew.bat'), "@exit /b 42`r`n")
     $env:SMARTTICKETING_TEST_VALUE = 'original'
     $rejected = $false
     try { Start-LocalBackend $true } catch { $rejected = $_.Exception.Message.Contains('42') }
@@ -35,9 +36,10 @@ try {
     Write-Host 'PASS: mode persistence, invalid mode rejection, existing backend protection, environment restoration.'
 } finally {
     Remove-Item Env:SMARTTICKETING_TEST_VALUE -ErrorAction SilentlyContinue
-    foreach ($testFile in @($modePath, (Join-Path $testRoot '.env'), (Join-Path $testRoot 'gradlew.bat'))) {
+    foreach ($testFile in @($modePath, (Join-Path $testRoot '.env'), (Join-Path $testRoot 'backend/gradlew.bat'))) {
         if (Test-Path -LiteralPath $testFile) { Remove-Item -LiteralPath $testFile }
     }
     if (Test-Path -LiteralPath (Join-Path $testRoot '.local')) { Remove-Item -LiteralPath (Join-Path $testRoot '.local') }
+    Remove-Item -LiteralPath (Join-Path $testRoot 'backend')
     Remove-Item -LiteralPath $testRoot
 }
