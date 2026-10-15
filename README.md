@@ -18,7 +18,7 @@
 
 선호 영화관과 좌석 구역을 저장하고, 날짜·시간대·인원을 선택하면 조건에 맞는 좌석을 자동 탐색합니다. 예매 가능한 좌석은 **5분간 선점**하고, 원하는 좌석이 없으면 **대기 등록 후 취소표 발생 시 자동 선점**합니다.
 
-📅 **개발 기간** : 2026.09.28 ~ 진행 중<br>
+📅 **개발 기간** : 2026.09.28 ~ 2026.10.12<br>
 👥 **개발 인원** : 3인<br>
 🙋 **담당 역할** : 팀장 / 스마트·일반예매, 취소표·접속 대기열, 동시성 제어 및 성능 개선
 
@@ -52,9 +52,30 @@
 | **접속 대기열** | Redis 기반 순차 입장, 동시 입장 정원·초당 입장 한도 제어, 서버 입장권 검증 |
 
 <details>
-<summary><strong>🟡 접속 대기열 시연</strong></summary>
+<summary><strong>⚖️ 스마트 예매 결과 비교 (GIF)</strong></summary>
 
-![접속 대기 인원이 줄어든 뒤 자동 입장하는 화면](docs/images/admission-demo.gif)
+<img src="docs/images/smart-booking-demo.gif" width="540" alt="선호 좌석 선점, 균형 추천 선점, 빠른 예매 선점, 세 후보 모두 대기하는 네 가지 결과" />
+
+</details>
+
+<details>
+<summary><strong>🔔 취소표 자동 선점 (GIF)</strong></summary>
+
+<img src="docs/images/waiting-autohold-demo.gif" width="720" alt="다른 사용자의 예매 취소 후 대기 좌석이 자동 선점되고 알림이 도착하는 흐름" />
+
+</details>
+
+<details>
+<summary><strong>🎫 QR 티켓 사용 (GIF)</strong></summary>
+
+<img src="docs/images/qr-ticket-demo.gif" width="720" alt="내 티켓의 QR을 휴대폰으로 인증하면 사용 완료 처리되고 USED 표시가 반영되는 흐름" />
+
+</details>
+
+<details>
+<summary><strong>⏳ 접속 대기열 (GIF)</strong></summary>
+
+<img src="docs/images/admission-demo.gif" width="720" alt="접속 대기 인원이 줄어든 뒤 자동 입장하는 화면" />
 
 </details>
 
