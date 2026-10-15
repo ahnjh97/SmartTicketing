@@ -28,7 +28,7 @@ public class VerificationMailer {
             case RESET_PASSWORD -> "비밀번호 재설정";
         };
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(from);
+        message.setFrom("SmartTicketing <" + from + ">");
         message.setTo(email);
         message.setSubject("[SmartTicketing] " + label + " 인증번호");
         message.setText(label + " 인증번호: " + code + "\n10분 안에 입력해주세요.\n본인이 요청하지 않았다면 무시해주세요.");
