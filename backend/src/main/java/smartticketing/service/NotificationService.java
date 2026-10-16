@@ -22,6 +22,10 @@ public class NotificationService {
 
     private final NotificationRepository notifications;
     private final UsersRepository users;
+    private java.util.function.Consumer<Long> delivery = NotificationSseHub::publish;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationPublisher(NotificationPublisher publisher) { delivery = publisher::publish; }
 
     public NotificationService(NotificationRepository n, UsersRepository u) {
         notifications = n;
@@ -69,14 +73,15 @@ public class NotificationService {
         n.setMessage(message);
         n.setCreatedAt(LocalDateTime.now());
         Notification saved = notifications.save(n);
-        publishAfterCommit(userId);
+        publishAfterCommit(userId, delivery);
         return saved;
     }
 
     /**
      * WAITING -> HOLDING 승급이 실제로 완료된 뒤에만 호출한다.
      */
-    public static void waitingAcquired(jakarta.persistence.EntityManager em, BookingRequestGroup group) {
+    public static void waitingAcquired(jakarta.persistence.EntityManager em, BookingRequestGroup group,
+                                       java.util.function.Consumer<Long> delivery) {
         var reservation = em.createQuery("""
                 select r from Reservation r
                 where r.requestGroup.id=:group
@@ -95,14 +100,15 @@ public class NotificationService {
         notification.setMessage("대기하던 좌석을 확보했습니다. 5분 안에 모의결제를 완료해주세요.");
         notification.setCreatedAt(LocalDateTime.now());
         em.persist(link(notification, reservation));
-        publishAfterCommit(reservation.getUser().getId());
+        publishAfterCommit(reservation.getUser().getId(), delivery);
     }
 
     /**
      * QUEUE_TURN이 붙은 실제 선점이 5분을 넘겨 만료된 경우에만 생성한다.
      * 기존 QUEUE_TURN은 제거하고 만료 알림 하나로 교체한다.
      */
-    public static void holdExpired(jakarta.persistence.EntityManager em, Long groupId) {
+    public static void holdExpired(jakarta.persistence.EntityManager em, Long groupId,
+                                   java.util.function.Consumer<Long> delivery) {
         var turns = em.createQuery(
                 "select n from Notification n where n.bookingGroupId=:group and n.type=:type",
                 Notification.class)
@@ -125,25 +131,25 @@ public class NotificationService {
         expired.setCreatedAt(LocalDateTime.now());
         expired.setBookingGroupId(groupId);
         em.persist(expired);
-        publishAfterCommit(user.getId());
+        publishAfterCommit(user.getId(), delivery);
     }
 
     /**
      * 알림 DB 반영이 실제 COMMIT된 뒤에만 SSE를 발행한다.
      * 그래야 브라우저가 이벤트를 받고 즉시 목록을 조회해도 새 알림을 반드시 읽을 수 있다.
      */
-    private static void publishAfterCommit(Long userId) {
+    static void publishAfterCommit(Long userId, java.util.function.Consumer<Long> delivery) {
         if (userId == null) return;
 
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            NotificationSseHub.publish(userId);
+            delivery.accept(userId);
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                NotificationSseHub.publish(userId);
+                delivery.accept(userId);
             }
         });
     }

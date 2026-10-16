@@ -1,0 +1,60 @@
+name: smartticketing-distributed-a
+services:
+  mysql:
+    image: mysql:8.4
+    # Application installs spatial triggers using the dedicated non-root lab user.
+    command: [--log-bin-trust-function-creators=1]
+    environment:
+      TZ: Asia/Seoul
+      MYSQL_DATABASE: distributed_lab
+      MYSQL_USER: lab
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+    ports: ["${SERVER_A_IP}:3306:3306"]
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -e "SELECT 1"']
+      interval: 3s
+      timeout: 3s
+      retries: 60
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: [sh, -c, 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    ports: ["${SERVER_A_IP}:6379:6379"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  admission-redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: [sh, -c, 'exec redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction --requirepass "$$REDIS_PASSWORD"']
+    ports: ["${SERVER_A_IP}:6380:6379"]
+    volumes: [admission-data:/data]
+  backend-a:
+    extends: {file: common.yml, service: backend}
+    environment:
+      BOOKING_OUTBOX_ENABLED: ${A_OUTBOX_ENABLED:-true}
+    ports: ["${SERVER_A_IP}:8080:8080"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  nginx:
+    image: nginx:alpine
+    ports: ["${SERVER_A_IP}:8088:80"]
+    environment:
+      SERVER_B_IP: ${SERVER_B_IP:?set SERVER_B_IP}
+      NGINX_ENVSUBST_FILTER: SERVER_B_IP
+    volumes:
+      - ./nginx.${LAB_MODE:-one}.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      backend-a: {condition: service_healthy}
+volumes:
+  mysql-data:
+  redis-data:
+  admission-data:

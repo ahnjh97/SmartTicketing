@@ -33,6 +33,9 @@ public class BookingWaitingDispatcher {
     private final TransactionTemplate write;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private BookingDispatchGate dispatchGate;
+    private java.util.function.Consumer<Long> notificationDelivery = NotificationSseHub::publish;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationPublisher(NotificationPublisher publisher) { notificationDelivery = publisher::publish; }
 
     public BookingWaitingDispatcher(EntityManager em, BookingHoldService holds, BookingWaitingService waiting, PlatformTransactionManager manager) {
         this.em = em; this.holds = holds; this.waiting = waiting;
@@ -147,7 +150,7 @@ public class BookingWaitingDispatcher {
                     BookingZoneLocks.finish(em, shows);
                     try { holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, requested, lockedInventory); }
                     catch(BookingRejection conflict) { if("WAITING_PRIORITY".equals(conflict.code)) continue; throw conflict; }
-                    NotificationService.waitingAcquired(em, group);
+                    NotificationService.waitingAcquired(em, group, notificationDelivery);
                     allocated++;
                     continue;
                 }
@@ -160,7 +163,7 @@ public class BookingWaitingDispatcher {
                 BookingZoneLocks.finish(em, shows);
                 try { holds.acquireWaiting(group.getUser().getId(), group.getId(), showId, best.get().seatIds(), lockedInventory); }
                 catch(BookingRejection conflict) { if("WAITING_PRIORITY".equals(conflict.code)) continue; throw conflict; }
-                NotificationService.waitingAcquired(em, group);
+                NotificationService.waitingAcquired(em, group, notificationDelivery);
                 allocated++;
             }
             return allocated;

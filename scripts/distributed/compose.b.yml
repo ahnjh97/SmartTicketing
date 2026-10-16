@@ -1,0 +1,5 @@
+name: smartticketing-distributed-b
+services:
+  backend-b:
+    extends: {file: common.yml, service: backend}
+    ports: ["${SERVER_B_IP}:8080:8080"]

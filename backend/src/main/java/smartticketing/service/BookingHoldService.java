@@ -26,6 +26,9 @@ public class BookingHoldService {
     private final BookingIdempotency operations;
     private final Clock clock;
     private SmartBookingSummaryCache summaries;
+    private java.util.function.Consumer<Long> notificationDelivery = NotificationSseHub::publish;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationPublisher(NotificationPublisher publisher) { notificationDelivery = publisher::publish; }
     @org.springframework.beans.factory.annotation.Autowired
     void setSummaries(SmartBookingSummaryCache summaries) { this.summaries=summaries; }
     void invalidateSummaries(Collection<Long> shows) { if(summaries!=null)summaries.invalidate(shows); }
@@ -315,7 +318,7 @@ public class BookingHoldService {
         BookingQueueLifecycle.released(em, group.getId(), false, now);
         em.remove(slot);
         BookingOutbox.append(em, show.getId(), BookingOutboxEvent.Type.BOOKING_CHANGED, group.getId(), "HOLD_EXPIRED", now);
-        NotificationService.holdExpired(em, group.getId());
+        NotificationService.holdExpired(em, group.getId(), notificationDelivery);
         return true;
     }
 

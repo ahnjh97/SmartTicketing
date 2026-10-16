@@ -1,0 +1,41 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-smartticketing-distributed:local}
+    cpus: ${BACKEND_CPUS:-2}
+    mem_limit: ${BACKEND_MEMORY:-2g}
+    extra_hosts:
+      - db.internal:${SERVER_A_IP:?set SERVER_A_IP}
+      - redis.internal:${SERVER_A_IP:?set SERVER_A_IP}
+    environment:
+      TZ: Asia/Seoul
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx1024m}
+      SPRING_CONFIG_IMPORT: ""
+      DB_URL: jdbc:mysql://db.internal:3306/distributed_lab?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: lab
+      DB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${DDL_MODE:-validate}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      REDIS_HOST: redis.internal
+      REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      SPRING_DATA_REDIS_TIMEOUT: 500ms
+      SPRING_DATA_REDIS_CONNECT_TIMEOUT: 500ms
+      APP_CACHE_ENABLED: "true"
+      APP_CACHE_MAIN_LOCAL_TTL_MS: "0"
+      NOTIFICATION_REDIS_ENABLED: "true"
+      ADMISSION_ENABLED: ${ADMISSION_ENABLED:-false}
+      ADMISSION_REDIS_HOST: redis.internal
+      ADMISSION_REDIS_PORT: "6380"
+      ADMISSION_SECURE_COOKIE: "false"
+      TMDB_AUTO_IMPORT: "false"
+      KAKAO_CATALOG_AUTO_IMPORT: "false"
+      SHOWTIME_SEED_ENABLED: "false"
+      BOOKING_SEED_ENABLED: "false"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://localhost:8080/api/health/readiness]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 30s
