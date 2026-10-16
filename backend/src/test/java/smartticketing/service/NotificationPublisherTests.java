@@ -12,6 +12,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("core")
 class NotificationPublisherTests {
     @SuppressWarnings("unchecked")
     private Map<Long,List<SseEmitter>> clients() {

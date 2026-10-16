@@ -52,11 +52,13 @@ class BookingHoldHttpTests {
         return new WebApplicationContextRunner()
                 .withUserConfiguration(WebConfig.class, SecurityConfig.class, BookingHoldController.class, ApiExceptionHandler.class,
                         BookingGroupService.class, BookingHoldService.class, BookingIdempotency.class, BookingExpiryWorker.class, AdminMaintenanceGate.class, CurrentUser.class,
-                        BookingPaymentController.class, BookingPaymentService.class, TossPaymentService.class, TicketController.class, TicketService.class, NotificationService.class,
+                        BookingPaymentController.class, BookingPaymentService.class, TossPaymentService.class, TicketController.class, TicketService.class,
+                        NotificationService.class, NotificationPublisher.class,
                         BookingSmartController.class, BookingSmartService.class, BookingRecoveryService.class, BookingActivityService.class,
                         smartticketing.controller.BookingRecoveryController.class, smartticketing.controller.NotificationController.class,
                         smartticketing.controller.BookingWaitingController.class, BookingWaitingService.class, BookingWaitingDispatcher.class)
-                .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true")
+                .withPropertyValues("spring.profiles.active=test", "booking.mock-payment.allow-failure=true",
+                        "spring.datasource.url=" + db.jdbcUrl(), "app.notifications.redis-enabled=false")
                 .withBean(TicketRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(TicketRepository.class))
                 .withBean(ReservationRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationRepository.class))
                 .withBean(ReservationSeatRepository.class, () -> new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(db.factory())).getRepository(ReservationSeatRepository.class))

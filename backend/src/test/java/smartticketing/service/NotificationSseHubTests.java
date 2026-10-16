@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("core")
 class NotificationSseHubTests {
     @Test void localDeliveryRemovesClosedClientsAndContinuesToOtherClients() throws Exception {
         var clients=(Map<Long,List<SseEmitter>>)ReflectionTestUtils.getField(NotificationSseHub.class,"CLIENTS");
