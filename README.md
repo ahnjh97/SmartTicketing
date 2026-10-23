@@ -175,3 +175,10 @@
 
 - 설정한 정원·초당 입장 한도 내에서 사용자를 입장시키고, 초과 접속자는 대기열에서 대기.
 - 입장권 없는 직접 API 요청을 차단하고, 입장 제어용 Redis 장애 시 `503`을 반환해 무제한 입장 방지.
+
+
+### EC2 분산 백엔드 실험
+
+같은 VPC의 EC2 A/B에 백엔드를 하나씩 실행하고 A의 MySQL·Redis를 공유한다.
+사설 IP 설정, 보안 그룹, 이미지 전달, 서버 간 알림·장애·부하 검증은 [분산 실행 가이드](scripts/distributed/README.md)를 따른다.
+`DEPLOY_TARGET=distributed`를 설정하면 같은 CI 이미지를 두 EC2에 자동 배포한다. 최초 설정은 [분산 CD 가이드](scripts/distributed/CD.md)를 따른다.

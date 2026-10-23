@@ -11,6 +11,10 @@ on:
         description: 'Run all regression tests and Docker image-store compatibility checks before deployment'
         type: boolean
         default: false
+      initialize_distributed_schema:
+        description: 'First distributed deployment only: initialize the dedicated lab database schema on EC2 A'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -58,6 +62,14 @@ jobs:
       - name: Verify mail configuration transport
         working-directory: .
         run: python3 -m unittest discover -s deploy -p 'test_mail_secret.py'
+      - name: Verify distributed deployment and scenario tools
+        working-directory: .
+        env:
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET || 'production' }}
+        run: |
+          case "$DEPLOY_TARGET" in production|distributed) ;; *) echo 'DEPLOY_TARGET must be production or distributed' >&2; exit 1 ;; esac
+          python3 -m unittest discover -s scripts/distributed -p 'test_*.py'
+          python3 -m unittest discover -s deploy -p 'test_distributed_cd.py'
       - name: Deployment regression tests (full suite)
         if: ${{ inputs.full_tests }}
         run: python3 -m unittest discover -s deploy -p 'test_*.py'
@@ -142,9 +154,10 @@ jobs:
       - name: Build frontend production image
         env:
           VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET || 'production' }}
         # Fork PRs can build without secrets; production deployments require a key.
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != 'pull_request' && -z "${VITE_TOSS_CLIENT_KEY//[[:space:]]/}" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != 'pull_request' && "$DEPLOY_TARGET" != distributed && -z "${VITE_TOSS_CLIENT_KEY//[[:space:]]/}" ]]; then
             echo 'Set VITE_TOSS_CLIENT_KEY in GitHub Actions Secrets.' >&2
             exit 1
           fi
@@ -187,7 +200,7 @@ jobs:
 
   deploy:
     needs: [frontend, backend, containers]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && (vars.DEPLOY_TARGET == '' || vars.DEPLOY_TARGET == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     concurrency:
@@ -263,3 +276,43 @@ jobs:
             "bash -s -- '$DEPLOY_SHA' '$DEPLOY_ID' '$IMAGES_SHA256' '$BACKEND_FINGERPRINT' '$FRONTEND_FINGERPRINT'"
       - name: Verify public HTTPS and JSON APIs
         run: python3 deploy/smoke-test.py https://smartticketing.duckdns.org
+
+  deploy-distributed:
+    needs: [frontend, backend, containers]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET == 'distributed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency:
+      group: aws-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-images-${{ github.sha }}
+          path: build/images
+      - name: Deploy the same verified backend to EC2 A and B
+        env:
+          AWS_DISTRIBUTED_A_HOST: ${{ secrets.AWS_DISTRIBUTED_A_HOST }}
+          AWS_DISTRIBUTED_B_HOST: ${{ secrets.AWS_DISTRIBUTED_B_HOST }}
+          AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          INITIALIZE_SCHEMA: ${{ inputs.initialize_distributed_schema || false }}
+        run: |
+          set -euo pipefail
+          (cd build/images && sha256sum --check images.tar.gz.sha256)
+          options=()
+          if [[ "$INITIALIZE_SCHEMA" == true ]]; then options+=(--bootstrap); fi
+          python3 deploy/distributed.py run \
+            --revision "$DEPLOY_SHA" --artifact-id "$DEPLOY_ID" \
+            --archive build/images/images.tar.gz \
+            --fingerprint-file build/images/backend.fingerprint "${options[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: distributed-deployment-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/distributed-deployment.json
+          if-no-files-found: ignore
+          retention-days: 14

@@ -2,6 +2,7 @@ name: smartticketing-distributed-a
 services:
   mysql:
     image: mysql:8.4
+    restart: unless-stopped
     # Application installs spatial triggers using the dedicated non-root lab user.
     command: [--log-bin-trust-function-creators=1]
     environment:
@@ -19,6 +20,7 @@ services:
       retries: 60
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     command: [sh, -c, 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
@@ -31,6 +33,7 @@ services:
       retries: 30
   admission-redis:
     image: redis:7-alpine
+    restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     command: [sh, -c, 'exec redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction --requirepass "$$REDIS_PASSWORD"']
@@ -46,12 +49,13 @@ services:
       redis: {condition: service_healthy}
   nginx:
     image: nginx:alpine
+    restart: unless-stopped
     ports: ["${SERVER_A_IP}:8088:80"]
     environment:
       SERVER_B_IP: ${SERVER_B_IP:?set SERVER_B_IP}
       NGINX_ENVSUBST_FILTER: SERVER_B_IP
     volumes:
-      - ./nginx.${LAB_MODE:-one}.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx.${LAB_MODE:-two}.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       backend-a: {condition: service_healthy}
 volumes:

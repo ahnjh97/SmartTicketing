@@ -44,6 +44,7 @@ out/
 /benchmark-results/
 **/__pycache__/
 /.deploy-operation.lock
+/.distributed-deploy.lock
 /.local/
 
 
